@@ -110,7 +110,11 @@ def handle_check_update(
         print(f"Update Check:     Error ({result.error})")
         return 1
 
-    print(f"Latest Release:   v{result.latest_version}")
+    if result.latest_version:
+        print(f"Latest Release:   v{result.latest_version}")
+    else:
+        print("Latest Release:   (No published releases found yet)")
+
     if result.update_available:
         print("Status:           🚀 Update Available!")
         if result.release_info and result.release_info.wheel_url:

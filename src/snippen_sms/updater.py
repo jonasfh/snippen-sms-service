@@ -116,6 +116,17 @@ class SoftwareUpdater:
 
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                logger.debug(
+                    "No published GitHub releases found for %s (HTTP 404).",
+                    self.github_repo,
+                )
+                return UpdateCheckResult(
+                    update_available=False,
+                    current_version=curr_ver,
+                    latest_version=None,
+                    error=None,
+                )
             err_msg = f"GitHub API HTTP error: {exc.code} {exc.reason}"
             logger.warning("Version check failed: %s", err_msg)
             return UpdateCheckResult(
