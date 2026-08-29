@@ -6,6 +6,9 @@
   },
   "customizations": {
     "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python"
+      },
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
@@ -14,6 +17,6 @@
       ]
     }
   },
-  "postCreateCommand": "pip install -e .[dev]",
+  "postCreateCommand": "python3 -m venv /home/vscode/.venv && /home/vscode/.venv/bin/pip install -e \".[dev]\"",
   "remoteUser": "vscode"
 }

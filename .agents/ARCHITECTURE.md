@@ -1,7 +1,7 @@
 # Architecture & Coding Standards
 
 ## Tech Stack & Environment
-- **Python**: 3.12+
+- **Python**: 3.12+ (Dev Container virtualenv located at `/home/vscode/.venv` outside workspace)
 - **Framework / Service**: FastAPI / Flask / Python Async SMS Service
 - **Dependency & Package Management**: `pyproject.toml` (pip / uv / poetry)
 - **Module Structure**: `src/snippen_sms/`

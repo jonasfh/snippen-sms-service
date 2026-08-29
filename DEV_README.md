@@ -27,11 +27,13 @@ snippen-sms-service/
 
 1. **Dev Container**: Open project in VS Code with Dev Containers extension to spin up Python 3.12 environment automatically.
 2. **Virtual Environment & Dependencies**:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -e .[dev]
-   ```
+   - In **Dev Container**, the virtual environment is automatically set up at `/home/vscode/.venv` (outside the workspace root) to prevent collisions with host OS environments.
+   - For local CLI development outside container:
+     ```bash
+     python -m venv ~/.venv
+     source ~/.venv/bin/activate
+     pip install -e ".[dev]"
+     ```
 3. **Testing & Linting**:
    ```bash
    pytest
