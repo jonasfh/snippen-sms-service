@@ -12,7 +12,7 @@ snippen-sms-service/
 ├── .agents/                  # Agent guidelines (Architecture, Workflow, Testing, Docs)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
-│   └── architecture.md       # High-level architecture & communication flows
+│   └── architecture.md       # High-level architecture, provider abstraction & flows
 ├── scripts/                  # Development & formatting utilities
 │   ├── format.py             # Whitespace & file formatting tool
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
@@ -20,27 +20,31 @@ snippen-sms-service/
 │   └── snippen_sms/          # Application package
 │       ├── __init__.py       # Package version & exports
 │       ├── config.py         # Gateway configuration settings
-│       ├── gateway.py        # GatewayService lifecycle & run loop
+│       ├── gateway.py        # GatewayService lifecycle, send/receive orchestration & run loop
 │       ├── main.py           # Entry point & CLI runner
 │       ├── migrations/       # SQLite database migration system
 │       │   ├── __init__.py   # Migration exports
 │       │   ├── runner.py     # MigrationRunner & Migration class
 │       │   └── sql/          # Sequential SQL migration files
 │       ├── models.py         # Message domain models and enums
+│       ├── providers/        # SMS provider abstraction layer
+│       │   ├── __init__.py   # Provider exports
+│       │   ├── base.py       # SmsProvider ABC, SendResult, IncomingMessage
+│       │   └── memory.py     # InMemorySmsProvider for testing & simulation
 │       └── storage.py        # SQLite persistent storage repository
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_format.py        # Formatter tests
-│   ├── test_gateway.py       # GatewayService lifecycle tests
+│   ├── test_gateway.py       # GatewayService lifecycle & provider integration tests
 │   ├── test_main.py          # Unit tests
 │   ├── test_migrations.py   # Database migration unit & integration tests
+│   ├── test_providers.py    # SMS provider abstraction unit tests
 │   ├── test_storage.py       # SQLite message storage unit & integration tests
 │   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config
 ├── README.md                 # User documentation
 ├── DEV_README.md             # Developer documentation
 └── CHANGELOG.md              # Project history
-
 ```
 
 For high-level system architecture, communication flows, and boundaries, see [docs/architecture.md](file:///workspaces/snippen-sms-service/docs/architecture.md).
