@@ -15,6 +15,7 @@ Once a GitHub issue is identified or created, follow this workflow:
 3. **Implementation**:
    - Resolve the issue using Python 3.12 standards.
    - Create/update tests and run linting and tests (`pytest`, `ruff check .`).
+   - Update documentation (`README.md`, `DEV_README.md`, `docs/`) for any new features, endpoints, or data models implemented.
 4. **Submission & Commit Messages**:
    - Commit changed files.
    - **Commit Message**: Issue commits MUST start with `(#<id>)`, e.g., `(#1) Fixed xxx...`. Make separate commits for different issue numbers. General repo updates not tied to an issue do not require the header.

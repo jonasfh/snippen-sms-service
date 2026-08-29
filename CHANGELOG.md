@@ -12,4 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package layout under `src/snippen_sms/` with main module and version declaration.
 - `pyproject.toml` setup with pytest and ruff dev dependencies.
 - Pytest unit testing suite and test configuration.
-- Agent guidelines (`AGENTS.md` and `.agents/` docs) updated for Python ecosystem with continuous self-improvement protocols.
+- Agent guidelines (`AGENTS.md` and `.agents/` docs) updated for Python ecosystem with continuous self-improvement protocols and mandatory documentation synchronization.
+- High-level architecture documentation under `docs/architecture.md` and documentation hub in `docs/README.md` (`#3`).
+- Updated `README.md` and `DEV_README.md` with system topology, project purpose, and documentation links (`#3`).
