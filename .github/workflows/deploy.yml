@@ -61,6 +61,6 @@ jobs:
           TAG="${{ steps.get_version.outputs.tag }}"
           VERSION="${{ steps.get_version.outputs.version }}"
           python -m pip install --upgrade build
-          python -m build
+          python scripts/build_release.py
           gh release create "${TAG}" dist/* --title "${TAG}" --generate-notes
-          echo "Successfully created GitHub Release for ${TAG} with build assets."
+          echo "Successfully created GitHub Release for ${TAG} with build assets and checksums."

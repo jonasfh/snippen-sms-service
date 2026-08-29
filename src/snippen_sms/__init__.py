@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService
@@ -19,7 +19,13 @@ from snippen_sms.providers import (
     register_provider,
 )
 from snippen_sms.storage import MessageStorage
-from snippen_sms.updater import ReleaseInfo, SoftwareUpdater, UpdateCheckResult
+from snippen_sms.updater import (
+    ReleaseInfo,
+    SoftwareUpdater,
+    UpdateCheckResult,
+    calculate_sha256,
+    parse_checksums_file,
+)
 
 __all__ = [
     "GatewayConfig",
@@ -41,6 +47,8 @@ __all__ = [
     "SoftwareUpdater",
     "UpdateCheckResult",
     "__version__",
+    "calculate_sha256",
     "get_provider",
+    "parse_checksums_file",
     "register_provider",
 ]

@@ -269,8 +269,9 @@ sequenceDiagram
 ### Key Update Capabilities
 1. **Zero-Dependency Release Checking**: Uses Python's standard `urllib` to query GitHub API with configurable repository defaults (`jonasfh/snippen-sms-service`) and environment overrides (`SNIPPEN_SMS_GITHUB_REPO`).
 2. **Safe, Non-Looping Startup Check**: Checks for updates at startup (and periodically in background) without forcing restarts, avoiding reboot crash loops if network conditions or package dependencies encounter issues.
-3. **Artifact-Based Upgrade**: Discovers and downloads wheel (`.whl`) or tarball distributions, installs via `pip`, and automatically executes any new SQLite schema migrations.
-4. **CLI Management**: Direct command-line access via `snippen-sms check-update` and `snippen-sms update`.
+3. **Cryptographic Checksum Verification**: Automatically fetches `checksums.txt` attached to the release and validates SHA-256 integrity of the downloaded package before installation.
+4. **Artifact-Based Upgrade**: Discovers and downloads wheel (`.whl`) or tarball distributions, installs via `pip`, and automatically executes any new SQLite schema migrations.
+5. **CLI Management**: Direct command-line access via `snippen-sms check-update` and `snippen-sms update`.
 
 ---
 
