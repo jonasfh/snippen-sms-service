@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-29
+
+### Added
+- Automated release packaging and checksum generation utility `scripts/build_release.py` (`#21`).
+- Cryptographic SHA-256 integrity verification in `SoftwareUpdater.download_artifact()` against release `checksums.txt` (`#21`).
+- Helper functions `calculate_sha256()` and `parse_checksums_file()` in `snippen_sms.updater` (`#21`).
+- GitHub Actions deployment workflow (`.github/workflows/deploy.yml`) updated to build distributions and publish GitHub Releases with attached `.whl`, `.tar.gz`, and `checksums.txt` assets (`#21`).
+- Comprehensive unit tests in `tests/test_build_release.py` and `tests/test_updater.py` (`#21`).
+- Developer guide and architecture documentation updated with release build instructions and checksum verification flow (`#21`).
+
 ## [0.8.0] - 2026-08-29
 
 ### Added

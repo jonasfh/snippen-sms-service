@@ -36,12 +36,13 @@ snippen-sms-service/
 │       └── updater.py        # GitHub release checking and self-update management
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
+│   ├── test_build_release.py # Release build & checksum calculation tests
 │   ├── test_format.py        # Formatter tests
 │   ├── test_gateway.py       # GatewayService lifecycle & provider integration tests
 │   ├── test_main.py          # Unit tests
-│   ├── test_migrations.py   # Database migration unit & integration tests
+│   ├── test_migrations.py    # Database migration unit & integration tests
 │   ├── test_mock_provider.py # Mock SMS provider and factory tests
-│   ├── test_providers.py    # SMS provider abstraction unit tests
+│   ├── test_providers.py     # SMS provider abstraction unit tests
 │   ├── test_storage.py       # SQLite message storage unit & integration tests
 │   ├── test_updater.py       # GitHub release version checking & updater unit tests
 │   └── test_validate_pr.py   # PR validation tests
@@ -53,10 +54,10 @@ snippen-sms-service/
 
 For high-level system architecture, communication flows, and boundaries, see [docs/architecture.md](file:///workspaces/snippen-sms-service/docs/architecture.md).
 
-## Setup & Local Development
+## Development Setup
 
-1. **Dev Container**: Open project in VS Code with Dev Containers extension to spin up Python 3.12 environment automatically.
-2. **Virtual Environment & Dependencies**:
+1. **Prerequisites**: Python 3.12+ and `pip`.
+2. **Environment & Dependencies**:
    - In **Dev Container**, the virtual environment is automatically set up at `/home/vscode/.venv` (outside the workspace root) to prevent collisions with host OS environments.
    - For local CLI development outside container:
      ```bash
@@ -64,7 +65,7 @@ For high-level system architecture, communication flows, and boundaries, see [do
      source ~/.venv/bin/activate
      pip install -e ".[dev]"
      ```
-3. **Testing, Linting, Formatting & PR Validation**:
+3. **Testing, Linting, Formatting, Building & PR Validation**:
    ```bash
    # Run test suite
    pytest
@@ -74,6 +75,9 @@ For high-level system architecture, communication flows, and boundaries, see [do
 
    # Format files & cleanup whitespace / newlines
    python scripts/format.py
+
+   # Build distribution packages and generate SHA-256 checksums
+   python scripts/build_release.py
 
    # Validate PR version bump and changelog
    python scripts/validate_pr.py --base origin/main
@@ -89,4 +93,5 @@ For high-level system architecture, communication flows, and boundaries, see [do
 - **Deploy & Release Tagging (`.github/workflows/deploy.yml`)**:
   - Triggers on push to `main` (merges).
   - Automatically tags release with `v<version>` if the tag does not already exist.
-  - Skips tag creation cleanly if the tag is already present.
+  - Builds `.whl` and `.tar.gz` distributions with `python scripts/build_release.py` and calculates `checksums.txt`.
+  - Publishes a formal GitHub Release attaching all build distributions and checksums.

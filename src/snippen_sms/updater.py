@@ -41,17 +41,43 @@ def is_newer_version(latest_str: str, current_str: str) -> bool:
         return parse_semver(latest_str) > parse_semver(current_str)
 
 
+def calculate_sha256(file_path: Path) -> str:
+    """Calculate the SHA-256 hexadecimal hash digest of a file."""
+    import hashlib
+
+    sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(65536):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def parse_checksums_file(content: str) -> dict[str, str]:
+    """Parse a standard sha256sum formatted text into a mapping of filename -> sha256 digest."""
+    checksums: dict[str, str] = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2:
+            digest, name = parts[0].strip(), parts[1].strip().lstrip("*")
+            checksums[name] = digest.lower()
+    return checksums
+
+
 @dataclass
 class ReleaseInfo:
     """Metadata about a GitHub release."""
 
     version: str
     tag_name: str
-    published_at: str
-    wheel_url: str | None
-    tarball_url: str | None
-    html_url: str
-    release_notes: str
+    published_at: str = ""
+    wheel_url: str | None = None
+    tarball_url: str | None = None
+    checksums_url: str | None = None
+    html_url: str = ""
+    release_notes: str = ""
 
 
 @dataclass
@@ -151,18 +177,20 @@ class SoftwareUpdater:
         html_url = data.get("html_url", "")
         release_notes = data.get("body", "")
 
-        # Look for wheel (.whl) or tarball (.tar.gz) assets
+        # Look for wheel (.whl), tarball (.tar.gz), and checksums assets
         wheel_url: str | None = None
         tarball_url: str | None = data.get("tarball_url")
+        checksums_url: str | None = None
 
         for asset in data.get("assets", []):
             name = asset.get("name", "")
             download_url = asset.get("browser_download_url")
             if name.endswith(".whl") and download_url:
                 wheel_url = download_url
-                break
             elif name.endswith(".tar.gz") and download_url:
                 tarball_url = download_url
+            elif name in ("checksums.txt", "SHA256SUMS", "sha256sums.txt") and download_url:
+                checksums_url = download_url
 
         release_info = ReleaseInfo(
             version=latest_version,
@@ -170,6 +198,7 @@ class SoftwareUpdater:
             published_at=published_at,
             wheel_url=wheel_url,
             tarball_url=tarball_url,
+            checksums_url=checksums_url,
             html_url=html_url,
             release_notes=release_notes,
         )
@@ -197,7 +226,7 @@ class SoftwareUpdater:
         )
 
     def download_artifact(self, release_info: ReleaseInfo, dest_dir: Path) -> Path:
-        """Download release asset (wheel preferred, then tarball) to destination directory."""
+        """Download release asset (wheel preferred, then tarball) to destination directory and verify checksum."""
         dest_dir.mkdir(parents=True, exist_ok=True)
         download_url = release_info.wheel_url or release_info.tarball_url
 
@@ -219,6 +248,34 @@ class SoftwareUpdater:
                 out_f.write(chunk)
 
         logger.info("Downloaded %d bytes to %s", dest_file.stat().st_size, dest_file)
+
+        # Verify SHA-256 checksum if available
+        if release_info.checksums_url:
+            try:
+                logger.info("Fetching release checksums from %s...", release_info.checksums_url)
+                chk_req = urllib.request.Request(release_info.checksums_url, headers=headers)
+                with urllib.request.urlopen(chk_req, timeout=30.0) as chk_resp:
+                    chk_content = chk_resp.read().decode("utf-8")
+                checksums_map = parse_checksums_file(chk_content)
+
+                if dest_file.name in checksums_map:
+                    expected_sha = checksums_map[dest_file.name]
+                    actual_sha = calculate_sha256(dest_file)
+                    if actual_sha != expected_sha:
+                        raise ValueError(
+                            f"SHA-256 digest mismatch for {dest_file.name}: "
+                            f"expected {expected_sha}, calculated {actual_sha}"
+                        )
+                    logger.info("SHA-256 checksum verified successfully for %s", dest_file.name)
+                else:
+                    logger.warning("Artifact %s not found in checksums.txt", dest_file.name)
+            except Exception as exc:
+                if isinstance(exc, ValueError):
+                    raise
+                logger.warning(
+                    "Could not verify checksum against %s: %s", release_info.checksums_url, exc
+                )
+
         return dest_file
 
     def install_release(

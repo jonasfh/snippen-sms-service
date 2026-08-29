@@ -14,9 +14,29 @@ from snippen_sms.updater import (
     ReleaseInfo,
     SoftwareUpdater,
     UpdateCheckResult,
+    calculate_sha256,
     is_newer_version,
+    parse_checksums_file,
     parse_semver,
 )
+
+
+def test_parse_checksums_file():
+    sample = """
+    # SHA-256 Checksums
+    e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty.whl
+    a1b2c3d4e5f6  *file2.tar.gz
+    """
+    parsed = parse_checksums_file(sample)
+    assert parsed["empty.whl"] == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    assert parsed["file2.tar.gz"] == "a1b2c3d4e5f6"
+
+
+def test_calculate_sha256_updater(tmp_path: Path):
+    sample_file = tmp_path / "hello.txt"
+    sample_file.write_bytes(b"hello world")
+    digest = calculate_sha256(sample_file)
+    assert digest == "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
 
 
 def test_parse_semver_valid():
@@ -163,6 +183,7 @@ def test_updater_download_artifact(tmp_path: Path):
         published_at="",
         wheel_url="https://example.com/downloads/snippen_sms-0.9.0-py3-none-any.whl",
         tarball_url=None,
+        checksums_url=None,
         html_url="",
         release_notes="",
     )
@@ -178,6 +199,73 @@ def test_updater_download_artifact(tmp_path: Path):
     assert downloaded.exists()
     assert downloaded.name == "snippen_sms-0.9.0-py3-none-any.whl"
     assert downloaded.read_bytes() == b"MOCK_WHEEL_DATA_CHUNK_1MOCK_WHEEL_DATA_CHUNK_2"
+
+
+def test_updater_download_artifact_with_valid_checksum(tmp_path: Path):
+    import hashlib
+
+    updater = SoftwareUpdater(github_repo="test-owner/test-repo")
+    wheel_content = b"GENUINE_WHEEL_BINARY_CONTENT"
+    expected_digest = hashlib.sha256(wheel_content).hexdigest()
+    checksums_txt = f"{expected_digest}  snippen_sms-0.9.0-py3-none-any.whl\n"
+
+    rel = ReleaseInfo(
+        version="0.9.0",
+        tag_name="v0.9.0",
+        published_at="",
+        wheel_url="https://example.com/downloads/snippen_sms-0.9.0-py3-none-any.whl",
+        tarball_url=None,
+        checksums_url="https://example.com/downloads/checksums.txt",
+        html_url="",
+        release_notes="",
+    )
+
+    resp_wheel = MagicMock()
+    resp_wheel.read.side_effect = [wheel_content, b""]
+    resp_wheel.__enter__.return_value = resp_wheel
+
+    resp_chk = MagicMock()
+    resp_chk.read.return_value = checksums_txt.encode("utf-8")
+    resp_chk.__enter__.return_value = resp_chk
+
+    dest_dir = tmp_path / "downloads_chk"
+    with patch("urllib.request.urlopen", side_effect=[resp_wheel, resp_chk]):
+        downloaded = updater.download_artifact(rel, dest_dir)
+
+    assert downloaded.exists()
+    assert downloaded.read_bytes() == wheel_content
+
+
+def test_updater_download_artifact_checksum_mismatch(tmp_path: Path):
+    updater = SoftwareUpdater(github_repo="test-owner/test-repo")
+    wheel_content = b"CORRUPTED_WHEEL_DATA"
+    checksums_txt = "0000000000000000000000000000000000000000000000000000000000000000  snippen_sms-0.9.0-py3-none-any.whl\n"
+
+    rel = ReleaseInfo(
+        version="0.9.0",
+        tag_name="v0.9.0",
+        published_at="",
+        wheel_url="https://example.com/downloads/snippen_sms-0.9.0-py3-none-any.whl",
+        tarball_url=None,
+        checksums_url="https://example.com/downloads/checksums.txt",
+        html_url="",
+        release_notes="",
+    )
+
+    resp_wheel = MagicMock()
+    resp_wheel.read.side_effect = [wheel_content, b""]
+    resp_wheel.__enter__.return_value = resp_wheel
+
+    resp_chk = MagicMock()
+    resp_chk.read.return_value = checksums_txt.encode("utf-8")
+    resp_chk.__enter__.return_value = resp_chk
+
+    dest_dir = tmp_path / "downloads_bad_chk"
+    with (
+        patch("urllib.request.urlopen", side_effect=[resp_wheel, resp_chk]),
+        pytest.raises(ValueError, match="SHA-256 digest mismatch"),
+    ):
+        updater.download_artifact(rel, dest_dir)
 
 
 def test_updater_download_artifact_no_url():
