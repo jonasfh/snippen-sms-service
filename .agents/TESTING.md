@@ -14,12 +14,16 @@ pytest tests/test_main.py
 # Linting and style checks (Ruff)
 ruff check .
 ruff format --check .
+
+# Project-wide formatting (Python, Markdown, JSON, YAML, TOML)
+python scripts/format.py
 ```
 
 ## Mandatory Rules
 - **Create tests**: Create unit or integration tests in `tests/` for all new functionality.
 - **Update tests**: Update existing tests when modifying functionality.
 - **Linting check**: Always run `ruff check .` (or flake8) and resolve all errors and warnings before completing a task.
+- **Formatting check**: Always run `python scripts/format.py` (or `ruff format`) before committing to remove trailing whitespace, add single newline at file end, and remove duplicate newlines from file end across all files (including Markdown).
 
 ## Writing Tests
 - Locate tests in `tests/`.

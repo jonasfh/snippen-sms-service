@@ -13,6 +13,8 @@ snippen-sms-service/
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
 │   └── architecture.md       # High-level architecture & communication flows
+├── scripts/                  # Development & formatting utilities
+│   └── format.py             # Whitespace & file formatting tool
 ├── src/
 │   └── snippen_sms/          # Application package
 │       ├── __init__.py       # Package version
@@ -39,8 +41,14 @@ For high-level system architecture, communication flows, and boundaries, see [do
      source ~/.venv/bin/activate
      pip install -e ".[dev]"
      ```
-3. **Testing & Linting**:
+3. **Testing, Linting & Formatting**:
    ```bash
+   # Run tests
    pytest
+
+   # Run lint checks
    ruff check .
+
+   # Format files & cleanup whitespace / newlines
+   python scripts/format.py
    ```
