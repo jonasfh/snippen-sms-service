@@ -310,3 +310,87 @@ def test_context_manager(tmp_path: Path) -> None:
             )
         )
         assert storage.count_messages() == 1
+
+
+def test_storage_outbox_helpers(memory_storage: MessageStorage) -> None:
+    """Test enqueue_outbox, get_pending_outbox, get_outbox, and count_outbox."""
+    assert memory_storage.count_outbox() == 0
+    assert memory_storage.get_pending_outbox() == []
+
+    # Enqueue 3 outbound messages
+    msg1 = memory_storage.enqueue_outbox(
+        recipient="+4790000001",
+        body="Pending msg 1",
+        sender="Snippen",
+        status=MessageStatus.PENDING,
+    )
+    msg2 = memory_storage.enqueue_outbox(
+        recipient="+4790000002",
+        body="Queued msg 2",
+        sender="Snippen",
+        status=MessageStatus.QUEUED,
+    )
+    msg3 = memory_storage.enqueue_outbox(
+        recipient="+4790000003",
+        body="Sent msg 3",
+        sender="Snippen",
+        status=MessageStatus.SENT,
+    )
+
+    assert msg1.id is not None
+    assert msg2.id is not None
+    assert msg3.id is not None
+    assert memory_storage.count_outbox() == 3
+    assert memory_storage.count_outbox(status=MessageStatus.PENDING) == 1
+    assert memory_storage.count_outbox(status=MessageStatus.QUEUED) == 1
+    assert memory_storage.count_outbox(status=MessageStatus.SENT) == 1
+
+    # get_pending_outbox should return FIFO order of PENDING and QUEUED messages
+    pending = memory_storage.get_pending_outbox()
+    assert len(pending) == 2
+    assert pending[0].id == msg1.id
+    assert pending[0].body == "Pending msg 1"
+    assert pending[1].id == msg2.id
+    assert pending[1].body == "Queued msg 2"
+
+    # get_outbox should list outbound messages ordered by id DESC
+    outbox_all = memory_storage.get_outbox()
+    assert len(outbox_all) == 3
+    assert outbox_all[0].id == msg3.id
+
+    outbox_filtered = memory_storage.get_outbox(status=MessageStatus.SENT)
+    assert len(outbox_filtered) == 1
+    assert outbox_filtered[0].id == msg3.id
+
+
+def test_storage_inbox_helpers(memory_storage: MessageStorage) -> None:
+    """Test get_inbox and count_inbox."""
+    assert memory_storage.count_inbox() == 0
+    assert memory_storage.get_inbox() == []
+
+    memory_storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791112233",
+            recipient="Snippen",
+            body="Inbound 1",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+    memory_storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791112244",
+            recipient="Snippen",
+            body="Inbound 2",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+    # Also save an outbound message to ensure separation
+    memory_storage.enqueue_outbox(recipient="+4791112255", body="Outbound")
+
+    assert memory_storage.count_inbox() == 2
+    inbox = memory_storage.get_inbox()
+    assert len(inbox) == 2
+    assert inbox[0].sender == "+4791112244"
+    assert inbox[1].sender == "+4791112233"

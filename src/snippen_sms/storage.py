@@ -249,6 +249,72 @@ class MessageStorage:
         row = cursor.fetchone()
         return int(row[0]) if row else 0
 
+    def enqueue_outbox(
+        self,
+        recipient: str,
+        body: str,
+        sender: str = "snippen-sms-service",
+        status: MessageStatus = MessageStatus.PENDING,
+    ) -> Message:
+        """Add a new outbound message to the outbox."""
+        message = Message(
+            direction=MessageDirection.OUTBOUND,
+            sender=sender,
+            recipient=recipient,
+            body=body,
+            status=status,
+        )
+        return self.save_message(message)
+
+    def get_pending_outbox(self, limit: int = 50) -> list[Message]:
+        """Retrieve pending and queued messages from the outbox in FIFO order."""
+        query = """
+            SELECT * FROM messages
+            WHERE direction = ? AND status IN (?, ?)
+            ORDER BY id ASC
+            LIMIT ?
+        """
+        cursor = self.connection.execute(
+            query,
+            (
+                MessageDirection.OUTBOUND.value,
+                MessageStatus.PENDING.value,
+                MessageStatus.QUEUED.value,
+                limit,
+            ),
+        )
+        return [self._row_to_message(row) for row in cursor.fetchall()]
+
+    def get_outbox(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        status: MessageStatus | str | None = None,
+    ) -> list[Message]:
+        """Retrieve messages from the outbox with optional status filter."""
+        return self.list_messages(
+            limit=limit,
+            offset=offset,
+            status=status,
+            direction=MessageDirection.OUTBOUND,
+        )
+
+    def get_inbox(self, limit: int = 100, offset: int = 0) -> list[Message]:
+        """Retrieve messages from the inbox."""
+        return self.list_messages(
+            limit=limit,
+            offset=offset,
+            direction=MessageDirection.INBOUND,
+        )
+
+    def count_outbox(self, status: MessageStatus | str | None = None) -> int:
+        """Count messages in the outbox."""
+        return self.count_messages(status=status, direction=MessageDirection.OUTBOUND)
+
+    def count_inbox(self) -> int:
+        """Count messages in the inbox."""
+        return self.count_messages(direction=MessageDirection.INBOUND)
+
     def close(self) -> None:
         """Close the database connection."""
         if self._conn is not None:

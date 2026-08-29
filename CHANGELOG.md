@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-29
+
+### Added
+- Local transactional message outbox and inbox handling in `MessageStorage` and `GatewayService` (`#8`).
+- Outbox persistence helper methods (`enqueue_outbox`, `get_pending_outbox`, `get_outbox`, `count_outbox`) in `MessageStorage` (`#8`).
+- Inbox query and counting helpers (`get_inbox`, `count_inbox`) in `MessageStorage` (`#8`).
+- Outbox batch processing (`process_outbox`) in `GatewayService` with sequential FIFO dispatch and reliable error handling without message loss (`#8`).
+- Periodic outbox processing integrated into the `GatewayService.run()` execution loop alongside inbound polling (`#8`).
+- Gateway status reporting for outbox and inbox metrics (`outbox_pending`, `outbox_total`, `inbox_total`) in `GatewayService.get_status()` (`#8`).
+- Comprehensive unit and integration tests covering outbox enqueueing, batch dispatch, crash/error retention, service restart resilience, and inbox operations (`#8`).
+- System architecture documentation updated with Outbox/Inbox patterns and sequence flow (`#8`).
+
 ## [0.6.0] - 2026-08-29
 
 ### Added
