@@ -44,6 +44,7 @@ The gateway service can be configured via CLI flags or environment variables:
 | Log Level | `SNIPPEN_SMS_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | Poll Interval | `SNIPPEN_SMS_POLL_INTERVAL` | `2.0` | Polling loop tick interval in seconds |
 | Database Path | `SNIPPEN_SMS_DATABASE_PATH` | `data/sms_gateway.db` | Path to SQLite database file (or `:memory:`) |
+| Provider | `SNIPPEN_SMS_PROVIDER` | `mock` | SMS provider backend (`mock`, `memory`) |
 
 ---
 
@@ -52,11 +53,11 @@ The gateway service can be configured via CLI flags or environment variables:
 Start the long-running SMS gateway service:
 
 ```bash
-# Start gateway service
+# Start gateway service using default mock provider
 python -m snippen_sms.main
 
-# Or run with custom poll interval, log level, and database path
-python -m snippen_sms.main --poll-interval 1.0 --log-level DEBUG
+# Or run with custom provider, poll interval, log level, and database path
+python -m snippen_sms.main --provider mock --poll-interval 1.0 --log-level DEBUG
 ```
 
 Manage database migrations:

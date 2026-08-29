@@ -17,6 +17,7 @@ def test_gateway_config_defaults():
     assert config.log_level == "INFO"
     assert config.poll_interval_seconds == 2.0
     assert config.database_path == "data/sms_gateway.db"
+    assert config.provider == "mock"
 
 
 def test_gateway_config_from_env(monkeypatch):
@@ -24,12 +25,14 @@ def test_gateway_config_from_env(monkeypatch):
     monkeypatch.setenv("SNIPPEN_SMS_LOG_LEVEL", "debug")
     monkeypatch.setenv("SNIPPEN_SMS_POLL_INTERVAL", "5.5")
     monkeypatch.setenv("SNIPPEN_SMS_DATABASE_PATH", ":memory:")
+    monkeypatch.setenv("SNIPPEN_SMS_PROVIDER", "memory")
 
     config = GatewayConfig.from_env()
     assert config.service_name == "custom-gateway"
     assert config.log_level == "DEBUG"
     assert config.poll_interval_seconds == 5.5
     assert config.database_path == ":memory:"
+    assert config.provider == "memory"
 
 
 def test_gateway_start_and_stop():
@@ -247,3 +250,13 @@ def test_gateway_run_cancellation():
         assert not service.is_running
 
     asyncio.run(_test())
+
+
+def test_gateway_default_provider_resolution():
+    config = GatewayConfig(database_path=":memory:", provider="mock")
+    service = GatewayService(config=config)
+    assert service.provider.__class__.__name__ == "MockSmsProvider"
+
+    config_mem = GatewayConfig(database_path=":memory:", provider="memory")
+    service_mem = GatewayService(config=config_mem)
+    assert service_mem.provider.__class__.__name__ == "InMemorySmsProvider"

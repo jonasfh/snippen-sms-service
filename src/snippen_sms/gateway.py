@@ -9,8 +9,8 @@ from typing import Any
 
 from snippen_sms.config import GatewayConfig
 from snippen_sms.models import Message, MessageDirection, MessageStatus
+from snippen_sms.providers import get_provider
 from snippen_sms.providers.base import SmsProvider
-from snippen_sms.providers.memory import InMemorySmsProvider
 from snippen_sms.storage import MessageStorage
 
 logger = logging.getLogger("snippen_sms.gateway")
@@ -27,7 +27,7 @@ class GatewayService:
     ) -> None:
         self.config = config or GatewayConfig()
         self.storage = storage or MessageStorage(self.config.database_path)
-        self.provider = provider or InMemorySmsProvider()
+        self.provider = provider or get_provider(self.config.provider)
         self._is_running = False
         self._stop_event = asyncio.Event()
         self._start_time: float | None = None
