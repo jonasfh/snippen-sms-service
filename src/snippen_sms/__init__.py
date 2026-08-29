@@ -6,10 +6,19 @@ from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService
 from snippen_sms.migrations import Migration, MigrationError, MigrationRunner
 from snippen_sms.models import Message, MessageDirection, MessageStatus
-from snippen_sms.providers import IncomingMessage, InMemorySmsProvider, SendResult, SmsProvider
+from snippen_sms.providers import (
+    IncomingMessage,
+    InMemorySmsProvider,
+    MockSMSProvider,
+    MockSmsProvider,
+    SendResult,
+    SmsProvider,
+    get_provider,
+    register_provider,
+)
 from snippen_sms.storage import MessageStorage
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "GatewayConfig",
@@ -23,7 +32,11 @@ __all__ = [
     "Migration",
     "MigrationError",
     "MigrationRunner",
+    "MockSMSProvider",
+    "MockSmsProvider",
     "SendResult",
     "SmsProvider",
     "__version__",
+    "get_provider",
+    "register_provider",
 ]

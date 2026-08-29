@@ -28,9 +28,10 @@ snippen-sms-service/
 │       │   └── sql/          # Sequential SQL migration files
 │       ├── models.py         # Message domain models and enums
 │       ├── providers/        # SMS provider abstraction layer
-│       │   ├── __init__.py   # Provider exports
+│       │   ├── __init__.py   # Provider exports & factory registry
 │       │   ├── base.py       # SmsProvider ABC, SendResult, IncomingMessage
-│       │   └── memory.py     # InMemorySmsProvider for testing & simulation
+│       │   ├── memory.py     # InMemorySmsProvider for testing & simulation
+│       │   └── mock.py       # MockSmsProvider for mock messaging & auto-replies
 │       └── storage.py        # SQLite persistent storage repository
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
@@ -38,6 +39,7 @@ snippen-sms-service/
 │   ├── test_gateway.py       # GatewayService lifecycle & provider integration tests
 │   ├── test_main.py          # Unit tests
 │   ├── test_migrations.py   # Database migration unit & integration tests
+│   ├── test_mock_provider.py # Mock SMS provider and factory tests
 │   ├── test_providers.py    # SMS provider abstraction unit tests
 │   ├── test_storage.py       # SQLite message storage unit & integration tests
 │   └── test_validate_pr.py   # PR validation tests

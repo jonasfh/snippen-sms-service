@@ -125,6 +125,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="data/sms_gateway.db",
         help="Database file path (default: data/sms_gateway.db)",
     )
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="SMS provider implementation to use (default: mock)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
@@ -148,6 +154,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default="data/sms_gateway.db",
         help="Database file path (default: data/sms_gateway.db)",
+    )
+    run_parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="SMS provider implementation to use (default: mock)",
     )
 
     # Migrate subcommand
@@ -193,10 +205,15 @@ def main_cli() -> None:
         # Default action: run gateway service
         db_path = getattr(args, "database_path", "data/sms_gateway.db")
         poll_interval = getattr(args, "poll_interval", 2.0)
+        provider_arg = getattr(args, "provider", None)
+
+        env_config = GatewayConfig.from_env()
         config = GatewayConfig(
+            service_name=env_config.service_name,
             log_level=log_level,
             poll_interval_seconds=poll_interval,
             database_path=db_path,
+            provider=provider_arg or env_config.provider,
         )
 
         try:

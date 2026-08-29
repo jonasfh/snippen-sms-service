@@ -47,7 +47,7 @@ classDiagram
         +receive_sms() async list~IncomingMessage~*
     }
 
-    class InMemorySmsProvider {
+    class MockSmsProvider {
         -sent_messages: list~SentRecord~
         -inbox: list~IncomingMessage~
         +open() async
@@ -55,8 +55,16 @@ classDiagram
         +send_sms(recipient: str, body: str) async SendResult
         +receive_sms() async list~IncomingMessage~
         +simulate_inbound(sender: str, body: str) IncomingMessage
+        +simulate_incoming(sender: str, body: str) IncomingMessage
         +simulate_send_failure(should_fail: bool, error_message: str)
+        +simulate_receive_failure(should_fail: bool, error_message: str)
+        +add_auto_reply(trigger: str, reply: str)
         +clear()
+    }
+
+    class InMemorySmsProvider {
+        +open() async
+        +close() async
     }
 
     class FutureModemProvider {
@@ -68,7 +76,8 @@ classDiagram
         +receive_sms() async list~IncomingMessage~
     }
 
-    SmsProvider <|-- InMemorySmsProvider
+    SmsProvider <|-- MockSmsProvider
+    MockSmsProvider <|-- InMemorySmsProvider
     SmsProvider <|-- FutureModemProvider
 ```
 
@@ -83,8 +92,11 @@ classDiagram
    - `SendResult(success, message_id, error_message)` encapsulates transmission outcomes and hardware identifiers.
    - `IncomingMessage(sender, body, received_at, provider_message_id)` represents inbound cellular messages in a standardized UTC format.
 
-3. **`InMemorySmsProvider`**:
-   - High-fidelity in-memory provider enabling offline development, CI/CD testing, and simulated inbound/outbound scenarios without physical hardware.
+3. **`MockSmsProvider` & `InMemorySmsProvider`**:
+   - High-fidelity mock/in-memory provider enabling offline development, CI/CD testing, simulated inbound/outbound scenarios, failure injection, and automated response rules without physical hardware.
+
+4. **Provider Factory & Registry (`get_provider`, `register_provider`)**:
+   - Facilitates dynamic instantiation and runtime swapping of providers via configuration or CLI arguments without changing gateway business logic.
 
 ---
 
