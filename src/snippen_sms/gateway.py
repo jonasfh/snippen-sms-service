@@ -12,6 +12,7 @@ from snippen_sms.models import Message, MessageDirection, MessageStatus
 from snippen_sms.providers import get_provider
 from snippen_sms.providers.base import SmsProvider
 from snippen_sms.storage import MessageStorage
+from snippen_sms.updater import SoftwareUpdater, UpdateCheckResult
 
 logger = logging.getLogger("snippen_sms.gateway")
 
@@ -24,13 +25,20 @@ class GatewayService:
         config: GatewayConfig | None = None,
         storage: MessageStorage | None = None,
         provider: SmsProvider | None = None,
+        updater: SoftwareUpdater | None = None,
     ) -> None:
         self.config = config or GatewayConfig()
         self.storage = storage or MessageStorage(self.config.database_path)
         self.provider = provider or get_provider(self.config.provider)
+        self.updater = updater or SoftwareUpdater(
+            github_repo=self.config.github_repo,
+            github_token=self.config.github_token,
+        )
         self._is_running = False
         self._stop_event = asyncio.Event()
         self._start_time: float | None = None
+        self._latest_version_check: UpdateCheckResult | None = None
+        self._last_update_check_time: float = 0.0
 
     @property
     def is_running(self) -> bool:
@@ -63,7 +71,45 @@ class GatewayService:
             "outbox_total": self.storage.count_outbox(),
             "inbox_total": self.storage.count_inbox(),
             "total_messages": self.storage.count_messages(),
+            "github_repo": self.config.github_repo,
+            "update_available": (
+                self._latest_version_check.update_available
+                if self._latest_version_check is not None
+                else False
+            ),
+            "latest_version": (
+                self._latest_version_check.latest_version
+                if self._latest_version_check is not None
+                else None
+            ),
         }
+
+    def check_for_updates(self) -> UpdateCheckResult:
+        """Check GitHub for new releases and log notices if available."""
+        self._last_update_check_time = time.time()
+        try:
+            result = self.updater.check_for_update()
+            self._latest_version_check = result
+            if result.update_available:
+                logger.info(
+                    "A new release (%s) is available on GitHub (current: v%s). "
+                    "Run 'snippen-sms update' to upgrade.",
+                    result.latest_version,
+                    result.current_version,
+                )
+            elif result.error:
+                logger.debug("Update check completed with notice: %s", result.error)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Exception during update check: %s", exc)
+            err_result = UpdateCheckResult(
+                update_available=False,
+                current_version=self.config.service_name,
+                latest_version=None,
+                error=str(exc),
+            )
+            self._latest_version_check = err_result
+            return err_result
 
     def enqueue_outbox(
         self,
@@ -242,6 +288,12 @@ class GatewayService:
             self.config.poll_interval_seconds,
         )
 
+        if self.config.check_updates_on_startup:
+            try:
+                self.check_for_updates()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Startup update check skipped or encountered error: %s", exc)
+
     async def stop(self) -> None:
         """Signal the gateway service to stop gracefully."""
         if not self._is_running:
@@ -269,6 +321,17 @@ class GatewayService:
                     await self.poll_incoming_messages()
                 except Exception:
                     logger.exception("Error during incoming message polling tick.")
+
+                # Periodic update check
+                if (
+                    self.config.auto_update_check
+                    and (time.time() - self._last_update_check_time)
+                    >= self.config.update_check_interval_seconds
+                ):
+                    try:
+                        self.check_for_updates()
+                    except Exception:
+                        logger.exception("Error during periodic update check tick.")
 
                 try:
                     await asyncio.wait_for(

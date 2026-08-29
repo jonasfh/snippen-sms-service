@@ -45,6 +45,10 @@ The gateway service can be configured via CLI flags or environment variables:
 | Poll Interval | `SNIPPEN_SMS_POLL_INTERVAL` | `2.0` | Polling loop tick interval in seconds |
 | Database Path | `SNIPPEN_SMS_DATABASE_PATH` | `data/sms_gateway.db` | Path to SQLite database file (or `:memory:`) |
 | Provider | `SNIPPEN_SMS_PROVIDER` | `mock` | SMS provider backend (`mock`, `memory`) |
+| GitHub Repo | `SNIPPEN_SMS_GITHUB_REPO` | `jonasfh/snippen-sms-service` | Target repository for software updates |
+| Startup Update Check | `SNIPPEN_SMS_CHECK_UPDATES_ON_STARTUP` | `true` | Check GitHub Releases on service start |
+| Auto Update Check | `SNIPPEN_SMS_AUTO_UPDATE_CHECK` | `true` | Enable periodic background update checks |
+| Update Interval | `SNIPPEN_SMS_UPDATE_CHECK_INTERVAL` | `86400.0` | Interval in seconds between update checks |
 
 ---
 
@@ -58,6 +62,16 @@ python -m snippen_sms.main
 
 # Or run with custom provider, poll interval, log level, and database path
 python -m snippen_sms.main --provider mock --poll-interval 1.0 --log-level DEBUG
+```
+
+Check for software updates and upgrade:
+
+```bash
+# Check if a new version is available on GitHub Releases
+snippen-sms check-update
+
+# Download release artifact and perform software upgrade
+snippen-sms update
 ```
 
 Manage database migrations:

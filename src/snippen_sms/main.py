@@ -94,6 +94,56 @@ def handle_migrate_status(db_path: str) -> int:
     return 0
 
 
+def handle_check_update(
+    repo: str = "jonasfh/snippen-sms-service",
+    token: str | None = None,
+) -> int:
+    """Check GitHub Releases for available updates and display result."""
+    from snippen_sms.updater import SoftwareUpdater
+
+    updater = SoftwareUpdater(github_repo=repo, github_token=token)
+    print(f"Checking for updates from GitHub repository: {repo}...")
+    result = updater.check_for_update()
+
+    print(f"\nCurrent Version:  v{result.current_version}")
+    if result.error:
+        print(f"Update Check:     Error ({result.error})")
+        return 1
+
+    print(f"Latest Release:   v{result.latest_version}")
+    if result.update_available:
+        print("Status:           🚀 Update Available!")
+        if result.release_info and result.release_info.wheel_url:
+            print(f"Package Asset:    {result.release_info.wheel_url}")
+        print("\nTo upgrade, run:  snippen-sms update")
+    else:
+        print("Status:           ✅ Up to date")
+    return 0
+
+
+def handle_update(
+    repo: str = "jonasfh/snippen-sms-service",
+    token: str | None = None,
+    force: bool = False,
+    database_path: str = "data/sms_gateway.db",
+) -> int:
+    """Download latest release artifact and perform upgrade."""
+    from snippen_sms.updater import SoftwareUpdater
+
+    updater = SoftwareUpdater(github_repo=repo, github_token=token)
+    print(f"Fetching latest release from {repo}...")
+    success, message = updater.perform_upgrade(force=force, database_path=database_path)
+
+    if success:
+        print(f"✅ {message}")
+        print("\nIf running as a systemd service, restart the service to apply changes:")
+        print("  sudo systemctl restart snippen-sms")
+        return 0
+    else:
+        print(f"❌ Upgrade failed: {message}")
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build command line argument parser."""
     parser = argparse.ArgumentParser(
@@ -186,6 +236,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Database file path (default: data/sms_gateway.db)",
     )
 
+    # Check update subcommand
+    check_update_parser = subparsers.add_parser(
+        "check-update",
+        help="Check GitHub Releases for available software updates",
+    )
+    check_update_parser.add_argument(
+        "--repo",
+        type=str,
+        default=None,
+        help="GitHub repository (default: jonasfh/snippen-sms-service)",
+    )
+
+    # Update subcommand
+    update_parser = subparsers.add_parser(
+        "update",
+        help="Download latest GitHub release artifact and upgrade software",
+    )
+    update_parser.add_argument(
+        "--repo",
+        type=str,
+        default=None,
+        help="GitHub repository (default: jonasfh/snippen-sms-service)",
+    )
+    update_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force reinstallation even if already at latest version",
+    )
+    update_parser.add_argument(
+        "--database-path",
+        type=str,
+        default="data/sms_gateway.db",
+        help="Database file path to apply migrations to post-upgrade",
+    )
+
     return parser
 
 
@@ -197,23 +282,43 @@ def main_cli() -> None:
     log_level = getattr(args, "log_level", "INFO") or "INFO"
     setup_logging(log_level)
 
+    env_config = GatewayConfig.from_env()
+
     if args.command == "migrate":
         sys.exit(handle_migrate(args.database_path, getattr(args, "target_version", None)))
     elif args.command == "migrate-status":
         sys.exit(handle_migrate_status(args.database_path))
+    elif args.command == "check-update":
+        repo = getattr(args, "repo", None) or env_config.github_repo
+        sys.exit(handle_check_update(repo=repo, token=env_config.github_token))
+    elif args.command == "update":
+        repo = getattr(args, "repo", None) or env_config.github_repo
+        db_path = getattr(args, "database_path", env_config.database_path)
+        sys.exit(
+            handle_update(
+                repo=repo,
+                token=env_config.github_token,
+                force=getattr(args, "force", False),
+                database_path=db_path,
+            )
+        )
     else:
         # Default action: run gateway service
         db_path = getattr(args, "database_path", "data/sms_gateway.db")
         poll_interval = getattr(args, "poll_interval", 2.0)
         provider_arg = getattr(args, "provider", None)
 
-        env_config = GatewayConfig.from_env()
         config = GatewayConfig(
             service_name=env_config.service_name,
             log_level=log_level,
             poll_interval_seconds=poll_interval,
             database_path=db_path,
             provider=provider_arg or env_config.provider,
+            github_repo=env_config.github_repo,
+            check_updates_on_startup=env_config.check_updates_on_startup,
+            auto_update_check=env_config.auto_update_check,
+            update_check_interval_seconds=env_config.update_check_interval_seconds,
+            github_token=env_config.github_token,
         )
 
         try:

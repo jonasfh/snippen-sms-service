@@ -423,3 +423,70 @@ def test_gateway_run_loop_processes_outbox_and_inbox():
         await asyncio.wait_for(task, timeout=1.0)
 
     asyncio.run(_test())
+
+
+def test_gateway_updater_integration():
+    from unittest.mock import patch
+
+    from snippen_sms.updater import ReleaseInfo, UpdateCheckResult
+
+    config = GatewayConfig(
+        database_path=":memory:",
+        github_repo="test-owner/test-repo",
+        check_updates_on_startup=False,
+    )
+    service = GatewayService(config=config)
+
+    # Initial status
+    status = service.get_status()
+    assert status["github_repo"] == "test-owner/test-repo"
+    assert status["update_available"] is False
+    assert status["latest_version"] is None
+
+    mock_check = UpdateCheckResult(
+        update_available=True,
+        current_version="0.8.0",
+        latest_version="0.9.0",
+        release_info=ReleaseInfo(
+            version="0.9.0",
+            tag_name="v0.9.0",
+            published_at="",
+            wheel_url="https://example.com/wheel.whl",
+            tarball_url=None,
+            html_url="",
+            release_notes="",
+        ),
+    )
+
+    with patch.object(service.updater, "check_for_update", return_value=mock_check):
+        res = service.check_for_updates()
+
+    assert res.update_available is True
+    assert res.latest_version == "0.9.0"
+
+    status_updated = service.get_status()
+    assert status_updated["update_available"] is True
+    assert status_updated["latest_version"] == "0.9.0"
+
+
+def test_gateway_startup_check_offline_graceful():
+    async def _test():
+        from unittest.mock import patch
+
+        config = GatewayConfig(
+            database_path=":memory:",
+            check_updates_on_startup=True,
+        )
+        service = GatewayService(config=config)
+
+        with patch.object(
+            service.updater,
+            "check_for_update",
+            side_effect=TimeoutError("Network offline"),
+        ):
+            # start() should catch the error gracefully and not crash
+            await service.start()
+            assert service.is_running
+            await service.stop()
+
+    asyncio.run(_test())

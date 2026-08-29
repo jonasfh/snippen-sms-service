@@ -241,6 +241,39 @@ erDiagram
 
 ---
 
+## Software Version Checking & Self-Update Architecture
+
+The gateway features built-in release tracking against the official GitHub Releases API to keep field deployments up-to-date.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GW as Gateway / CLI
+    participant GH as GitHub Releases API
+    participant Pip as Environment / pip
+    participant DB as SQLite Migrations
+
+    GW->>GH: GET /repos/{repo}/releases/latest
+    GH-->>GW: JSON Release Payload (tag_name, assets)
+    GW->>GW: Compare SemVer against current package version
+    alt Update Available & Upgrade Requested
+        GW->>GH: Download wheel / distribution artifact
+        GW->>Pip: pip install --upgrade --no-cache-dir <artifact>
+        GW->>DB: MigrationRunner.run_migrations()
+        GW-->>GW: Ready for process restart (e.g. systemctl restart)
+    else Up to date / Check Only
+        GW-->>GW: Update diagnostic status report
+    end
+```
+
+### Key Update Capabilities
+1. **Zero-Dependency Release Checking**: Uses Python's standard `urllib` to query GitHub API with configurable repository defaults (`jonasfh/snippen-sms-service`) and environment overrides (`SNIPPEN_SMS_GITHUB_REPO`).
+2. **Safe, Non-Looping Startup Check**: Checks for updates at startup (and periodically in background) without forcing restarts, avoiding reboot crash loops if network conditions or package dependencies encounter issues.
+3. **Artifact-Based Upgrade**: Discovers and downloads wheel (`.whl`) or tarball distributions, installs via `pip`, and automatically executes any new SQLite schema migrations.
+4. **CLI Management**: Direct command-line access via `snippen-sms check-update` and `snippen-sms update`.
+
+---
+
 ## Architectural Principles
 
 1. **Hardware Isolation**:

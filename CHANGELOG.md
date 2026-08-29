@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-29
+
+### Added
+- Automated GitHub release version checking and self-update facility with `SoftwareUpdater` in `snippen_sms.updater` (`#19`).
+- `ReleaseInfo` and `UpdateCheckResult` domain dataclasses with SemVer comparison logic (`#19`).
+- Configurable GitHub repository target (`github_repo` / `SNIPPEN_SMS_GITHUB_REPO`, defaulting to `jonasfh/snippen-sms-service`) (`#19`).
+- Safe, non-looping startup version check and periodic background checks in `GatewayService` without blocking offline operation (`#19`).
+- Release asset download (wheel `.whl` and tarball `.tar.gz`), pip upgrade execution, and post-upgrade SQLite database schema migrations (`#19`).
+- CLI subcommands `snippen-sms check-update` and `snippen-sms update` for manual and automated maintenance (`#19`).
+- Update availability reporting in `GatewayService.get_status()` (`#19`).
+- Comprehensive unit and integration tests for GitHub release querying, version parsing, wheel installation, and CLI workflows (`#19`).
+- System architecture and developer guides updated with release management and update sequence diagrams (`#19`).
+
 ## [0.7.0] - 2026-08-29
 
 ### Added
