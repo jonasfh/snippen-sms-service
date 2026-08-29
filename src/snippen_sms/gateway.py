@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from snippen_sms.config import GatewayConfig
+from snippen_sms.storage import MessageStorage
 
 logger = logging.getLogger("snippen_sms.gateway")
 
@@ -15,8 +16,13 @@ logger = logging.getLogger("snippen_sms.gateway")
 class GatewayService:
     """Long-running gateway service managing SMS dispatch and ingestion."""
 
-    def __init__(self, config: GatewayConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: GatewayConfig | None = None,
+        storage: MessageStorage | None = None,
+    ) -> None:
         self.config = config or GatewayConfig()
+        self.storage = storage or MessageStorage(self.config.database_path)
         self._is_running = False
         self._stop_event = asyncio.Event()
         self._start_time: float | None = None
@@ -43,6 +49,8 @@ class GatewayService:
             "version": __version__,
             "uptime_seconds": round(self.uptime_seconds, 2),
             "poll_interval_seconds": self.config.poll_interval_seconds,
+            "database_path": self.config.database_path,
+            "total_messages": self.storage.count_messages(),
         }
 
     async def start(self) -> None:
@@ -68,6 +76,7 @@ class GatewayService:
         logger.info("Stopping %s...", self.config.service_name)
         self._is_running = False
         self._stop_event.set()
+        self.storage.close()
 
     async def run(self) -> None:
         """Main service execution loop."""

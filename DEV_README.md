@@ -21,17 +21,21 @@ snippen-sms-service/
 │       ├── __init__.py       # Package version & exports
 │       ├── config.py         # Gateway configuration settings
 │       ├── gateway.py        # GatewayService lifecycle & run loop
-│       └── main.py           # Entry point & CLI runner
+│       ├── main.py           # Entry point & CLI runner
+│       ├── models.py         # Message domain models and enums
+│       └── storage.py        # SQLite persistent storage repository
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_format.py        # Formatter tests
 │   ├── test_gateway.py       # GatewayService lifecycle tests
 │   ├── test_main.py          # Unit tests
+│   ├── test_storage.py       # SQLite message storage unit & integration tests
 │   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config
 ├── README.md                 # User documentation
 ├── DEV_README.md             # Developer documentation
 └── CHANGELOG.md              # Project history
+
 ```
 
 For high-level system architecture, communication flows, and boundaries, see [docs/architecture.md](file:///workspaces/snippen-sms-service/docs/architecture.md).
