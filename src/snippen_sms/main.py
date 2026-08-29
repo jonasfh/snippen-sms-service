@@ -166,9 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # Migrate status subcommand
-    status_parser = subparsers.add_parser(
-        "migrate-status", help="Show database migration status"
-    )
+    status_parser = subparsers.add_parser("migrate-status", help="Show database migration status")
     status_parser.add_argument(
         "--database-path",
         type=str,
