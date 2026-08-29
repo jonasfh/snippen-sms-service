@@ -16,3 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - High-level architecture documentation under `docs/architecture.md` and documentation hub in `docs/README.md` (`#3`).
 - Updated `README.md` and `DEV_README.md` with system topology, project purpose, and documentation links (`#3`).
 - Project-wide formatting utility (`scripts/format.py`) and agent instructions to enforce trailing whitespace removal and single EOF newline hygiene across all code, markdown, and text files.
+- Semantic versioning configuration using standard setuptools dynamic package versioning (`#10`).
+- PR Validator GitHub Actions workflow (`.github/workflows/pr-validator.yml`) and validation utility (`scripts/validate_pr.py`) to enforce valid SemVer bump, changelog presence, linting, and tests (`#10`).
+- Deploy & Release Tagging GitHub Actions workflow (`.github/workflows/deploy.yml`) to automatically tag releases upon merging to main (`#10`).

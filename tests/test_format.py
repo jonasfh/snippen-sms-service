@@ -1,7 +1,7 @@
 """Unit tests for the project formatter utility."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Add scripts directory to path to import format module
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))

@@ -16,6 +16,7 @@ Once a GitHub issue is identified or created, follow this workflow:
    - Resolve the issue using Python 3.12 standards.
    - Run project formatter: `python scripts/format.py` (strips trailing whitespace, ensures single EOF newline, removes duplicate EOF newlines across all text/markdown files).
    - Create/update tests and run linting and tests (`pytest`, `ruff check .`).
+   - Run PR validator locally: `python scripts/validate_pr.py` (ensures SemVer bump and CHANGELOG entry).
    - Update documentation (`README.md`, `DEV_README.md`, `docs/`) for any new features, endpoints, or data models implemented.
 4. **Submission & Commit Messages**:
    - Commit changed files.

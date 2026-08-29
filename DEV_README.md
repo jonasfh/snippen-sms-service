@@ -14,14 +14,17 @@ snippen-sms-service/
 │   ├── README.md             # Documentation overview
 │   └── architecture.md       # High-level architecture & communication flows
 ├── scripts/                  # Development & formatting utilities
-│   └── format.py             # Whitespace & file formatting tool
+│   ├── format.py             # Whitespace & file formatting tool
+│   └── validate_pr.py        # PR SemVer & changelog validation tool
 ├── src/
 │   └── snippen_sms/          # Application package
 │       ├── __init__.py       # Package version
 │       └── main.py           # Entry point
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
-│   └── test_main.py          # Unit tests
+│   ├── test_format.py        # Formatter tests
+│   ├── test_main.py          # Unit tests
+│   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config
 ├── README.md                 # User documentation
 ├── DEV_README.md             # Developer documentation
@@ -41,9 +44,9 @@ For high-level system architecture, communication flows, and boundaries, see [do
      source ~/.venv/bin/activate
      pip install -e ".[dev]"
      ```
-3. **Testing, Linting & Formatting**:
+3. **Testing, Linting, Formatting & PR Validation**:
    ```bash
-   # Run tests
+   # Run test suite
    pytest
 
    # Run lint checks
@@ -51,4 +54,19 @@ For high-level system architecture, communication flows, and boundaries, see [do
 
    # Format files & cleanup whitespace / newlines
    python scripts/format.py
+
+   # Validate PR version bump and changelog
+   python scripts/validate_pr.py --base origin/main
    ```
+
+## CI/CD Workflows
+
+- **PR Validator (`.github/workflows/pr-validator.yml`)**:
+  - Triggers on pull requests targeting `main`.
+  - Runs formatting check (`python scripts/format.py`), ruff linting, and pytest test suite.
+  - Verifies that package version conforms to Semantic Versioning and is strictly greater than the latest release git tag.
+  - Verifies that `CHANGELOG.md` contains an entry for the version.
+- **Deploy & Release Tagging (`.github/workflows/deploy.yml`)**:
+  - Triggers on push to `main` (merges).
+  - Automatically tags release with `v<version>` if the tag does not already exist.
+  - Skips tag creation cleanly if the tag is already present.
