@@ -68,3 +68,26 @@ def test_check_changelog_missing_version(tmp_path: Path):
         ValueError, match=r"CHANGELOG.md does not contain an entry for version \[0.1.0\]"
     ):
         validate_pr.check_changelog(tmp_path, "0.1.0")
+
+
+def test_check_formatting_hygiene_clean(tmp_path: Path):
+    test_file = tmp_path / "clean.md"
+    test_file.write_text("# Header\n\nLine 1\n", encoding="utf-8")
+
+    assert validate_pr.check_formatting_hygiene(tmp_path) is True
+
+
+def test_check_formatting_hygiene_trailing_whitespace(tmp_path: Path):
+    test_file = tmp_path / "dirty.md"
+    test_file.write_text("# Header  \nLine 1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="trailing whitespace detected"):
+        validate_pr.check_formatting_hygiene(tmp_path)
+
+
+def test_check_formatting_hygiene_duplicate_eof_newline(tmp_path: Path):
+    test_file = tmp_path / "double_newline.py"
+    test_file.write_text("x = 1\n\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate trailing newlines at end of file"):
+        validate_pr.check_formatting_hygiene(tmp_path)
