@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-29
+
+### Added
+- SMS provider abstraction layer with `SmsProvider` abstract base class, `SendResult`, and `IncomingMessage` data structures (`#6`).
+- Hardware-agnostic `InMemorySmsProvider` implementation for automated testing, simulation, and offline operation (`#6`).
+- Provider integration in `GatewayService` with `send_sms()` dispatch, `poll_incoming_messages()` ingestion, and lifecycle hooks (`#6`).
+- Polling of incoming SMS integrated into the `GatewayService.run()` main execution loop (`#6`).
+- Provider health/type diagnostics reported in `GatewayService.get_status()` (`#6`).
+- Comprehensive unit test suite in `tests/test_providers.py` and extended gateway tests in `tests/test_gateway.py` (`#6`).
+- Updated system architecture documentation and diagrams detailing provider decoupling and flow (`#6`).
+
 ## [0.4.0] - 2026-08-29
 
 ### Added
@@ -18,7 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2026-08-29
 
-
 ### Added
 - Local SQLite message persistence with `MessageStorage` repository (`#5`).
 - Domain models `Message`, `MessageDirection`, and `MessageStatus` with UTC timestamp tracking (`created_at`, `modified_at`) (`#5`).
@@ -27,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - System architecture documentation and Mermaid data schema diagram for local message storage (`#5`).
 
 ## [0.2.0] - 2026-08-29
-
 
 ### Added
 - Gateway application skeleton with `GatewayService` lifecycle management and run loop (`#4`).
