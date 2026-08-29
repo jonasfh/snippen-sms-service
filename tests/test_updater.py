@@ -103,7 +103,7 @@ def test_updater_check_for_update_same_version():
     assert result.error is None
 
 
-def test_updater_check_for_update_http_error():
+def test_updater_check_for_update_http_404_no_releases():
     updater = SoftwareUpdater(github_repo="test-owner/test-repo")
 
     with patch(
@@ -120,8 +120,28 @@ def test_updater_check_for_update_http_error():
 
     assert result.update_available is False
     assert result.latest_version is None
+    assert result.error is None
+
+
+def test_updater_check_for_update_http_500_error():
+    updater = SoftwareUpdater(github_repo="test-owner/test-repo")
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=urllib.error.HTTPError(
+            url="http://test",
+            code=500,
+            msg="Internal Server Error",
+            hdrs={},  # type: ignore[arg-type]
+            fp=io.BytesIO(b""),
+        ),
+    ):
+        result = updater.check_for_update(current_version="0.8.0")
+
+    assert result.update_available is False
+    assert result.latest_version is None
     assert result.error is not None
-    assert "404" in result.error
+    assert "500" in result.error
 
 
 def test_updater_check_for_update_network_exception():

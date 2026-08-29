@@ -52,3 +52,15 @@ jobs:
           git tag -a "${TAG}" -m "Release ${TAG} - version ${VERSION}"
           git push origin "${TAG}"
           echo "Successfully created and pushed tag ${TAG}"
+
+      - name: Build Package Distributions and Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.get_version.outputs.tag }}"
+          VERSION="${{ steps.get_version.outputs.version }}"
+          python -m pip install --upgrade build
+          python -m build
+          gh release create "${TAG}" dist/* --title "${TAG}" --generate-notes
+          echo "Successfully created GitHub Release for ${TAG} with build assets."
