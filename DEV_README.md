@@ -10,6 +10,9 @@
 snippen-sms-service/
 ├── .devcontainer/            # Dev Container configuration (Python 3.12)
 ├── .agents/                  # Agent guidelines (Architecture, Workflow, Testing, Docs)
+├── docs/                     # System documentation & architecture guides
+│   ├── README.md             # Documentation overview
+│   └── architecture.md       # High-level architecture & communication flows
 ├── src/
 │   └── snippen_sms/          # Application package
 │       ├── __init__.py       # Package version
@@ -22,6 +25,8 @@ snippen-sms-service/
 ├── DEV_README.md             # Developer documentation
 └── CHANGELOG.md              # Project history
 ```
+
+For high-level system architecture, communication flows, and boundaries, see [docs/architecture.md](file:///workspaces/snippen-sms-service/docs/architecture.md).
 
 ## Setup & Local Development
 

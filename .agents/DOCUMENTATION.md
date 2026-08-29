@@ -4,6 +4,7 @@
 
 - **User-facing docs**: Keep `README.md` updated with installation, usage, API endpoints, and configuration parameters.
 - **Developer-facing docs**: Keep `DEV_README.md` updated with architecture, development setup, workflow, and testing strategy.
+- **Continuous Documentation Updates**: Whenever implementing new features, components, endpoints, database tables, or data models, you MUST update relevant documentation (`README.md`, `DEV_README.md`, `docs/*`, schema diagrams) in the same PR before completing the task. Never leave documentation out-of-sync with newly introduced functionality or models.
 
 ## Mermaid Diagrams
 
