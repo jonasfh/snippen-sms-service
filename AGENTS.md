@@ -12,6 +12,10 @@ Guide AI agents working in this repository.
   - Run pytest/ruff via `/home/vscode/.venv/bin/pytest` or `/home/vscode/.venv/bin/ruff check .` (or system/container tools).
 - **Database Rules**: Always include `created_at` and `modified_at` timestamps on database models and custom database tables.
 - **GitHub Issue Workflow**: All development MUST follow an associated GitHub Issue or direct Code Scanning / Dependabot alert IDs. Create branches like `gh-issue/<id>`, `dep-<ids>-fix-dependabot-issues`, or `sec-<ids>-fix-code-scanning-issues`, create PRs, and format commit messages accordingly (`(#<id>) Description` or `(sec-<ids>) Description` / `(dep-<ids>) Description`).
+- **Formatting & Whitespace Hygiene**: Always run the repository formatter (`python scripts/format.py` or `ruff format .`) before committing. All project files (Python, Markdown, JSON, YAML, TOML, etc.) must have:
+  - Trailing whitespaces stripped.
+  - A single newline (`\n`) at the end of the file.
+  - Duplicate/excess trailing newlines removed.
 - **Documentation**: Always update documentation (`README.md`, `DEV_README.md`, `docs/`, and architecture documents) whenever implementing new features, endpoints, data models, or database schemas. Keeping documentation in sync with the codebase is mandatory.
 
 ## Self-Improvement & Environment Adaptation
