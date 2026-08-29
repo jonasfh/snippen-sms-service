@@ -1,0 +1,2 @@
+snippen_sms
+wp-content

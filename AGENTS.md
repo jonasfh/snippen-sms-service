@@ -1,0 +1,31 @@
+# AGENTS.md
+
+## Purpose
+Guide AI agents working in this repository.
+
+## Key Rules & Guidelines
+
+- **Python Standards & Best Practices**: Use Python 3.12+. Project source code resides in `src/snippen_sms/` (or `snippen_sms/`).
+- **Testing & Quality Control**:
+  - Always write `pytest` unit/integration tests for new functionality and update existing tests when modifying functionality.
+  - Run linting (`ruff check .` / `flake8`) and tests (`pytest`) before completing a task. Resolving all linting errors and warnings is mandatory.
+  - If local python or pytest CLI tools are missing on host, run them via Docker container or virtual environment.
+- **Database Rules**: Always include `created_at` and `modified_at` timestamps on database models and custom database tables.
+- **GitHub Issue Workflow**: All development MUST follow an associated GitHub Issue or direct Code Scanning / Dependabot alert IDs. Create branches like `gh-issue/<id>`, `dep-<ids>-fix-dependabot-issues`, or `sec-<ids>-fix-code-scanning-issues`, create PRs, and format commit messages accordingly (`(#<id>) Description` or `(sec-<ids>) Description` / `(dep-<ids>) Description`).
+- **Documentation**: Keep `README.md` (user-facing) and `DEV_README.md` (developer-facing) updated with changes.
+
+## Self-Improvement & Environment Adaptation
+- **Continuous Agent Guideline Updates**: Whenever an agent experiences friction, environment errors (e.g., sandbox network access for `gh` CLI commands requiring `BypassSandbox: true`, missing CLI tools, unusual log locations, or git ref locks), the agent MUST update `AGENTS.md` and `.agents/` modular guidelines with the discovered workaround or instructions so subsequent agent sessions execute cleanly without repeating trial-and-error.
+
+## Modular Sub-guidelines
+
+Detailed guidelines are split into specialized modules under `.agents/`:
+
+- 📐 **[Architecture & Coding Standards](file:///.agents/ARCHITECTURE.md)**: Python tech stack, directory structure, module layout, and DB rules.
+- 🔄 **[GitHub Issue Workflow](file:///.agents/WORKFLOW.md)**: Branching strategy, commit message rules, PR requirements, versioning, and CHANGELOG updates.
+- 🧪 **[Testing & Quality Assurance](file:///.agents/TESTING.md)**: Running tests (`pytest`) and linting (`ruff`), writing unit/integration tests, and debugging/logging.
+- 📝 **[Documentation Standards & Diagrams](file:///.agents/DOCUMENTATION.md)**: README/DEV_README maintenance and Mermaid diagram constraints.
+
+## Versioning & Changelog
+- **Version Bump**: Update version in `pyproject.toml` or `src/snippen_sms/__init__.py` on functional changes.
+- **CHANGELOG.md**: Add an entry under `## [X.Y.Z] - YYYY-MM-DD` for every version bump.
