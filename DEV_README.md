@@ -22,6 +22,10 @@ snippen-sms-service/
 │       ├── config.py         # Gateway configuration settings
 │       ├── gateway.py        # GatewayService lifecycle & run loop
 │       ├── main.py           # Entry point & CLI runner
+│       ├── migrations/       # SQLite database migration system
+│       │   ├── __init__.py   # Migration exports
+│       │   ├── runner.py     # MigrationRunner & Migration class
+│       │   └── sql/          # Sequential SQL migration files
 │       ├── models.py         # Message domain models and enums
 │       └── storage.py        # SQLite persistent storage repository
 ├── tests/
@@ -29,6 +33,7 @@ snippen-sms-service/
 │   ├── test_format.py        # Formatter tests
 │   ├── test_gateway.py       # GatewayService lifecycle tests
 │   ├── test_main.py          # Unit tests
+│   ├── test_migrations.py   # Database migration unit & integration tests
 │   ├── test_storage.py       # SQLite message storage unit & integration tests
 │   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config

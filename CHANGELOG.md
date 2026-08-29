@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-29
+
+### Added
+- Database migration management system for embedded SQLite (`#13`).
+- Lightweight, zero-dependency `MigrationRunner` and `Migration` dataclass in `snippen_sms.migrations` with atomic transactions, SHA-256 checksum tracking, and rollback on failure (`#13`).
+- Persistent `schema_migrations` tracking table and `PRAGMA user_version` synchronization (`#13`).
+- Initial migration script `0001_initial_messages_schema.sql` for creating `messages` table and performance indexes (`#13`).
+- Automatic schema migration hook on `MessageStorage` and `GatewayService` initialization with baseline support for existing databases (`#13`).
+- CLI subcommands `snippen-sms migrate` and `snippen-sms migrate-status` with target-version and custom database path flags (`#13`).
+- Comprehensive unit and integration tests covering migration parsing, execution, error rollback, idempotency, baseline migration, and CLI workflows (`#13`).
+
 ## [0.3.0] - 2026-08-29
+
 
 ### Added
 - Local SQLite message persistence with `MessageStorage` repository (`#5`).

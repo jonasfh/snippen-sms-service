@@ -9,6 +9,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+from snippen_sms.migrations.runner import MigrationRunner
 from snippen_sms.models import Message, MessageDirection, MessageStatus
 
 logger = logging.getLogger("snippen_sms.storage")
@@ -17,8 +18,13 @@ logger = logging.getLogger("snippen_sms.storage")
 class MessageStorage:
     """Persistent message repository backed by SQLite."""
 
-    def __init__(self, db_path: str | Path = "data/sms_gateway.db") -> None:
+    def __init__(
+        self,
+        db_path: str | Path = "data/sms_gateway.db",
+        auto_migrate: bool = True,
+    ) -> None:
         self.db_path = str(db_path)
+        self.auto_migrate = auto_migrate
         self._conn: sqlite3.Connection | None = None
         # Ensure connection and schema are initialized
         _ = self.connection
@@ -31,40 +37,20 @@ class MessageStorage:
                 Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
             conn.row_factory = sqlite3.Row
-            self._setup_schema(conn)
+            if self.auto_migrate:
+                self._setup_schema(conn)
             self._conn = conn
         return self._conn
 
     def _setup_schema(self, conn: sqlite3.Connection) -> None:
-        """Initialize database tables and indexes on the connection."""
-        with conn:
-            if self.db_path != ":memory:":
-                conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA foreign_keys=ON;")
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    direction TEXT NOT NULL,
-                    sender TEXT NOT NULL,
-                    recipient TEXT NOT NULL,
-                    body TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    modem_message_id TEXT,
-                    error_message TEXT,
-                    created_at TEXT NOT NULL,
-                    modified_at TEXT NOT NULL
-                );
-                """
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_messages_direction ON messages(direction);"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);"
-            )
-        logger.debug("MessageStorage initialized with backend: %s", self.db_path)
+        """Initialize database schema and apply pending migrations."""
+        runner = MigrationRunner(conn)
+        runner.run_migrations()
+        logger.debug(
+            "MessageStorage initialized with backend: %s (schema v%d)",
+            self.db_path,
+            runner.get_current_version(),
+        )
 
     @staticmethod
     def _row_to_message(row: sqlite3.Row) -> Message:
