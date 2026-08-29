@@ -125,10 +125,17 @@ erDiagram
         string created_at
         string modified_at
     }
+    schema_migrations {
+        int version PK
+        string name
+        string applied_at
+        string checksum
+    }
 ```
 
 - **Persistence Layer (`MessageStorage`)**: Built on Python standard library `sqlite3` using Write-Ahead Logging (`WAL`) mode for robust, concurrent reads and writes without external database server dependencies.
 - **Timestamp Tracking**: Every record maintains ISO-8601 UTC `created_at` and `modified_at` timestamps for auditing, synchronization, and retry workflows.
+- **Migration Management (`MigrationRunner`)**: Sequential SQL migration scripts managed atomically with `schema_migrations` tracking, SHA-256 checksum verification, `PRAGMA user_version` synchronization, and automatic execution upon service initialization.
 
 ---
 

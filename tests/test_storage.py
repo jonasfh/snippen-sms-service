@@ -49,6 +49,16 @@ def test_storage_initialization_memory(memory_storage: MessageStorage) -> None:
     )
     assert cursor.fetchone() is not None
 
+    # Verify schema_migrations table and version
+    cursor = memory_storage.connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations';"
+    )
+    assert cursor.fetchone() is not None
+
+    cursor = memory_storage.connection.execute("PRAGMA user_version;")
+    assert cursor.fetchone()[0] >= 1
+
+
 
 def test_storage_initialization_file(tmp_path: Path) -> None:
     """Test initializing storage on disk creates directories and files."""

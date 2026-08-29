@@ -2,6 +2,7 @@
 
 import asyncio
 
+from snippen_sms import __version__
 from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService
 
@@ -42,7 +43,7 @@ def test_gateway_start_and_stop():
         status = service.get_status()
         assert status["status"] == "running"
         assert status["service"] == "snippen-sms-service"
-        assert status["version"] == "0.3.0"
+        assert status["version"] == __version__
         assert status["database_path"] == ":memory:"
         assert status["total_messages"] == 0
 

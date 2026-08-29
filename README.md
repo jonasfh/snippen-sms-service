@@ -59,6 +59,17 @@ python -m snippen_sms.main
 python -m snippen_sms.main --poll-interval 1.0 --log-level DEBUG
 ```
 
+Manage database migrations:
+
+```bash
+# Apply pending schema migrations
+snippen-sms migrate
+
+# Check migration status and current schema version
+snippen-sms migrate-status
+```
+
+
 Run the test suite, code linter, and formatting tool in the development environment:
 
 ```bash
