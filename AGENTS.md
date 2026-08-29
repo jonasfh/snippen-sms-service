@@ -5,17 +5,18 @@ Guide AI agents working in this repository.
 
 ## Key Rules & Guidelines
 
-- **Python Standards & Best Practices**: Use Python 3.12+. Project source code resides in `src/snippen_sms/` (or `snippen_sms/`).
+- **Python Standards & Best Practices**: Use Python 3.12+. Project source code resides in `src/snippen_sms/` (or `snippen_sms/`). In Dev Containers, the virtual environment is maintained at `/home/vscode/.venv` (outside `/workspaces/snippen-sms-service`) to prevent host/container `.venv` collisions.
 - **Testing & Quality Control**:
   - Always write `pytest` unit/integration tests for new functionality and update existing tests when modifying functionality.
   - Run linting (`ruff check .` / `flake8`) and tests (`pytest`) before completing a task. Resolving all linting errors and warnings is mandatory.
-  - If local python or pytest CLI tools are missing on host, run them via Docker container or virtual environment.
+  - Run pytest/ruff via `/home/vscode/.venv/bin/pytest` or `/home/vscode/.venv/bin/ruff check .` (or system/container tools).
 - **Database Rules**: Always include `created_at` and `modified_at` timestamps on database models and custom database tables.
 - **GitHub Issue Workflow**: All development MUST follow an associated GitHub Issue or direct Code Scanning / Dependabot alert IDs. Create branches like `gh-issue/<id>`, `dep-<ids>-fix-dependabot-issues`, or `sec-<ids>-fix-code-scanning-issues`, create PRs, and format commit messages accordingly (`(#<id>) Description` or `(sec-<ids>) Description` / `(dep-<ids>) Description`).
 - **Documentation**: Keep `README.md` (user-facing) and `DEV_README.md` (developer-facing) updated with changes.
 
 ## Self-Improvement & Environment Adaptation
 - **Continuous Agent Guideline Updates**: Whenever an agent experiences friction, environment errors (e.g., sandbox network access for `gh` CLI commands requiring `BypassSandbox: true`, missing CLI tools, unusual log locations, or git ref locks), the agent MUST update `AGENTS.md` and `.agents/` modular guidelines with the discovered workaround or instructions so subsequent agent sessions execute cleanly without repeating trial-and-error.
+- **Dev Container Virtual Environment**: To avoid host OS workspace `.venv` files breaking container execution, Dev Container virtualenvs are located outside the workspace at `/home/vscode/.venv` (configured in `.devcontainer/devcontainer.json` via `python.defaultInterpreterPath`).
 
 ## Modular Sub-guidelines
 
