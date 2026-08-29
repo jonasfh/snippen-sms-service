@@ -98,8 +98,13 @@ def main() -> None:
         ruff_bin = Path("ruff")
 
     try:
+        # Sort imports
+        subprocess.run(
+            [str(ruff_bin), "check", "--select", "I", "--fix", str(repo_root)], check=True
+        )
+        # Format code
         subprocess.run([str(ruff_bin), "format", str(repo_root)], check=True)
-    except FileNotFoundError:
+    except (subprocess.SubprocessError, FileNotFoundError):
         pass
 
 
