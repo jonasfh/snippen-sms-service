@@ -32,7 +32,8 @@ snippen-sms-service/
 │       │   ├── base.py       # SmsProvider ABC, SendResult, IncomingMessage
 │       │   ├── memory.py     # InMemorySmsProvider for testing & simulation
 │       │   └── mock.py       # MockSmsProvider for mock messaging & auto-replies
-│       └── storage.py        # SQLite persistent storage repository
+│       ├── storage.py        # SQLite persistent storage repository
+│       └── updater.py        # GitHub release checking and self-update management
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_format.py        # Formatter tests
@@ -42,6 +43,7 @@ snippen-sms-service/
 │   ├── test_mock_provider.py # Mock SMS provider and factory tests
 │   ├── test_providers.py    # SMS provider abstraction unit tests
 │   ├── test_storage.py       # SQLite message storage unit & integration tests
+│   ├── test_updater.py       # GitHub release version checking & updater unit tests
 │   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config
 ├── README.md                 # User documentation

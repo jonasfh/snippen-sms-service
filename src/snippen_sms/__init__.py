@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__version__ = "0.8.0"
+
 from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService
 from snippen_sms.migrations import Migration, MigrationError, MigrationRunner
@@ -17,8 +19,7 @@ from snippen_sms.providers import (
     register_provider,
 )
 from snippen_sms.storage import MessageStorage
-
-__version__ = "0.7.0"
+from snippen_sms.updater import ReleaseInfo, SoftwareUpdater, UpdateCheckResult
 
 __all__ = [
     "GatewayConfig",
@@ -34,8 +35,11 @@ __all__ = [
     "MigrationRunner",
     "MockSMSProvider",
     "MockSmsProvider",
+    "ReleaseInfo",
     "SendResult",
     "SmsProvider",
+    "SoftwareUpdater",
+    "UpdateCheckResult",
     "__version__",
     "get_provider",
     "register_provider",
