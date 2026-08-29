@@ -175,6 +175,38 @@ sequenceDiagram
 
 ---
 
+## Message Outbox & Inbox Architecture
+
+To provide high reliability and prevent message loss when communication or the SMS provider is temporarily unavailable, `snippen-sms-service` implements local transactional outbox and inbox patterns backed by SQLite storage.
+
+```mermaid
+flowchart TD
+    subgraph Outbound Flow
+        A1["Snippen Send Request"] -->|"enqueue_outbox()"| A2[("Outbox (SQLite: PENDING)")]
+        A2 -->|"process_outbox()"| A3["SMS Provider"]
+        A3 -->|Success| A4[("Outbox (SQLite: SENT)")]
+        A3 -->|Failure / Error| A5[("Outbox (SQLite: FAILED)")]
+    end
+
+    subgraph Inbound Flow
+        B1["SMS Provider (Modem/SIM)"] -->|"receive_sms()"| B2["Gateway Ingestion (process_inbox)"]
+        B2 -->|"save_message()"| B3[("Inbox (SQLite: RECEIVED)")]
+        B3 --> B4["Snippen Application Ingestion"]
+    end
+```
+
+### Outbox Processing
+1. **Persistent Enqueueing**: Outgoing messages are enqueued to the local SQLite database as `PENDING` records via `MessageStorage.enqueue_outbox()` before any provider transmission is attempted.
+2. **Batch / Polling Dispatch**: The gateway dispatches pending outbox records via `GatewayService.process_outbox()`. This runs during active sends and on every heartbeat tick of the gateway run loop.
+3. **Failure Isolation & Non-Destructive Error Handling**: If provider delivery fails or network timeouts occur, the message status is updated to `FAILED` with detailed diagnostic error messages. Messages are never silently deleted or lost.
+4. **Service Restart Resilience**: Any pending outbox messages persist across gateway restarts and will be processed once the service restarts and the SMS provider is available.
+
+### Inbox Ingestion
+1. **Provider Polling**: The gateway periodically polls the SMS provider (`SmsProvider.receive_sms()`) via `GatewayService.poll_incoming_messages()` (or `process_inbox()`).
+2. **Local Storage**: Each inbound SMS is immediately persisted into the local SQLite database with `direction=inbound`, `status=received`, timestamp, and provider identifiers.
+
+---
+
 ## Local Message Persistence
 
 To ensure zero message loss during network interruptions or service restarts, the SMS Gateway employs a lightweight, embedded SQLite database backend. Messages are persisted locally before and after transmission or ingestion.

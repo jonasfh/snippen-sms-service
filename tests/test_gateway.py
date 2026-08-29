@@ -260,3 +260,166 @@ def test_gateway_default_provider_resolution():
     config_mem = GatewayConfig(database_path=":memory:", provider="memory")
     service_mem = GatewayService(config=config_mem)
     assert service_mem.provider.__class__.__name__ == "InMemorySmsProvider"
+
+
+def test_gateway_enqueue_and_process_outbox():
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+
+        # Enqueue 2 messages in outbox without dispatching yet
+        msg1 = service.enqueue_outbox(recipient="+4790000001", body="Outbox batch 1")
+        msg2 = service.enqueue_outbox(recipient="+4790000002", body="Outbox batch 2")
+
+        assert msg1.status == MessageStatus.PENDING
+        assert msg2.status == MessageStatus.PENDING
+        assert service.storage.count_outbox(status=MessageStatus.PENDING) == 2
+
+        # Process outbox batch
+        processed = await service.process_outbox(limit=10)
+        assert len(processed) == 2
+        assert processed[0].status == MessageStatus.SENT
+        assert processed[0].modem_message_id is not None
+        assert processed[1].status == MessageStatus.SENT
+        assert processed[1].modem_message_id is not None
+
+        # Verify no pending messages remain
+        assert service.storage.count_outbox(status=MessageStatus.PENDING) == 0
+        assert len(service.storage.get_pending_outbox()) == 0
+
+    asyncio.run(_test())
+
+
+def test_gateway_process_outbox_failure_retains_message():
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        provider.simulate_send_failure(True, error_message="SIM card busy")
+        service = GatewayService(config=config, provider=provider)
+
+        msg = service.enqueue_outbox(recipient="+4790000003", body="Fail test")
+        assert msg.id is not None
+
+        processed = await service.process_outbox()
+        assert len(processed) == 1
+        assert processed[0].status == MessageStatus.FAILED
+        assert processed[0].error_message == "SIM card busy"
+
+        # Verify message is retained in storage and not deleted
+        stored = service.storage.get_message(msg.id)
+        assert stored is not None
+        assert stored.status == MessageStatus.FAILED
+        assert stored.error_message == "SIM card busy"
+        assert service.storage.count_outbox() == 1
+
+    asyncio.run(_test())
+
+
+def test_gateway_process_outbox_exception_retains_message():
+    async def _test():
+        class CrashingSendProvider(SmsProvider):
+            async def send_sms(self, recipient: str, body: str) -> SendResult:
+                raise TimeoutError("AT command timeout")
+
+            async def receive_sms(self):
+                return []
+
+        config = GatewayConfig(database_path=":memory:")
+        service = GatewayService(config=config, provider=CrashingSendProvider())
+
+        msg = service.enqueue_outbox(recipient="+4790000004", body="Exception test")
+        assert msg.id is not None
+
+        processed = await service.process_outbox()
+        assert len(processed) == 1
+        assert processed[0].status == MessageStatus.FAILED
+        assert "AT command timeout" in (processed[0].error_message or "")
+
+        # Verify message is retained in storage
+        stored = service.storage.get_message(msg.id)
+        assert stored is not None
+        assert stored.status == MessageStatus.FAILED
+
+    asyncio.run(_test())
+
+
+def test_gateway_outbox_survives_restart_and_processes(tmp_path):
+    async def _test():
+        db_path = str(tmp_path / "restart_test.db")
+        config = GatewayConfig(database_path=db_path)
+
+        # Instance 1: Enqueue message to outbox while provider is offline/service not running
+        service1 = GatewayService(config=config, provider=InMemorySmsProvider())
+        msg = service1.enqueue_outbox(
+            recipient="+4791000000",
+            body="Message enqueued before restart",
+        )
+        assert msg.id is not None
+        assert msg.status == MessageStatus.PENDING
+        service1.storage.close()
+
+        # Instance 2: Gateway service restart
+        provider2 = InMemorySmsProvider()
+        service2 = GatewayService(config=config, provider=provider2)
+
+        status_before = service2.get_status()
+        assert status_before["outbox_pending"] == 1
+        assert status_before["outbox_total"] == 1
+
+        # Process outbox on new service instance
+        processed = await service2.process_outbox()
+        assert len(processed) == 1
+        assert processed[0].id == msg.id
+        assert processed[0].status == MessageStatus.SENT
+
+        status_after = service2.get_status()
+        assert status_after["outbox_pending"] == 0
+        assert status_after["outbox_total"] == 1
+
+        service2.storage.close()
+
+    asyncio.run(_test())
+
+
+def test_gateway_process_inbox_alias():
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        provider.simulate_inbound(sender="+4798765432", body="INBOX_TEST")
+        service = GatewayService(config=config, provider=provider)
+
+        ingested = await service.process_inbox()
+        assert len(ingested) == 1
+        assert ingested[0].direction == MessageDirection.INBOUND
+        assert ingested[0].sender == "+4798765432"
+        assert ingested[0].status == MessageStatus.RECEIVED
+
+        status = service.get_status()
+        assert status["inbox_total"] == 1
+        assert status["total_messages"] == 1
+
+    asyncio.run(_test())
+
+
+def test_gateway_run_loop_processes_outbox_and_inbox():
+    async def _test():
+        config = GatewayConfig(poll_interval_seconds=0.05, database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+
+        # Enqueue outbound message and simulate inbound message
+        service.enqueue_outbox(recipient="+4799009900", body="OUT_LOOP")
+        provider.simulate_inbound(sender="+4799119911", body="IN_LOOP")
+
+        task = asyncio.create_task(service.run())
+        await asyncio.sleep(0.08)
+
+        # Both should have been processed
+        assert service.storage.count_outbox(status=MessageStatus.SENT) == 1
+        assert service.storage.count_inbox() == 1
+
+        await service.stop()
+        await asyncio.wait_for(task, timeout=1.0)
+
+    asyncio.run(_test())

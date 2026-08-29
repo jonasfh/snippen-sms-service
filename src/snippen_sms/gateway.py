@@ -48,6 +48,9 @@ class GatewayService:
         """Return diagnostic health and status report."""
         from snippen_sms import __version__
 
+        pending_outbox = self.storage.count_outbox(
+            status=MessageStatus.PENDING
+        ) + self.storage.count_outbox(status=MessageStatus.QUEUED)
         return {
             "status": "running" if self._is_running else "stopped",
             "service": self.config.service_name,
@@ -56,8 +59,91 @@ class GatewayService:
             "uptime_seconds": round(self.uptime_seconds, 2),
             "poll_interval_seconds": self.config.poll_interval_seconds,
             "database_path": self.config.database_path,
+            "outbox_pending": pending_outbox,
+            "outbox_total": self.storage.count_outbox(),
+            "inbox_total": self.storage.count_inbox(),
             "total_messages": self.storage.count_messages(),
         }
+
+    def enqueue_outbox(
+        self,
+        recipient: str,
+        body: str,
+        sender: str | None = None,
+    ) -> Message:
+        """Enqueue an outbound SMS into the persistent local outbox.
+
+        Args:
+            recipient: Destination phone number.
+            body: Text content of the SMS.
+            sender: Optional originating sender ID (defaults to service name).
+
+        Returns:
+            The saved pending Message instance.
+        """
+        sender_id = sender or self.config.service_name
+        message = self.storage.enqueue_outbox(
+            recipient=recipient,
+            body=body,
+            sender=sender_id,
+            status=MessageStatus.PENDING,
+        )
+        logger.info("Enqueued message ID %s for %s to outbox", message.id, recipient)
+        return message
+
+    async def process_outbox(self, limit: int = 50) -> list[Message]:
+        """Process pending and queued messages from the outbox via the SMS provider.
+
+        Args:
+            limit: Maximum number of pending messages to dispatch in this batch.
+
+        Returns:
+            List of processed Message instances with updated statuses.
+        """
+        pending_messages = self.storage.get_pending_outbox(limit=limit)
+        if not pending_messages:
+            return []
+
+        logger.debug("Processing %d pending outbox messages...", len(pending_messages))
+        processed: list[Message] = []
+
+        for msg in pending_messages:
+            if msg.id is None:
+                continue
+
+            try:
+                result = await self.provider.send_sms(recipient=msg.recipient, body=msg.body)
+                if result.success:
+                    updated = self.storage.update_message_status(
+                        msg.id,
+                        status=MessageStatus.SENT,
+                        modem_message_id=result.message_id,
+                    )
+                    logger.info("Dispatched outbox SMS ID %s to %s", msg.id, msg.recipient)
+                    processed.append(updated or msg)
+                else:
+                    updated = self.storage.update_message_status(
+                        msg.id,
+                        status=MessageStatus.FAILED,
+                        error_message=result.error_message,
+                    )
+                    logger.warning(
+                        "Failed to dispatch outbox SMS ID %s to %s: %s",
+                        msg.id,
+                        msg.recipient,
+                        result.error_message,
+                    )
+                    processed.append(updated or msg)
+            except Exception as exc:
+                logger.exception("Unexpected exception while dispatching outbox SMS ID %s", msg.id)
+                updated = self.storage.update_message_status(
+                    msg.id,
+                    status=MessageStatus.FAILED,
+                    error_message=str(exc),
+                )
+                processed.append(updated or msg)
+
+        return processed
 
     async def send_sms(
         self,
@@ -65,7 +151,7 @@ class GatewayService:
         body: str,
         sender: str | None = None,
     ) -> Message:
-        """Dispatch an outbound SMS message through the provider and persist records.
+        """Enqueue an outbound message to the outbox and immediately attempt delivery.
 
         Args:
             recipient: Destination phone number.
@@ -75,15 +161,7 @@ class GatewayService:
         Returns:
             The persisted Message record with updated delivery status.
         """
-        sender_id = sender or self.config.service_name
-        msg = Message(
-            direction=MessageDirection.OUTBOUND,
-            sender=sender_id,
-            recipient=recipient,
-            body=body,
-            status=MessageStatus.PENDING,
-        )
-        saved_msg = self.storage.save_message(msg)
+        saved_msg = self.enqueue_outbox(recipient=recipient, body=body, sender=sender)
         assert saved_msg.id is not None
 
         try:
@@ -143,6 +221,10 @@ class GatewayService:
 
         return persisted_messages
 
+    async def process_inbox(self) -> list[Message]:
+        """Alias for poll_incoming_messages to ingest incoming provider messages."""
+        return await self.poll_incoming_messages()
+
     async def start(self) -> None:
         """Initialize and start the gateway service."""
         if self._is_running:
@@ -176,8 +258,13 @@ class GatewayService:
         await self.start()
         try:
             while not self._stop_event.is_set():
-                # Service tick - poll incoming messages and process queue
+                # Service tick - process pending outbox and poll incoming messages
                 logger.debug("Gateway heartbeat tick.")
+                try:
+                    await self.process_outbox()
+                except Exception:
+                    logger.exception("Error during outbox processing tick.")
+
                 try:
                     await self.poll_incoming_messages()
                 except Exception:

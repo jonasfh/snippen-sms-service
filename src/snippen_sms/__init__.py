@@ -18,7 +18,7 @@ from snippen_sms.providers import (
 )
 from snippen_sms.storage import MessageStorage
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     "GatewayConfig",
