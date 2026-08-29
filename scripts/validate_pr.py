@@ -5,17 +5,47 @@ Validates:
 1. Valid semantic versioning in package.
 2. Version is incremented from latest release tag in git.
 3. CHANGELOG.md contains an entry for the current version.
+4. Formatting hygiene: no trailing whitespaces, exactly one trailing newline at EOF.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 from packaging.version import InvalidVersion, Version
+
+IGNORED_DIRS = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    ".pytest_cache",
+    ".ruff_cache",
+    "snippen_sms_service.egg-info",
+}
+
+BINARY_EXTENSIONS = {
+    ".pyc",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".ico",
+    ".bin",
+    ".tar",
+    ".gz",
+    ".zip",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+}
 
 
 def get_current_version(repo_root: Path) -> str:
@@ -127,6 +157,46 @@ def check_changelog(repo_root: Path, current_version_str: str, base_ref: str | N
     return True
 
 
+def check_formatting_hygiene(repo_root: Path) -> bool:
+    """Verify all text files have no trailing whitespace and exactly one EOF newline."""
+    formatting_errors: list[str] = []
+
+    for root, dirs, files in os.walk(repo_root):
+        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
+        for file in files:
+            p = Path(root) / file
+            if p.suffix.lower() in BINARY_EXTENSIONS:
+                continue
+            try:
+                content = p.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+
+            rel_path = str(p.relative_to(repo_root))
+            lines = content.splitlines(keepends=True)
+
+            for idx, line in enumerate(lines, start=1):
+                line_no_nl = line.rstrip("\r\n")
+                if line_no_nl != line_no_nl.rstrip():
+                    formatting_errors.append(f"{rel_path}:{idx}: trailing whitespace detected")
+
+            if content and not content.endswith("\n"):
+                formatting_errors.append(f"{rel_path}: missing newline at end of file")
+            elif content.endswith("\n\n"):
+                formatting_errors.append(f"{rel_path}: duplicate trailing newlines at end of file")
+
+    if formatting_errors:
+        err_msg = "\n".join(formatting_errors[:10])
+        if len(formatting_errors) > 10:
+            err_msg += f"\n... and {len(formatting_errors) - 10} more formatting issues."
+        raise ValueError(
+            f"Formatting hygiene check failed! Please run 'python scripts/format.py' to fix:\n{err_msg}"
+        )
+
+    print("✅ Formatting hygiene check passed (0 trailing spaces, 1 EOF newline per file).")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate PR version and changelog")
     parser.add_argument(
@@ -140,6 +210,8 @@ def main() -> int:
     repo_root = args.repo_root.resolve()
 
     try:
+        check_formatting_hygiene(repo_root)
+
         version_str = get_current_version(repo_root)
         current_version = validate_semver(version_str)
         print(f"Current package version: {current_version}")

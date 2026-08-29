@@ -55,7 +55,7 @@ def format_text_file(file_path: Path) -> bool:
     while stripped_lines and stripped_lines[-1] == "":
         stripped_lines.pop()
 
-    # Ensure single newline at end of non-empty files
+    # Ensure exactly one newline at end of non-empty files
     new_content = "\n".join(stripped_lines) + "\n" if stripped_lines else ""
 
     if new_content != content:
@@ -81,16 +81,7 @@ def format_all_files(repo_root: Path) -> list[str]:
 def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
-    # 1. Format text files (trailing whitespaces, trailing newlines)
-    modified_text_files = format_all_files(repo_root)
-    if modified_text_files:
-        print(f"Cleaned whitespaces/newlines in {len(modified_text_files)} files:")
-        for mf in sorted(modified_text_files):
-            print(f"  - {mf}")
-    else:
-        print("All text files cleanly formatted.")
-
-    # 2. Run ruff formatting on python files if available
+    # 1. Run ruff formatting and import sorting on python files first
     python_bin = sys.executable
     venv_bin_dir = Path(python_bin).parent
     ruff_bin = venv_bin_dir / "ruff"
@@ -100,12 +91,27 @@ def main() -> None:
     try:
         # Sort imports
         subprocess.run(
-            [str(ruff_bin), "check", "--select", "I", "--fix", str(repo_root)], check=True
+            [str(ruff_bin), "check", "--select", "I", "--fix", str(repo_root)],
+            check=True,
+            capture_output=True,
         )
         # Format code
-        subprocess.run([str(ruff_bin), "format", str(repo_root)], check=True)
+        subprocess.run(
+            [str(ruff_bin), "format", str(repo_root)],
+            check=True,
+            capture_output=True,
+        )
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
+
+    # 2. Format all text files (strips trailing whitespaces and enforces exactly one EOF newline)
+    modified_text_files = format_all_files(repo_root)
+    if modified_text_files:
+        print(f"Cleaned whitespaces/newlines in {len(modified_text_files)} files:")
+        for mf in sorted(modified_text_files):
+            print(f"  - {mf}")
+    else:
+        print("All text files cleanly formatted.")
 
 
 if __name__ == "__main__":

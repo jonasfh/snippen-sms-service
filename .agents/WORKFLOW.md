@@ -19,6 +19,7 @@ Once a GitHub issue is identified or created, follow this workflow:
    - Run PR validator locally: `python scripts/validate_pr.py` (ensures SemVer bump and CHANGELOG entry).
    - Update documentation (`README.md`, `DEV_README.md`, `docs/`) for any new features, endpoints, or data models implemented.
 4. **Submission & Commit Messages**:
+   - **Mandatory Pre-Commit Formatting**: ALWAYS run `python scripts/format.py` immediately before staging files (`git add`) and committing.
    - Commit changed files.
    - **Commit Message**: Issue commits MUST start with `(#<id>)`, e.g., `(#1) Fixed xxx...`. Make separate commits for different issue numbers. General repo updates not tied to an issue do not require the header.
    - **Commit Suggestion**: ALWAYS suggest a commit message as plain text in a copy-pasteable code block. Focus on the problem solved in the header, with rationale in the body.
