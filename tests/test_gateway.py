@@ -11,22 +11,25 @@ def test_gateway_config_defaults():
     assert config.service_name == "snippen-sms-service"
     assert config.log_level == "INFO"
     assert config.poll_interval_seconds == 2.0
+    assert config.database_path == "data/sms_gateway.db"
 
 
 def test_gateway_config_from_env(monkeypatch):
     monkeypatch.setenv("SNIPPEN_SMS_SERVICE_NAME", "custom-gateway")
     monkeypatch.setenv("SNIPPEN_SMS_LOG_LEVEL", "debug")
     monkeypatch.setenv("SNIPPEN_SMS_POLL_INTERVAL", "5.5")
+    monkeypatch.setenv("SNIPPEN_SMS_DATABASE_PATH", ":memory:")
 
     config = GatewayConfig.from_env()
     assert config.service_name == "custom-gateway"
     assert config.log_level == "DEBUG"
     assert config.poll_interval_seconds == 5.5
+    assert config.database_path == ":memory:"
 
 
 def test_gateway_start_and_stop():
     async def _test():
-        config = GatewayConfig(poll_interval_seconds=0.05)
+        config = GatewayConfig(poll_interval_seconds=0.05, database_path=":memory:")
         service = GatewayService(config)
 
         assert not service.is_running
@@ -39,7 +42,9 @@ def test_gateway_start_and_stop():
         status = service.get_status()
         assert status["status"] == "running"
         assert status["service"] == "snippen-sms-service"
-        assert status["version"] == "0.2.0"
+        assert status["version"] == "0.3.0"
+        assert status["database_path"] == ":memory:"
+        assert status["total_messages"] == 0
 
         await service.stop()
         assert not service.is_running
@@ -50,7 +55,7 @@ def test_gateway_start_and_stop():
 
 def test_gateway_run_loop_and_graceful_stop():
     async def _test():
-        config = GatewayConfig(poll_interval_seconds=0.05)
+        config = GatewayConfig(poll_interval_seconds=0.05, database_path=":memory:")
         service = GatewayService(config)
 
         task = asyncio.create_task(service.run())
@@ -69,7 +74,7 @@ def test_gateway_run_loop_and_graceful_stop():
 
 def test_gateway_run_cancellation():
     async def _test():
-        config = GatewayConfig(poll_interval_seconds=0.05)
+        config = GatewayConfig(poll_interval_seconds=0.05, database_path=":memory:")
         service = GatewayService(config)
 
         task = asyncio.create_task(service.run())

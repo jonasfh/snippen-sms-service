@@ -105,6 +105,33 @@ sequenceDiagram
 
 ---
 
+## Local Message Persistence
+
+To ensure zero message loss during network interruptions or service restarts, the SMS Gateway employs a lightweight, embedded SQLite database backend. Messages are persisted locally before and after transmission or ingestion.
+
+### Data Model & Schema
+
+```mermaid
+erDiagram
+    messages {
+        int id PK
+        string direction
+        string sender
+        string recipient
+        string body
+        string status
+        string modem_message_id
+        string error_message
+        string created_at
+        string modified_at
+    }
+```
+
+- **Persistence Layer (`MessageStorage`)**: Built on Python standard library `sqlite3` using Write-Ahead Logging (`WAL`) mode for robust, concurrent reads and writes without external database server dependencies.
+- **Timestamp Tracking**: Every record maintains ISO-8601 UTC `created_at` and `modified_at` timestamps for auditing, synchronization, and retry workflows.
+
+---
+
 ## Architectural Principles
 
 1. **Hardware Isolation**:

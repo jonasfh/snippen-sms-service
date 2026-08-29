@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-29
+
+### Added
+- Local SQLite message persistence with `MessageStorage` repository (`#5`).
+- Domain models `Message`, `MessageDirection`, and `MessageStatus` with UTC timestamp tracking (`created_at`, `modified_at`) (`#5`).
+- Persistent storage integration in `GatewayService` and configurable database path in `GatewayConfig` (`#5`).
+- Comprehensive unit and integration test suite in `tests/test_storage.py` covering persistence, CRUD operations, filtering, pagination, and service restarts (`#5`).
+- System architecture documentation and Mermaid data schema diagram for local message storage (`#5`).
+
 ## [0.2.0] - 2026-08-29
+
 
 ### Added
 - Gateway application skeleton with `GatewayService` lifecycle management and run loop (`#4`).

@@ -34,6 +34,19 @@ A lightweight, dedicated two-way SMS gateway service designed for the **Snippen*
 
 ---
 
+## Configuration
+
+The gateway service can be configured via CLI flags or environment variables:
+
+| Setting | Environment Variable | Default | Description |
+| :--- | :--- | :--- | :--- |
+| Service Name | `SNIPPEN_SMS_SERVICE_NAME` | `snippen-sms-service` | Name of the service instance |
+| Log Level | `SNIPPEN_SMS_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| Poll Interval | `SNIPPEN_SMS_POLL_INTERVAL` | `2.0` | Polling loop tick interval in seconds |
+| Database Path | `SNIPPEN_SMS_DATABASE_PATH` | `data/sms_gateway.db` | Path to SQLite database file (or `:memory:`) |
+
+---
+
 ## Quick Start (Development)
 
 Start the long-running SMS gateway service:
@@ -42,7 +55,7 @@ Start the long-running SMS gateway service:
 # Start gateway service
 python -m snippen_sms.main
 
-# Or run with custom poll interval and log level
+# Or run with custom poll interval, log level, and database path
 python -m snippen_sms.main --poll-interval 1.0 --log-level DEBUG
 ```
 
