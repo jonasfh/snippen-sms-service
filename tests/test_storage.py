@@ -59,7 +59,6 @@ def test_storage_initialization_memory(memory_storage: MessageStorage) -> None:
     assert cursor.fetchone()[0] >= 1
 
 
-
 def test_storage_initialization_file(tmp_path: Path) -> None:
     """Test initializing storage on disk creates directories and files."""
     db_file = tmp_path / "sub" / "dir" / "test.db"

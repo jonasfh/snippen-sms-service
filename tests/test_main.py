@@ -11,6 +11,5 @@ def test_get_status():
     assert status["version"] == __version__
 
 
-
 def test_setup_logging():
     setup_logging("DEBUG")

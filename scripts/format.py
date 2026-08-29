@@ -82,11 +82,21 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
     # 1. Run ruff formatting and import sorting on python files first
+    import shutil
+
     python_bin = sys.executable
     venv_bin_dir = Path(python_bin).parent
     ruff_bin = venv_bin_dir / "ruff"
     if not ruff_bin.exists():
-        ruff_bin = Path("ruff")
+        candidate_paths = [
+            Path("/home/vscode/.venv/bin/ruff"),
+            Path(shutil.which("ruff") or ""),
+            Path("ruff"),
+        ]
+        for candidate in candidate_paths:
+            if candidate and candidate.exists():
+                ruff_bin = candidate
+                break
 
     try:
         # Sort imports

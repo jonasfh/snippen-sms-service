@@ -59,7 +59,9 @@ def test_migration_runner_fresh_memory_db() -> None:
     cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages';")
     assert cursor.fetchone() is not None
 
-    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations';")
+    cursor = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations';"
+    )
     assert cursor.fetchone() is not None
 
 
@@ -239,7 +241,9 @@ def test_cli_parser() -> None:
     assert args_run.command == "run"
     assert args_run.poll_interval == 3.5
 
-    args_migrate = parser.parse_args(["migrate", "--database-path", "custom.db", "--target-version", "2"])
+    args_migrate = parser.parse_args(
+        ["migrate", "--database-path", "custom.db", "--target-version", "2"]
+    )
     assert args_migrate.command == "migrate"
     assert args_migrate.database_path == "custom.db"
     assert args_migrate.target_version == 2
