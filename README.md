@@ -36,7 +36,17 @@ A lightweight, dedicated two-way SMS gateway service designed for the **Snippen*
 
 ## Quick Start (Development)
 
-Run the test suite and code linter in the development environment:
+Start the long-running SMS gateway service:
+
+```bash
+# Start gateway service
+python -m snippen_sms.main
+
+# Or run with custom poll interval and log level
+python -m snippen_sms.main --poll-interval 1.0 --log-level DEBUG
+```
+
+Run the test suite, code linter, and formatting tool in the development environment:
 
 ```bash
 # Run unit tests
@@ -44,6 +54,9 @@ pytest
 
 # Run code linter
 ruff check .
+
+# Run project formatter
+python scripts/format.py
 ```
 
 For detailed development environment instructions, see the [Developer Guide](file:///workspaces/snippen-sms-service/DEV_README.md).

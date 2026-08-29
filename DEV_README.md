@@ -18,11 +18,14 @@ snippen-sms-service/
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
 ├── src/
 │   └── snippen_sms/          # Application package
-│       ├── __init__.py       # Package version
-│       └── main.py           # Entry point
+│       ├── __init__.py       # Package version & exports
+│       ├── config.py         # Gateway configuration settings
+│       ├── gateway.py        # GatewayService lifecycle & run loop
+│       └── main.py           # Entry point & CLI runner
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_format.py        # Formatter tests
+│   ├── test_gateway.py       # GatewayService lifecycle tests
 │   ├── test_main.py          # Unit tests
 │   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config

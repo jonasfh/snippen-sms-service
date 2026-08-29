@@ -13,6 +13,9 @@ authors = [
 ]
 dependencies = []
 
+[project.scripts]
+snippen-sms = "snippen_sms.main:main_cli"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
