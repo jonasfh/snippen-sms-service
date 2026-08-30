@@ -7,7 +7,7 @@ name = "snippen-sms-service"
 dynamic = ["version"]
 description = "SMS service for Snippen Booking"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 authors = [
     { name = "Snippen", email = "admin@snippen.com" }
 ]
@@ -42,4 +42,4 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"

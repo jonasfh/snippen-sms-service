@@ -1,6 +1,6 @@
 {
   "name": "snippen-sms-service-python",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.14-bullseye",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },

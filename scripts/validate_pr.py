@@ -80,7 +80,7 @@ def get_latest_git_tag(repo_root: Path) -> tuple[str | None, Version | None]:
             text=True,
             check=True,
         )
-    except (subprocess.SubprocessError, OSError):
+    except subprocess.SubprocessError, OSError:
         return None, None
 
     tags = [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -169,7 +169,7 @@ def check_formatting_hygiene(repo_root: Path) -> bool:
                 continue
             try:
                 content = p.read_text(encoding="utf-8")
-            except (UnicodeDecodeError, OSError):
+            except UnicodeDecodeError, OSError:
                 continue
 
             rel_path = str(p.relative_to(repo_root))

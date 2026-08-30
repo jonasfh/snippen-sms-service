@@ -13,7 +13,7 @@ Once a GitHub issue is identified or created, follow this workflow:
 2. **Branching**:
    - Create/use branch following pattern: `gh-issue/<id>` (e.g. `gh-issue/1`), based off `main`.
 3. **Implementation**:
-   - Resolve the issue using Python 3.12 standards.
+   - Resolve the issue using Python 3.14 standards.
    - Routinely run project formatter: `python scripts/format.py` whenever files are created or modified (strips trailing whitespace, ensures single EOF newline, removes duplicate EOF newlines across all text/markdown files).
    - Create/update tests and run linting and tests (`pytest`, `ruff check .`).
    - Run PR validator locally: `python scripts/validate_pr.py` (ensures SemVer bump and CHANGELOG entry).
