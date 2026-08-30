@@ -9,7 +9,7 @@
 ```
 snippen-sms-service/
 ├── .devcontainer/            # Dev Container configuration (Python 3.14)
-├── .agents/                  # Agent guidelines (Architecture, Workflow, Testing, Docs)
+├── .agents/                  # Agent guidelines (Architecture, Testing, common-agent-instructions submodule)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
 │   ├── architecture.md       # High-level architecture, provider abstraction & flows
