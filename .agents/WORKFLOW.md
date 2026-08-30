@@ -29,7 +29,7 @@ Once a GitHub issue is identified or created, follow this workflow:
    - Add implementation notes and summary to the GitHub issue (`gh issue comment <id> --body "..."`).
 6. **Merging Pull Requests**:
    - When instructed to merge, check PR status (`gh pr checks <id>`).
-   - Merge cleanly: `gh pr merge <id> --rebase --delete-branch`.
+   - Merge method: ALWAYS use **Rebase and merge** (`gh pr merge <id> --rebase --delete-branch`) as the default strategy. If rebasing issues or conflicts arise, use a standard **merge commit** (`gh pr merge <id> --merge --delete-branch`). Do NOT use squash and merge (`--squash`) unless explicitly instructed or needed for a specific reason.
 
 ## Versioning & Changelog
 
