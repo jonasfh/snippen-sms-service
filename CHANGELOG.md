@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-08-30
+
+### Added
+- Integrated `common-agent-instructions` git submodule under `.agents/common-agent-instructions` for technology-agnostic AI agent workflows, quality rules, documentation standards, and architectural guidelines (`#39`).
+
+### Changed
+- Refactored `AGENTS.md`, `.agents/ARCHITECTURE.md`, and `.agents/TESTING.md` to reference modular technology-agnostic guidelines in `common-agent-instructions` while retaining Python 3.14 and service-specific configurations (`#39`).
+- Updated developer documentation in `DEV_README.md` to reflect submodule layout (`#39`).
+
+### Removed
+- Removed duplicate `.agents/DOCUMENTATION.md` and `.agents/WORKFLOW.md` files now centralized in `common-agent-instructions` submodule (`#39`).
+
 ## [0.13.0] - 2026-08-30
 
 ### Added

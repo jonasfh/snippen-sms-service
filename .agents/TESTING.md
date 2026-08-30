@@ -1,6 +1,8 @@
-# Testing & Quality Assurance Guidelines
+# Python Testing & Quality Assurance Guidelines
 
-## Test Commands
+Refer to [Common Quality Principles](file:///.agents/common-agent-instructions/TESTING.md) for overall testing and quality policies.
+
+## Test & Lint Commands
 
 Use `pytest` and `ruff` (or Docker container) to run linting and tests:
 
@@ -17,9 +19,12 @@ ruff format --check .
 
 # Project-wide formatting (Python, Markdown, JSON, YAML, TOML)
 python scripts/format.py
+
+# PR validation (SemVer and CHANGELOG check)
+python scripts/validate_pr.py
 ```
 
-## Mandatory Rules
+## Mandatory Python Rules
 - **Create tests**: Create unit or integration tests in `tests/` for all new functionality.
 - **Update tests**: Update existing tests when modifying functionality.
 - **Linting check**: Always run `ruff check .` (or flake8) and resolve all errors and warnings before completing a task.
