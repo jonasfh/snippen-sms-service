@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from snippen_sms.client import SnippenClient, SnippenNetworkError
@@ -183,3 +184,45 @@ def test_sync_all_e2e() -> None:
     assert res["outbox_enqueued"] == 1
     assert res["statuses_reported"] == 0
     assert res["error"] is None
+
+
+def test_sync_inbox_with_booking_resolver() -> None:
+    """Test that sync_inbox resolves booking context before reporting to Snippen."""
+    from snippen_sms.context import BookingContextResolver
+    from snippen_sms.models import Booking
+
+    storage = MessageStorage(":memory:")
+    now = datetime(2026, 12, 15, 16, 0, tzinfo=UTC)
+    msg = storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791234567",
+            recipient="snippen-sms-service",
+            body="Hei, trenger info",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+    assert msg.id is not None
+
+    mock_client = MagicMock(spec=SnippenClient)
+    mock_client.fetch_bookings_for_phone.return_value = [
+        Booking(
+            id="book-777",
+            customer_phone="+4791234567",
+            start_time=now,
+            resource_name="Badstue",
+        )
+    ]
+    mock_client.report_inbound_messages.return_value = [msg.id]
+
+    resolver = BookingContextResolver(storage=storage, client=mock_client)
+    sync = SyncService(storage=storage, client=mock_client, resolver=resolver)
+
+    acked = sync.sync_inbox()
+    assert acked == [msg.id]
+
+    # Verify message was updated with booking_id
+    updated_msg = storage.get_message(msg.id)
+    assert updated_msg is not None
+    assert updated_msg.booking_id == "book-777"
+    assert updated_msg.status == MessageStatus.PROCESSED

@@ -22,6 +22,7 @@ snippen-sms-service/
 │       ├── __init__.py       # Package version & exports
 │       ├── client.py         # Snippen API HTTP client & error handling
 │       ├── config.py         # Gateway configuration settings
+│       ├── context.py        # Booking context resolution & conversational session management
 │       ├── gateway.py        # GatewayService lifecycle, send/receive orchestration & run loop
 │       ├── main.py           # Entry point & CLI runner
 │       ├── migrations/       # SQLite database migration system
@@ -41,6 +42,7 @@ snippen-sms-service/
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_build_release.py # Release build & checksum calculation tests
 │   ├── test_client.py        # SnippenClient HTTP client tests
+│   ├── test_context.py       # Booking context resolution & dialogue session tests
 │   ├── test_format.py        # Formatter tests
 │   ├── test_gateway.py       # GatewayService lifecycle & provider integration tests
 │   ├── test_main.py          # Unit tests

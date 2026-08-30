@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 from snippen_sms.client import (
     SnippenApiError,
@@ -12,9 +12,21 @@ from snippen_sms.client import (
     SnippenNetworkError,
 )
 from snippen_sms.config import GatewayConfig
+from snippen_sms.context import (
+    BookingContextResolver,
+    ContextResolutionResult,
+    ResolutionStatus,
+)
 from snippen_sms.gateway import GatewayService
 from snippen_sms.migrations import Migration, MigrationError, MigrationRunner
-from snippen_sms.models import Message, MessageDirection, MessageStatus
+from snippen_sms.models import (
+    Booking,
+    ConversationContext,
+    ConversationState,
+    Message,
+    MessageDirection,
+    MessageStatus,
+)
 from snippen_sms.providers import (
     IncomingMessage,
     InMemorySmsProvider,
@@ -36,6 +48,11 @@ from snippen_sms.updater import (
 )
 
 __all__ = [
+    "Booking",
+    "BookingContextResolver",
+    "ContextResolutionResult",
+    "ConversationContext",
+    "ConversationState",
     "GatewayConfig",
     "GatewayService",
     "InMemorySmsProvider",
@@ -50,6 +67,7 @@ __all__ = [
     "MockSMSProvider",
     "MockSmsProvider",
     "ReleaseInfo",
+    "ResolutionStatus",
     "SendResult",
     "SmsProvider",
     "SnippenApiError",

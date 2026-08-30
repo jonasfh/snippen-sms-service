@@ -128,7 +128,7 @@ Base Namespace: `/wp-json/snippen/v1/sms`
 ---
 
 ### 3. `POST /wp-json/snippen/v1/sms/inbox`
-**Description**: Called by the gateway to report newly received inbound SMS messages (guest replies, confirmations, commands).
+**Description**: Called by the gateway to report newly received inbound SMS messages (guest replies, confirmations, commands) along with resolved booking context.
 
 - **Method**: `POST`
 - **Headers**:
@@ -143,6 +143,8 @@ Base Namespace: `/wp-json/snippen/v1/sms`
         "sender": "+4791234567",
         "recipient": "snippen-sms-service",
         "body": "JA",
+        "booking_id": "105",
+        "conversation_id": 3,
         "received_at": "2026-08-30T10:15:30Z",
         "modem_message_id": "modem-in-99"
       }
@@ -160,9 +162,43 @@ Base Namespace: `/wp-json/snippen/v1/sms`
 
 ---
 
+### 4. `GET /wp-json/snippen/v1/sms/bookings`
+**Description**: Polled by the gateway to retrieve active/upcoming bookings for a specific customer phone number when resolving ambiguous incoming SMS context.
+
+- **Method**: `GET`
+- **Query Parameters**:
+  - `phone`: Customer telephone number in E.164 format (e.g. `+4791234567`)
+- **Headers**:
+  - `Accept: application/json`
+  - `Authorization: Bearer <token>`
+- **Response**: `200 OK`
+  ```json
+  {
+    "bookings": [
+      {
+        "id": "105",
+        "customer_name": "Ola Nordmann",
+        "start_time": "2026-12-15T16:00:00Z",
+        "end_time": "2026-12-15T18:00:00Z",
+        "resource_name": "Badstue",
+        "status": "confirmed"
+      },
+      {
+        "id": "109",
+        "customer_name": "Ola Nordmann",
+        "start_time": "2027-01-05T11:00:00Z",
+        "resource_name": "Felleslokale",
+        "status": "confirmed"
+      }
+    ]
+  }
+  ```
+
+---
+
 ## Ready-to-use Implementation Tasks for `snippen-booking`
 
-Below are three copy-pasteable tasks/issues to file in the `snippen-booking` WordPress plugin repository.
+Below are four copy-pasteable tasks/issues to file in the `snippen-booking` WordPress plugin repository.
 
 ---
 
@@ -218,3 +254,20 @@ Receive incoming SMS messages from the SMS Gateway and connect them with booking
   - Returns `{"success": true, "processed_ids": [<gateway_id>, ...]}`.
 - [ ] Deduplicate incoming messages using `gateway_id` or `modem_message_id`.
 - [ ] Tests verifying inbound message handling and booking status transitions.
+
+---
+
+### Task 4: [Feature] Implement Customer Bookings Lookup REST Route for Context Resolution
+
+#### Title:
+`[Feature] Implement GET /wp-json/snippen/v1/sms/bookings for Context Resolution`
+
+#### Description:
+Expose customer active/upcoming bookings by phone number so the SMS Gateway can resolve conversation context.
+
+#### Acceptance Criteria:
+- [ ] Register `GET /wp-json/snippen/v1/sms/bookings`:
+  - Accepts query parameter `?phone=<e164>`.
+  - Queries active, upcoming, or recent bookings for that phone number.
+  - Returns `{"bookings": [{"id": "<id>", "customer_name": "<name>", "start_time": "<iso8601>", "end_time": "<iso8601>", "resource_name": "<name>", "status": "confirmed"}]}`.
+- [ ] Tests verifying querying bookings by phone number and returning empty list when none match.

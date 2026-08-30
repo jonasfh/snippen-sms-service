@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-08-30
+
+### Added
+- Dynamic booking context resolution for incoming SMS messages (`#28`).
+- Domain model `Booking` with formatted Norwegian presentation (`format_summary`) and timestamp tracking (`#28`).
+- Domain model `ConversationContext` and `ConversationState` enum (`IDLE`, `AWAITING_SELECTION`, `RESOLVED`) (`#28`).
+- Core resolution engine `BookingContextResolver` supporting automatic unambiguous single-booking association, multi-booking disambiguation prompts, and active session TTL continuation (`#28`).
+- Robust natural-language and numeric selection parsing (`1`, `2`, `Nr 1`, `#2`, `første`, etc.) without rigid SMS commands (`#28`).
+- SQLite database migration `0004_messages_booking_context.sql` adding `booking_id` and `conversation_id` columns to `messages` and creating `conversation_contexts` tracking table (`#28`).
+- Persistence methods `get_conversation_context`, `save_conversation_context`, `delete_conversation_context`, and query helpers `list_messages_by_booking` and `list_messages_by_phone` in `MessageStorage` (`#28`).
+- Client method `SnippenClient.fetch_bookings_for_phone()` for querying active reservations by phone number (`#28`).
+- Inbound sync reporting transmitting resolved `booking_id` and `conversation_id` payloads to Snippen backend (`#28`).
+- Integration of `BookingContextResolver` in `GatewayService` message ingestion loop and `SyncService` (`#28`).
+- Configuration options `booking_resolution_enabled` and `conversation_ttl_seconds` in `GatewayConfig` (`#28`).
+- Comprehensive unit and integration test suite in `tests/test_context.py` and extended storage/client/gateway tests (`#28`).
+- Architecture documentation, sequence diagram, and WordPress REST API specification updated with context resolution endpoints (`#28`).
+
 ## [0.12.0] - 2026-08-30
 
 ### Added

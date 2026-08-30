@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from datetime import UTC, datetime
@@ -10,13 +11,19 @@ from types import TracebackType
 from typing import Any, Self
 
 from snippen_sms.migrations.runner import MigrationRunner
-from snippen_sms.models import Message, MessageDirection, MessageStatus
+from snippen_sms.models import (
+    ConversationContext,
+    ConversationState,
+    Message,
+    MessageDirection,
+    MessageStatus,
+)
 
 logger = logging.getLogger("snippen_sms.storage")
 
 
 class MessageStorage:
-    """Persistent message repository backed by SQLite."""
+    """Persistent message and conversation repository backed by SQLite."""
 
     def __init__(
         self,
@@ -63,6 +70,10 @@ class MessageStorage:
         if modified_at_dt.tzinfo is None:
             modified_at_dt = modified_at_dt.replace(tzinfo=UTC)
 
+        keys = row.keys()
+        booking_id = row["booking_id"] if "booking_id" in keys else None
+        conversation_id = row["conversation_id"] if "conversation_id" in keys else None
+
         return Message(
             id=row["id"],
             direction=MessageDirection(row["direction"]),
@@ -72,7 +83,46 @@ class MessageStorage:
             status=MessageStatus(row["status"]),
             modem_message_id=row["modem_message_id"],
             external_id=row["external_id"],
+            booking_id=booking_id,
+            conversation_id=conversation_id,
             error_message=row["error_message"],
+            created_at=created_at_dt,
+            modified_at=modified_at_dt,
+        )
+
+    @staticmethod
+    def _row_to_conversation_context(row: sqlite3.Row) -> ConversationContext:
+        """Convert a database Row to a ConversationContext instance."""
+        last_activity_dt = datetime.fromisoformat(row["last_activity_at"])
+        if last_activity_dt.tzinfo is None:
+            last_activity_dt = last_activity_dt.replace(tzinfo=UTC)
+
+        created_at_dt = datetime.fromisoformat(row["created_at"])
+        if created_at_dt.tzinfo is None:
+            created_at_dt = created_at_dt.replace(tzinfo=UTC)
+
+        modified_at_dt = datetime.fromisoformat(row["modified_at"])
+        if modified_at_dt.tzinfo is None:
+            modified_at_dt = modified_at_dt.replace(tzinfo=UTC)
+
+        pending_ids_raw = row["pending_booking_ids"]
+        pending_booking_ids: list[str] = []
+        if pending_ids_raw:
+            try:
+                parsed = json.loads(pending_ids_raw)
+                if isinstance(parsed, list):
+                    pending_booking_ids = [str(x) for x in parsed]
+            except (json.JSONDecodeError, TypeError):
+                pending_booking_ids = []
+
+        return ConversationContext(
+            id=row["id"],
+            phone_number=row["phone_number"],
+            active_booking_id=row["active_booking_id"],
+            pending_booking_ids=pending_booking_ids,
+            pending_message_id=row["pending_message_id"],
+            state=ConversationState(row["state"]),
+            last_activity_at=last_activity_dt,
             created_at=created_at_dt,
             modified_at=modified_at_dt,
         )
@@ -90,8 +140,9 @@ class MessageStorage:
                     """
                     INSERT INTO messages (
                         direction, sender, recipient, body, status,
-                        modem_message_id, external_id, error_message, created_at, modified_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        modem_message_id, external_id, booking_id, conversation_id,
+                        error_message, created_at, modified_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         message.direction.value,
@@ -101,6 +152,8 @@ class MessageStorage:
                         message.status.value,
                         message.modem_message_id,
                         message.external_id,
+                        message.booking_id,
+                        message.conversation_id,
                         message.error_message,
                         message.created_at.isoformat(),
                         message.modified_at.isoformat(),
@@ -122,6 +175,8 @@ class MessageStorage:
                     status = ?,
                     modem_message_id = ?,
                     external_id = ?,
+                    booking_id = ?,
+                    conversation_id = ?,
                     error_message = ?,
                     modified_at = ?
                 WHERE id = ?
@@ -134,6 +189,8 @@ class MessageStorage:
                     message.status.value,
                     message.modem_message_id,
                     message.external_id,
+                    message.booking_id,
+                    message.conversation_id,
                     message.error_message,
                     message.modified_at.isoformat(),
                     message.id,
@@ -197,8 +254,9 @@ class MessageStorage:
         offset: int = 0,
         status: MessageStatus | str | None = None,
         direction: MessageDirection | str | None = None,
+        booking_id: str | None = None,
     ) -> list[Message]:
-        """List messages with optional status and direction filtering and pagination."""
+        """List messages with optional status, direction, and booking_id filtering and pagination."""
         query = "SELECT * FROM messages"
         conditions: list[str] = []
         params: list[Any] = []
@@ -213,6 +271,10 @@ class MessageStorage:
             conditions.append("direction = ?")
             params.append(dir_val)
 
+        if booking_id is not None:
+            conditions.append("booking_id = ?")
+            params.append(booking_id)
+
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
@@ -222,6 +284,21 @@ class MessageStorage:
         cursor = self.connection.execute(query, tuple(params))
         return [self._row_to_message(row) for row in cursor.fetchall()]
 
+    def list_messages_by_booking(self, booking_id: str, limit: int = 100) -> list[Message]:
+        """List messages associated with a specific booking ID."""
+        return self.list_messages(limit=limit, booking_id=booking_id)
+
+    def list_messages_by_phone(self, phone_number: str, limit: int = 100) -> list[Message]:
+        """List all inbound or outbound messages involving a specific phone number."""
+        query = """
+            SELECT * FROM messages
+            WHERE sender = ? OR recipient = ?
+            ORDER BY id DESC
+            LIMIT ?
+        """
+        cursor = self.connection.execute(query, (phone_number, phone_number, limit))
+        return [self._row_to_message(row) for row in cursor.fetchall()]
+
     def update_message_status(
         self,
         message_id: int,
@@ -229,6 +306,8 @@ class MessageStorage:
         error_message: str | None = None,
         modem_message_id: str | None = None,
         external_id: str | None = None,
+        booking_id: str | None = None,
+        conversation_id: int | None = None,
     ) -> Message | None:
         """Update the status and optional metadata of a message."""
         status_val = status.value if isinstance(status, MessageStatus) else str(status)
@@ -250,6 +329,14 @@ class MessageStorage:
             update_clauses.append("external_id = ?")
             params.append(external_id)
 
+        if booking_id is not None:
+            update_clauses.append("booking_id = ?")
+            params.append(booking_id)
+
+        if conversation_id is not None:
+            update_clauses.append("conversation_id = ?")
+            params.append(conversation_id)
+
         params.append(message_id)
         query = f"UPDATE messages SET {', '.join(update_clauses)} WHERE id = ?"
 
@@ -259,6 +346,21 @@ class MessageStorage:
                 return None
 
         return self.get_message(message_id)
+
+    def update_message_booking_context(
+        self,
+        message_id: int,
+        booking_id: str | None,
+        conversation_id: int | None = None,
+    ) -> Message | None:
+        """Update the booking and conversation context of a message."""
+        msg = self.get_message(message_id)
+        if msg is None:
+            return None
+        msg.booking_id = booking_id
+        if conversation_id is not None:
+            msg.conversation_id = conversation_id
+        return self.save_message(msg)
 
     def delete_message(self, message_id: int) -> bool:
         """Delete a message by its ID."""
@@ -273,6 +375,7 @@ class MessageStorage:
         self,
         status: MessageStatus | str | None = None,
         direction: MessageDirection | str | None = None,
+        booking_id: str | None = None,
     ) -> int:
         """Count total messages matching criteria."""
         query = "SELECT COUNT(*) FROM messages"
@@ -289,6 +392,10 @@ class MessageStorage:
             conditions.append("direction = ?")
             params.append(dir_val)
 
+        if booking_id is not None:
+            conditions.append("booking_id = ?")
+            params.append(booking_id)
+
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
@@ -303,6 +410,8 @@ class MessageStorage:
         sender: str = "snippen-sms-service",
         status: MessageStatus = MessageStatus.PENDING,
         external_id: str | None = None,
+        booking_id: str | None = None,
+        conversation_id: int | None = None,
     ) -> Message:
         """Add a new outbound message to the outbox."""
         message = Message(
@@ -312,6 +421,8 @@ class MessageStorage:
             body=body,
             status=status,
             external_id=external_id,
+            booking_id=booking_id,
+            conversation_id=conversation_id,
         )
         return self.save_message(message)
 
@@ -433,6 +544,96 @@ class MessageStorage:
     def count_inbox(self, status: MessageStatus | str | None = None) -> int:
         """Count messages in the inbox with optional status filter."""
         return self.count_messages(status=status, direction=MessageDirection.INBOUND)
+
+    # Conversation Context persistence methods
+    def get_conversation_context(self, phone_number: str) -> ConversationContext | None:
+        """Retrieve active conversation context for a phone number."""
+        cursor = self.connection.execute(
+            "SELECT * FROM conversation_contexts WHERE phone_number = ?",
+            (phone_number,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_conversation_context(row)
+
+    def save_conversation_context(self, context: ConversationContext) -> ConversationContext:
+        """Save or update a conversation context record."""
+        now = datetime.now(UTC)
+        conn = self.connection
+        pending_json = json.dumps(context.pending_booking_ids)
+
+        if context.id is None:
+            existing = self.get_conversation_context(context.phone_number)
+            if existing is not None:
+                context.id = existing.id
+
+        if context.id is None:
+            context.created_at = context.created_at or now
+            context.modified_at = now
+            with conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO conversation_contexts (
+                        phone_number, active_booking_id, pending_booking_ids,
+                        pending_message_id, state, last_activity_at, created_at, modified_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        context.phone_number,
+                        context.active_booking_id,
+                        pending_json,
+                        context.pending_message_id,
+                        context.state.value,
+                        context.last_activity_at.isoformat(),
+                        context.created_at.isoformat(),
+                        context.modified_at.isoformat(),
+                    ),
+                )
+                context.id = cursor.lastrowid
+            logger.debug(
+                "Saved new conversation context for %s with id=%s", context.phone_number, context.id
+            )
+            return context
+
+        context.modified_at = now
+        with conn:
+            conn.execute(
+                """
+                UPDATE conversation_contexts SET
+                    phone_number = ?,
+                    active_booking_id = ?,
+                    pending_booking_ids = ?,
+                    pending_message_id = ?,
+                    state = ?,
+                    last_activity_at = ?,
+                    modified_at = ?
+                WHERE id = ?
+                """,
+                (
+                    context.phone_number,
+                    context.active_booking_id,
+                    pending_json,
+                    context.pending_message_id,
+                    context.state.value,
+                    context.last_activity_at.isoformat(),
+                    context.modified_at.isoformat(),
+                    context.id,
+                ),
+            )
+        logger.debug(
+            "Updated conversation context for %s (id=%s)", context.phone_number, context.id
+        )
+        return context
+
+    def delete_conversation_context(self, phone_number: str) -> bool:
+        """Delete conversation context for a phone number."""
+        with self.connection:
+            cursor = self.connection.execute(
+                "DELETE FROM conversation_contexts WHERE phone_number = ?",
+                (phone_number,),
+            )
+            return cursor.rowcount > 0
 
     def close(self) -> None:
         """Close the database connection."""

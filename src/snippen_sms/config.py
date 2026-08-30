@@ -25,6 +25,8 @@ class GatewayConfig:
     sync_interval_seconds: float = 5.0
     sync_timeout_seconds: float = 10.0
     sync_enabled: bool = True
+    booking_resolution_enabled: bool = True
+    conversation_ttl_seconds: float = 7200.0
 
     @classmethod
     def from_env(cls) -> GatewayConfig:
@@ -34,6 +36,9 @@ class GatewayConfig:
         )
         auto_check_env = os.getenv("SNIPPEN_SMS_AUTO_UPDATE_CHECK", "true").strip().lower()
         sync_enabled_env = os.getenv("SNIPPEN_SMS_SYNC_ENABLED", "true").strip().lower()
+        booking_res_env = (
+            os.getenv("SNIPPEN_SMS_BOOKING_RESOLUTION_ENABLED", "true").strip().lower()
+        )
 
         api_url = os.getenv("SNIPPEN_SMS_API_URL") or os.getenv("SNIPPEN_API_URL")
         api_token = os.getenv("SNIPPEN_SMS_API_TOKEN") or os.getenv("SNIPPEN_API_TOKEN")
@@ -56,4 +61,8 @@ class GatewayConfig:
             sync_interval_seconds=float(os.getenv("SNIPPEN_SMS_SYNC_INTERVAL", "5.0")),
             sync_timeout_seconds=float(os.getenv("SNIPPEN_SMS_SYNC_TIMEOUT", "10.0")),
             sync_enabled=sync_enabled_env in ("true", "1", "yes"),
+            booking_resolution_enabled=booking_res_env in ("true", "1", "yes"),
+            conversation_ttl_seconds=float(
+                os.getenv("SNIPPEN_SMS_CONVERSATION_TTL_SECONDS", "7200.0")
+            ),
         )
