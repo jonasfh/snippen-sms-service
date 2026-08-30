@@ -38,6 +38,7 @@ class Message:
     id: int | None = None
     status: MessageStatus = MessageStatus.PENDING
     modem_message_id: str | None = None
+    external_id: str | None = None
     error_message: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     modified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -63,6 +64,7 @@ class Message:
             "body": self.body,
             "status": self.status.value,
             "modem_message_id": self.modem_message_id,
+            "external_id": self.external_id,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat(),
             "modified_at": self.modified_at.isoformat(),

@@ -7,18 +7,20 @@ import logging
 import time
 from typing import Any
 
+from snippen_sms.client import SnippenClient
 from snippen_sms.config import GatewayConfig
 from snippen_sms.models import Message, MessageDirection, MessageStatus
 from snippen_sms.providers import get_provider
 from snippen_sms.providers.base import SmsProvider
 from snippen_sms.storage import MessageStorage
+from snippen_sms.sync import SyncService
 from snippen_sms.updater import SoftwareUpdater, UpdateCheckResult
 
 logger = logging.getLogger("snippen_sms.gateway")
 
 
 class GatewayService:
-    """Long-running gateway service managing SMS dispatch and ingestion."""
+    """Long-running gateway service managing SMS dispatch, ingestion, and Snippen API sync."""
 
     def __init__(
         self,
@@ -26,6 +28,8 @@ class GatewayService:
         storage: MessageStorage | None = None,
         provider: SmsProvider | None = None,
         updater: SoftwareUpdater | None = None,
+        client: SnippenClient | None = None,
+        sync_service: SyncService | None = None,
     ) -> None:
         self.config = config or GatewayConfig()
         self.storage = storage or MessageStorage(self.config.database_path)
@@ -34,11 +38,36 @@ class GatewayService:
             github_repo=self.config.github_repo,
             github_token=self.config.github_token,
         )
+
+        if client is not None:
+            self.client = client
+        elif self.config.snippen_api_url:
+            self.client = SnippenClient(
+                api_url=self.config.snippen_api_url,
+                api_token=self.config.snippen_api_token,
+                timeout_seconds=self.config.sync_timeout_seconds,
+            )
+        else:
+            self.client = None
+
+        if sync_service is not None:
+            self.sync_service = sync_service
+        elif self.client is not None:
+            self.sync_service = SyncService(
+                storage=self.storage,
+                client=self.client,
+                service_name=self.config.service_name,
+            )
+        else:
+            self.sync_service = None
+
         self._is_running = False
         self._stop_event = asyncio.Event()
         self._start_time: float | None = None
         self._latest_version_check: UpdateCheckResult | None = None
         self._last_update_check_time: float = 0.0
+        self._last_sync_time: float = 0.0
+        self._last_sync_result: dict[str, Any] | None = None
 
     @property
     def is_running(self) -> bool:
@@ -73,6 +102,11 @@ class GatewayService:
             "inbox_unprocessed": unprocessed_inbox,
             "inbox_total": self.storage.count_inbox(),
             "total_messages": self.storage.count_messages(),
+            "snippen_api_url": self.config.snippen_api_url,
+            "sync_enabled": self.config.sync_enabled and (self.sync_service is not None),
+            "sync_interval_seconds": self.config.sync_interval_seconds,
+            "last_sync_time": self._last_sync_time if self._last_sync_time > 0 else None,
+            "last_sync_result": self._last_sync_result,
             "github_repo": self.config.github_repo,
             "update_available": (
                 self._latest_version_check.update_available
@@ -85,6 +119,16 @@ class GatewayService:
                 else None
             ),
         }
+
+    def sync_with_snippen(self) -> dict[str, Any] | None:
+        """Perform synchronization cycle with Snippen backend."""
+        if self.sync_service is None or not self.config.sync_enabled:
+            return None
+
+        self._last_sync_time = time.time()
+        result = self.sync_service.sync_all()
+        self._last_sync_result = result
+        return result
 
     def check_for_updates(self) -> UpdateCheckResult:
         """Check GitHub for new releases and log notices if available."""
@@ -345,8 +389,18 @@ class GatewayService:
         await self.start()
         try:
             while not self._stop_event.is_set():
-                # Service tick - process pending outbox and poll incoming messages
+                # Service tick - process Snippen API sync, pending outbox, and incoming messages
                 logger.debug("Gateway heartbeat tick.")
+                if (
+                    self.config.sync_enabled
+                    and self.sync_service is not None
+                    and (time.time() - self._last_sync_time) >= self.config.sync_interval_seconds
+                ):
+                    try:
+                        self.sync_with_snippen()
+                    except Exception:
+                        logger.exception("Error during Snippen API synchronization tick.")
+
                 try:
                     await self.process_outbox()
                 except Exception:

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-30
+
+### Added
+- Two-way HTTP API synchronization between SMS Gateway and Snippen Booking (`#27`).
+- Zero-dependency HTTP client `SnippenClient` with `Authorization: Bearer <token>` and `X-API-Key: <token>` authentication (`#27`).
+- `SyncService` coordinating pending outbox polling, unhandled inbound message reporting, and outbound delivery status updates (`#27`).
+- Outbox message deduplication by external Snippen ID to prevent duplicate SMS transmissions (`#27`).
+- Inbound SMS acknowledgment lifecycle transitioning messages from `RECEIVED` to `PROCESSED` upon successful push (`#27`).
+- Delivery status tracking updating `SENT` messages to `DELIVERED` once reported to Snippen (`#27`).
+- Database schema migration `0003_messages_external_id.sql` adding `external_id` column and index to SQLite storage (`#27`).
+- Configurable Snippen API settings (`snippen_api_url`, `snippen_api_token`, `sync_interval_seconds`, `sync_timeout_seconds`, `sync_enabled`) in `GatewayConfig` (`#27`).
+- CLI subcommand `snippen-sms sync` for one-shot manual synchronization and diagnostic output (`#27`).
+- Synchronization diagnostics and metrics (`snippen_api_url`, `sync_enabled`, `last_sync_time`, `last_sync_result`) in `GatewayService.get_status()` (`#27`).
+- Comprehensive WordPress plugin REST API integration specification and tasks document in `docs/snippen_booking_api_spec.md` (`#27`).
+- Comprehensive unit and integration test suites in `tests/test_client.py` and `tests/test_sync.py` (`#27`).
+
 ## [0.11.0] - 2026-08-30
 
 ### Added

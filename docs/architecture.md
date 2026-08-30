@@ -227,6 +227,7 @@ erDiagram
         string body
         string status
         string modem_message_id
+        string external_id
         string error_message
         string created_at
         string modified_at
@@ -241,7 +242,50 @@ erDiagram
 
 - **Persistence Layer (`MessageStorage`)**: Built on Python standard library `sqlite3` using Write-Ahead Logging (`WAL`) mode for robust, concurrent reads and writes without external database server dependencies.
 - **Timestamp Tracking**: Every record maintains ISO-8601 UTC `created_at` and `modified_at` timestamps for auditing, synchronization, and retry workflows.
+- **External Identifier Tracking**: The `external_id` column indexes external identifiers assigned by Snippen Booking, enabling idempotent outbox polling and delivery status reconciliation without duplicates.
 - **Migration Management (`MigrationRunner`)**: Sequential SQL migration scripts managed atomically with `schema_migrations` tracking, SHA-256 checksum verification, `PRAGMA user_version` synchronization, and automatic execution upon service initialization.
+
+---
+
+## Snippen API Synchronization Architecture
+
+To support deployments behind NAT, mobile cellular modems, and edge firewalls without open inbound ports or dynamic DNS, **all HTTP communication is initiated by the SMS Gateway / Raspberry Pi**.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GW as Gateway / SyncService
+    participant DB as SQLite Storage
+    participant API as Snippen Booking API (WP)
+    participant Provider as SMS Provider (Modem)
+
+    Note over GW,API: Outbox Synchronization (Poll & Dispatch)
+    GW->>API: GET /wp-json/snippen/v1/sms/outbox (Bearer Auth)
+    API-->>GW: 200 OK: [{id: "101", recipient: "+479...", body: "Hello"}]
+    GW->>DB: Enqueue to outbox (deduplicating by external_id)
+    GW->>Provider: send_sms()
+    Provider-->>GW: SendResult(success=True)
+    GW->>DB: Update status to SENT
+    GW->>API: POST /wp-json/snippen/v1/sms/outbox/status [{external_id: "101", status: "sent"}]
+    API-->>GW: 200 OK
+    GW->>DB: Transition status to DELIVERED
+
+    Note over GW,API: Inbound Synchronization (Ingest & Acknowledge)
+    Provider-->>GW: Inbound SMS received
+    GW->>DB: Save to inbox (status=RECEIVED)
+    GW->>API: POST /wp-json/snippen/v1/sms/inbox [{gateway_id: 15, sender: "+47...", body: "JA"}]
+    API-->>GW: 200 OK: {processed_ids: [15]}
+    GW->>DB: Mark message as PROCESSED
+```
+
+### Key Synchronization Capabilities
+1. **Pull-Based Communication**: The gateway periodically queries `GET /wp-json/snippen/v1/sms/outbox` for messages scheduled for delivery.
+2. **Push-Based Inbound Reporting**: Unprocessed inbound SMS messages are batched and pushed to `POST /wp-json/snippen/v1/sms/inbox`. Upon acknowledgement from Snippen, local messages transition to `PROCESSED`.
+3. **Delivery Status Feedback**: Outbound transmission outcomes (success or error diagnostics) are reported via `POST /wp-json/snippen/v1/sms/outbox/status`, allowing Snippen Booking to update reservation logs.
+4. **Idempotency & Deduplication**: Outbound items are deduplicated against local SQLite records via `external_id`. If network interruptions prevent immediate acknowledgement, retried sync requests do not produce duplicate SMS transmissions.
+5. **Fault Isolation & Zero Data Loss**: If the Snippen application is temporarily down or unreachable, inbound SMS messages remain safely queued in SQLite as `RECEIVED`, and outbound polling retries automatically on subsequent sync ticks.
+6. **Authentication**: All HTTP requests are authenticated using `Authorization: Bearer <token>` and `X-API-Key: <token>` headers.
+7. **WordPress Plugin Specification**: Complete API endpoints, schema specifications, and developer tasks are documented in [Snippen Booking WordPress API Spec](file:///workspaces/snippen-sms-service/docs/snippen_booking_api_spec.md).
 
 ---
 

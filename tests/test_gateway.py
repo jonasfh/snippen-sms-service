@@ -668,3 +668,41 @@ def test_gateway_mock_provider_auto_reply_flow():
         assert unprocessed[0].body == "CONFIRMED 456"
 
     asyncio.run(_test())
+
+
+def test_gateway_sync_with_snippen():
+    """Test GatewayService with Snippen API sync integration."""
+    from unittest.mock import MagicMock
+
+    from snippen_sms.client import SnippenClient
+
+    config = GatewayConfig(
+        database_path=":memory:",
+        snippen_api_url="https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+        snippen_api_token="auth-token",
+        sync_enabled=True,
+    )
+    provider = InMemorySmsProvider()
+    mock_client = MagicMock(spec=SnippenClient)
+    mock_client.fetch_pending_outbox.return_value = [
+        {"id": "wp-1", "recipient": "+4791234567", "body": "SMS from WP"}
+    ]
+    mock_client.report_inbound_messages.return_value = []
+    mock_client.report_outbox_status.return_value = True
+
+    service = GatewayService(config=config, provider=provider, client=mock_client)
+
+    status = service.get_status()
+    assert status["snippen_api_url"] == "https://vestreholmensameie.no/wp-json/snippen/v1/sms"
+    assert status["sync_enabled"] is True
+
+    # Run sync cycle
+    res = service.sync_with_snippen()
+    assert res is not None
+    assert res["outbox_enqueued"] == 1
+
+    # Verify message enqueued into outbox
+    pending = service.storage.get_pending_outbox()
+    assert len(pending) == 1
+    assert pending[0].external_id == "wp-1"
+    assert pending[0].body == "SMS from WP"

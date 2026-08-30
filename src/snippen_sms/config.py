@@ -20,6 +20,11 @@ class GatewayConfig:
     auto_update_check: bool = True
     update_check_interval_seconds: float = 86400.0
     github_token: str | None = None
+    snippen_api_url: str | None = None
+    snippen_api_token: str | None = None
+    sync_interval_seconds: float = 5.0
+    sync_timeout_seconds: float = 10.0
+    sync_enabled: bool = True
 
     @classmethod
     def from_env(cls) -> GatewayConfig:
@@ -28,6 +33,10 @@ class GatewayConfig:
             os.getenv("SNIPPEN_SMS_CHECK_UPDATES_ON_STARTUP", "true").strip().lower()
         )
         auto_check_env = os.getenv("SNIPPEN_SMS_AUTO_UPDATE_CHECK", "true").strip().lower()
+        sync_enabled_env = os.getenv("SNIPPEN_SMS_SYNC_ENABLED", "true").strip().lower()
+
+        api_url = os.getenv("SNIPPEN_SMS_API_URL") or os.getenv("SNIPPEN_API_URL")
+        api_token = os.getenv("SNIPPEN_SMS_API_TOKEN") or os.getenv("SNIPPEN_API_TOKEN")
 
         return cls(
             service_name=os.getenv("SNIPPEN_SMS_SERVICE_NAME", "snippen-sms-service"),
@@ -42,4 +51,9 @@ class GatewayConfig:
                 os.getenv("SNIPPEN_SMS_UPDATE_CHECK_INTERVAL", "86400.0")
             ),
             github_token=os.getenv("SNIPPEN_SMS_GITHUB_TOKEN"),
+            snippen_api_url=api_url,
+            snippen_api_token=api_token,
+            sync_interval_seconds=float(os.getenv("SNIPPEN_SMS_SYNC_INTERVAL", "5.0")),
+            sync_timeout_seconds=float(os.getenv("SNIPPEN_SMS_SYNC_TIMEOUT", "10.0")),
+            sync_enabled=sync_enabled_env in ("true", "1", "yes"),
         )
