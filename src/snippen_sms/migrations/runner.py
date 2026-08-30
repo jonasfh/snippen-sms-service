@@ -109,7 +109,7 @@ class MigrationRunner:
                 if item.name.endswith(".sql"):
                     files.append(Path(str(item)))
             return sorted(files, key=lambda p: p.name)
-        except TypeError, ModuleNotFoundError, AttributeError, FileNotFoundError:
+        except (TypeError, ModuleNotFoundError, AttributeError, FileNotFoundError):
             fallback_dir = Path(__file__).parent / "sql"
             if fallback_dir.exists():
                 return sorted(fallback_dir.glob("*.sql"))
