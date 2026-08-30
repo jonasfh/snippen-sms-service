@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from snippen_sms import __version__
+from snippen_sms.client import SnippenClient
 from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService
 from snippen_sms.models import MessageDirection, MessageStatus
@@ -706,3 +707,48 @@ def test_gateway_sync_with_snippen():
     assert len(pending) == 1
     assert pending[0].external_id == "wp-1"
     assert pending[0].body == "SMS from WP"
+
+
+def test_gateway_incoming_message_with_booking_resolver():
+    """Test that incoming messages polled via gateway automatically resolve booking context."""
+    from datetime import UTC, datetime
+    from unittest.mock import MagicMock
+
+    from snippen_sms.models import Booking
+
+    async def _test():
+        config = GatewayConfig(
+            database_path=":memory:",
+            booking_resolution_enabled=True,
+        )
+        provider = InMemorySmsProvider()
+        mock_client = MagicMock(spec=SnippenClient)
+        now = datetime(2026, 12, 15, 16, 0, tzinfo=UTC)
+        mock_client.fetch_bookings_for_phone.return_value = [
+            Booking(
+                id="book-abc",
+                customer_phone="+4790011223",
+                start_time=now,
+                resource_name="Badstue",
+            )
+        ]
+
+        service = GatewayService(config=config, provider=provider, client=mock_client)
+        await service.start()
+
+        # Simulate incoming SMS from guest
+        provider.simulate_incoming(sender="+4790011223", body="Hva er koden?")
+
+        # Poll incoming messages
+        messages = await service.poll_incoming_messages()
+        assert len(messages) == 1
+        assert messages[0].booking_id == "book-abc"
+
+        # Check stored in database
+        db_msg = service.storage.get_message(messages[0].id)
+        assert db_msg is not None
+        assert db_msg.booking_id == "book-abc"
+
+        await service.stop()
+
+    asyncio.run(_test())

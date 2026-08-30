@@ -533,3 +533,83 @@ def test_storage_external_id_and_outbox_reporting(memory_storage: MessageStorage
 
     # Should no longer be in unreported list
     assert len(memory_storage.get_unreported_outbox_statuses()) == 0
+
+
+def test_storage_booking_and_conversation_context(memory_storage: MessageStorage) -> None:
+    """Test saving and retrieving messages with booking_id and conversation_id."""
+    msg = memory_storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791234567",
+            recipient="snippen-sms-service",
+            body="Hei, booking spm",
+            booking_id="book-555",
+            conversation_id=12,
+        )
+    )
+    assert msg.id is not None
+    assert msg.booking_id == "book-555"
+    assert msg.conversation_id == 12
+
+    fetched = memory_storage.get_message(msg.id)
+    assert fetched is not None
+    assert fetched.booking_id == "book-555"
+    assert fetched.conversation_id == 12
+
+    # Query by booking ID
+    by_booking = memory_storage.list_messages_by_booking("book-555")
+    assert len(by_booking) == 1
+    assert by_booking[0].id == msg.id
+
+    # Query by phone
+    by_phone = memory_storage.list_messages_by_phone("+4791234567")
+    assert len(by_phone) == 1
+    assert by_phone[0].id == msg.id
+
+    # Update booking context
+    memory_storage.update_message_booking_context(msg.id, booking_id="book-666", conversation_id=13)
+    refreshed = memory_storage.get_message(msg.id)
+    assert refreshed is not None
+    assert refreshed.booking_id == "book-666"
+    assert refreshed.conversation_id == 13
+
+
+def test_storage_conversation_context_crud(memory_storage: MessageStorage) -> None:
+    """Test ConversationContext CRUD operations."""
+    from snippen_sms.models import ConversationContext, ConversationState
+
+    assert memory_storage.get_conversation_context("+4791112233") is None
+
+    ctx = ConversationContext(
+        phone_number="+4791112233",
+        active_booking_id="book-100",
+        pending_booking_ids=["book-100", "book-200"],
+        pending_message_id=42,
+        state=ConversationState.AWAITING_SELECTION,
+    )
+    saved = memory_storage.save_conversation_context(ctx)
+    assert saved.id is not None
+    assert saved.phone_number == "+4791112233"
+    assert saved.state == ConversationState.AWAITING_SELECTION
+    assert saved.pending_booking_ids == ["book-100", "book-200"]
+    assert saved.pending_message_id == 42
+
+    # Retrieve
+    retrieved = memory_storage.get_conversation_context("+4791112233")
+    assert retrieved is not None
+    assert retrieved.id == saved.id
+    assert retrieved.pending_booking_ids == ["book-100", "book-200"]
+
+    # Update
+    retrieved.state = ConversationState.RESOLVED
+    retrieved.active_booking_id = "book-200"
+    retrieved.pending_booking_ids = []
+    retrieved.pending_message_id = None
+    updated = memory_storage.save_conversation_context(retrieved)
+    assert updated.state == ConversationState.RESOLVED
+    assert updated.active_booking_id == "book-200"
+    assert updated.pending_booking_ids == []
+
+    # Delete
+    assert memory_storage.delete_conversation_context("+4791112233") is True
+    assert memory_storage.get_conversation_context("+4791112233") is None

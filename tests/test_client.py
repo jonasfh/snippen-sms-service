@@ -94,8 +94,52 @@ def test_fetch_pending_outbox_raw_list() -> None:
         assert items[0]["id"] == "msg-10"
 
 
+def test_fetch_bookings_for_phone_success() -> None:
+    """Test fetching customer bookings by phone number."""
+    client = SnippenClient(
+        api_url="https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+        api_token="auth-tok",
+    )
+
+    mock_data = {
+        "bookings": [
+            {
+                "id": "b-1",
+                "customer_name": "Ola Nordmann",
+                "start_time": "2026-12-15T16:00:00Z",
+                "end_time": "2026-12-15T18:00:00Z",
+                "resource_name": "Badstue #1",
+                "status": "confirmed",
+            },
+            {
+                "id": "b-2",
+                "customer_name": "Ola Nordmann",
+                "start_time": "2027-01-05T11:00:00Z",
+                "resource_name": "Felleslokale",
+                "status": "confirmed",
+            },
+        ]
+    }
+
+    mock_resp = _create_mock_response(status=200, data=mock_data)
+
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+        bookings = client.fetch_bookings_for_phone("+4791234567")
+
+        assert len(bookings) == 2
+        assert bookings[0].id == "b-1"
+        assert bookings[0].customer_phone == "+4791234567"
+        assert bookings[0].resource_name == "Badstue #1"
+        assert bookings[0].start_time == datetime(2026, 12, 15, 16, 0, tzinfo=UTC)
+        assert bookings[1].id == "b-2"
+
+        req: urllib.request.Request = mock_urlopen.call_args[0][0]
+        assert "bookings?phone=%2B4791234567" in req.full_url
+        assert req.get_method() == "GET"
+
+
 def test_report_inbound_messages_success() -> None:
-    """Test reporting received inbound SMS messages to Snippen."""
+    """Test reporting received inbound SMS messages with booking_id to Snippen."""
     client = SnippenClient(
         api_url="https://vestreholmensameie.no/wp-json/snippen/v1/sms",
         api_token="test-token",
@@ -111,6 +155,8 @@ def test_report_inbound_messages_success() -> None:
             body="JA",
             status=MessageStatus.RECEIVED,
             modem_message_id="modem-101",
+            booking_id="b-101",
+            conversation_id=5,
             created_at=now,
         ),
         Message(
@@ -121,6 +167,8 @@ def test_report_inbound_messages_success() -> None:
             body="NEI",
             status=MessageStatus.RECEIVED,
             modem_message_id="modem-102",
+            booking_id=None,
+            conversation_id=None,
             created_at=now,
         ),
     ]
@@ -140,6 +188,8 @@ def test_report_inbound_messages_success() -> None:
         assert payload["messages"][0]["gateway_id"] == 1
         assert payload["messages"][0]["sender"] == "+4790000001"
         assert payload["messages"][0]["body"] == "JA"
+        assert payload["messages"][0]["booking_id"] == "b-101"
+        assert payload["messages"][0]["conversation_id"] == 5
         assert payload["messages"][0]["modem_message_id"] == "modem-101"
 
 

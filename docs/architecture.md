@@ -228,7 +228,20 @@ erDiagram
         string status
         string modem_message_id
         string external_id
+        string booking_id
+        int conversation_id
         string error_message
+        string created_at
+        string modified_at
+    }
+    conversation_contexts {
+        int id PK
+        string phone_number
+        string active_booking_id
+        string pending_booking_ids
+        int pending_message_id
+        string state
+        string last_activity_at
         string created_at
         string modified_at
     }
@@ -242,8 +255,46 @@ erDiagram
 
 - **Persistence Layer (`MessageStorage`)**: Built on Python standard library `sqlite3` using Write-Ahead Logging (`WAL`) mode for robust, concurrent reads and writes without external database server dependencies.
 - **Timestamp Tracking**: Every record maintains ISO-8601 UTC `created_at` and `modified_at` timestamps for auditing, synchronization, and retry workflows.
-- **External Identifier Tracking**: The `external_id` column indexes external identifiers assigned by Snippen Booking, enabling idempotent outbox polling and delivery status reconciliation without duplicates.
+- **External & Booking Tracking**: The `external_id` column indexes external identifiers assigned by Snippen Booking, while `booking_id` and `conversation_id` associate messages with reservation lifecycles and ongoing dialogue threads.
+- **Conversation State Tracking (`conversation_contexts`)**: Tracks active booking context, pending booking selections, and state transitions for each customer phone number.
 - **Migration Management (`MigrationRunner`)**: Sequential SQL migration scripts managed atomically with `schema_migrations` tracking, SHA-256 checksum verification, `PRAGMA user_version` synchronization, and automatic execution upon service initialization.
+
+---
+
+## Booking Context Resolution & Conversation Management
+
+When guests reply or send inquiries via SMS, `snippen-sms-service` dynamically identifies the applicable Snippen booking without requiring users to type complicated reference codes or IDs:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Guest as Customer / Guest
+    participant GW as SMS Gateway / ContextResolver
+    participant DB as SQLite Storage
+    participant API as Snippen Booking API
+
+    alt Case 1: Single Active Booking (Unambiguous)
+        Guest->>GW: "Hva er koden til døra?"
+        GW->>API: GET /wp-json/snippen/v1/sms/bookings?phone=+479...
+        API-->>GW: [{id: "105", resource: "Badstue", start_time: "..."}]
+        GW->>DB: Save message with booking_id="105", state=RESOLVED
+    else Case 2: Multiple Active Bookings (Ambiguous Selection Flow)
+        Guest->>GW: "Ehh, jeg trenger noen bord. Er det mulig å få utvask?"
+        GW->>API: GET /wp-json/snippen/v1/sms/bookings?phone=+479...
+        API-->>GW: [{id: "105", 15.12.2026}, {id: "109", 05.01.2027}]
+        GW->>DB: Set state=AWAITING_SELECTION, pending_ids=["105", "109"]
+        GW->>Guest: "Du har flere reservasjoner:\n1. 15.12.2026 16:00 (Badstue)\n2. 05.01.2027 11:00 (Felleslokale)\nSvar med tall (1 el 2)..."
+        Guest->>GW: "1"
+        GW->>DB: Update pending & reply messages with booking_id="105", state=RESOLVED
+    end
+```
+
+### Context Resolution Capabilities
+1. **Zero Booking ID Friction**: Users do not need to memorize or write booking IDs. Context is derived from customer phone numbers and existing reservation schedules.
+2. **Automatic Association**: If the user has a single active booking, incoming messages are immediately associated with it.
+3. **Interactive Multi-Booking Disambiguation**: When multiple reservations exist, the gateway sends a clear, natural-language prompt listing candidate bookings and lets the user reply with the option number (`1`, `2`, `Nr 1`, `første`).
+4. **Active Session Continuation**: Once resolved, subsequent messages within a configurable session window (default 2 hours) automatically inherit the active booking context.
+5. **Two-Way Synchronization**: Resolved `booking_id` and `conversation_id` are reported directly to the Snippen Booking backend during inbox sync.
 
 ---
 

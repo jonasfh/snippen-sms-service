@@ -9,6 +9,7 @@ from typing import Any
 
 from snippen_sms.client import SnippenClient
 from snippen_sms.config import GatewayConfig
+from snippen_sms.context import BookingContextResolver
 from snippen_sms.models import Message, MessageDirection, MessageStatus
 from snippen_sms.providers import get_provider
 from snippen_sms.providers.base import SmsProvider
@@ -30,6 +31,7 @@ class GatewayService:
         updater: SoftwareUpdater | None = None,
         client: SnippenClient | None = None,
         sync_service: SyncService | None = None,
+        resolver: BookingContextResolver | None = None,
     ) -> None:
         self.config = config or GatewayConfig()
         self.storage = storage or MessageStorage(self.config.database_path)
@@ -50,6 +52,18 @@ class GatewayService:
         else:
             self.client = None
 
+        if resolver is not None:
+            self.resolver = resolver
+        elif self.config.booking_resolution_enabled:
+            self.resolver = BookingContextResolver(
+                storage=self.storage,
+                client=self.client,
+                conversation_ttl_seconds=self.config.conversation_ttl_seconds,
+                service_name=self.config.service_name,
+            )
+        else:
+            self.resolver = None
+
         if sync_service is not None:
             self.sync_service = sync_service
         elif self.client is not None:
@@ -57,6 +71,7 @@ class GatewayService:
                 storage=self.storage,
                 client=self.client,
                 service_name=self.config.service_name,
+                resolver=self.resolver,
             )
         else:
             self.sync_service = None
@@ -104,6 +119,8 @@ class GatewayService:
             "total_messages": self.storage.count_messages(),
             "snippen_api_url": self.config.snippen_api_url,
             "sync_enabled": self.config.sync_enabled and (self.sync_service is not None),
+            "booking_resolution_enabled": self.config.booking_resolution_enabled
+            and (self.resolver is not None),
             "sync_interval_seconds": self.config.sync_interval_seconds,
             "last_sync_time": self._last_sync_time if self._last_sync_time > 0 else None,
             "last_sync_result": self._last_sync_result,
@@ -162,6 +179,8 @@ class GatewayService:
         recipient: str,
         body: str,
         sender: str | None = None,
+        booking_id: str | None = None,
+        conversation_id: int | None = None,
     ) -> Message:
         """Enqueue an outbound SMS into the persistent local outbox.
 
@@ -169,6 +188,8 @@ class GatewayService:
             recipient: Destination phone number.
             body: Text content of the SMS.
             sender: Optional originating sender ID (defaults to service name).
+            booking_id: Optional booking identifier.
+            conversation_id: Optional conversation session identifier.
 
         Returns:
             The saved pending Message instance.
@@ -179,6 +200,8 @@ class GatewayService:
             body=body,
             sender=sender_id,
             status=MessageStatus.PENDING,
+            booking_id=booking_id,
+            conversation_id=conversation_id,
         )
         logger.info("Enqueued message ID %s for %s to outbox", message.id, recipient)
         return message
@@ -242,6 +265,8 @@ class GatewayService:
         recipient: str,
         body: str,
         sender: str | None = None,
+        booking_id: str | None = None,
+        conversation_id: int | None = None,
     ) -> Message:
         """Enqueue an outbound message to the outbox and immediately attempt delivery.
 
@@ -249,11 +274,19 @@ class GatewayService:
             recipient: Destination phone number.
             body: Text content of the SMS.
             sender: Originating sender ID or service name.
+            booking_id: Optional booking identifier.
+            conversation_id: Optional conversation session identifier.
 
         Returns:
             The persisted Message record with updated delivery status.
         """
-        saved_msg = self.enqueue_outbox(recipient=recipient, body=body, sender=sender)
+        saved_msg = self.enqueue_outbox(
+            recipient=recipient,
+            body=body,
+            sender=sender,
+            booking_id=booking_id,
+            conversation_id=conversation_id,
+        )
         assert saved_msg.id is not None
 
         try:
@@ -292,7 +325,8 @@ class GatewayService:
         """Poll incoming SMS messages from the provider and persist them to storage.
 
         Deduplicates incoming messages using the provider's message identifier
-        to ensure messages are not ingested or processed repeatedly.
+        to ensure messages are not ingested or processed repeatedly, and resolves
+        booking context if resolver is enabled.
         """
         try:
             inbound_items = await self.provider.receive_sms()
@@ -327,7 +361,20 @@ class GatewayService:
                     created_at=item.received_at,
                 )
                 saved = self.storage.save_message(msg)
-                persisted_messages.append(saved)
+
+                # Resolve booking context if enabled
+                if self.resolver is not None and self.config.booking_resolution_enabled:
+                    try:
+                        self.resolver.resolve_incoming_message(saved)
+                    except Exception:
+                        logger.exception(
+                            "Failed to resolve booking context for inbound SMS ID %s",
+                            saved.id,
+                        )
+
+                # Fetch updated record with resolved context
+                refreshed = self.storage.get_message(saved.id) if saved.id is not None else saved
+                persisted_messages.append(refreshed or saved)
                 logger.info("Ingested inbound SMS ID %s from %s", saved.id, saved.sender)
             except Exception:
                 logger.exception(

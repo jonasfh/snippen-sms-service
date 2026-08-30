@@ -51,6 +51,8 @@ The gateway service can be configured via CLI flags or environment variables:
 | Sync Interval | `SNIPPEN_SMS_SYNC_INTERVAL` | `5.0` | Synchronization interval in seconds |
 | Sync Timeout | `SNIPPEN_SMS_SYNC_TIMEOUT` | `10.0` | HTTP request timeout in seconds |
 | Sync Enabled | `SNIPPEN_SMS_SYNC_ENABLED` | `true` | Enable/disable automatic Snippen synchronization |
+| Booking Resolution | `SNIPPEN_SMS_BOOKING_RESOLUTION_ENABLED` | `true` | Enable automatic booking context resolution for incoming SMS |
+| Conversation TTL | `SNIPPEN_SMS_CONVERSATION_TTL_SECONDS` | `7200.0` | Active dialogue session window in seconds (2 hours) |
 | GitHub Repo | `SNIPPEN_SMS_GITHUB_REPO` | `jonasfh/snippen-sms-service` | Target repository for software updates |
 | Startup Update Check | `SNIPPEN_SMS_CHECK_UPDATES_ON_STARTUP` | `true` | Check GitHub Releases on service start |
 | Auto Update Check | `SNIPPEN_SMS_AUTO_UPDATE_CHECK` | `true` | Enable periodic background update checks |

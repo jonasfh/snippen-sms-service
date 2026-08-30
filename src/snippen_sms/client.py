@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import UTC, datetime
 from typing import Any
 
 from snippen_sms import __version__
-from snippen_sms.models import Message
+from snippen_sms.models import Booking, Message
 
 logger = logging.getLogger("snippen_sms.client")
 
@@ -57,9 +59,14 @@ class SnippenClient:
         method: str,
         path: str,
         payload: dict[str, Any] | None = None,
+        query_params: dict[str, str] | None = None,
     ) -> Any:
         """Execute HTTP request against Snippen API with auth headers and error handling."""
         url = self._get_endpoint_url(path)
+        if query_params:
+            encoded_params = urllib.parse.urlencode(query_params)
+            url = f"{url}?{encoded_params}"
+
         headers = {
             "Accept": "application/json",
             "User-Agent": f"snippen-sms-service/{__version__}",
@@ -135,6 +142,56 @@ class SnippenClient:
                 return messages
         return []
 
+    def fetch_bookings_for_phone(self, phone_number: str) -> list[Booking]:
+        """Fetch active/upcoming bookings associated with a specific customer phone number."""
+        data = self._request("GET", "bookings", query_params={"phone": phone_number})
+        raw_list: list[dict[str, Any]] = []
+        if isinstance(data, list):
+            raw_list = data
+        elif isinstance(data, dict):
+            items = data.get("bookings") or data.get("items") or data.get("data")
+            if isinstance(items, list):
+                raw_list = items
+
+        bookings: list[Booking] = []
+        for item in raw_list:
+            try:
+                booking_id = str(item.get("id") or item.get("booking_id") or "").strip()
+                if not booking_id:
+                    continue
+
+                start_raw = item.get("start_time") or item.get("date") or item.get("starts_at")
+                if not start_raw:
+                    continue
+                start_dt = datetime.fromisoformat(str(start_raw))
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=UTC)
+
+                end_dt: datetime | None = None
+                end_raw = item.get("end_time") or item.get("ends_at")
+                if end_raw:
+                    end_dt = datetime.fromisoformat(str(end_raw))
+                    if end_dt.tzinfo is None:
+                        end_dt = end_dt.replace(tzinfo=UTC)
+
+                bookings.append(
+                    Booking(
+                        id=booking_id,
+                        customer_phone=phone_number,
+                        customer_name=item.get("customer_name") or item.get("name"),
+                        start_time=start_dt,
+                        end_time=end_dt,
+                        resource_name=item.get("resource_name")
+                        or item.get("resource")
+                        or item.get("room"),
+                        status=str(item.get("status") or "confirmed"),
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Failed to parse booking record %s: %s", item, exc)
+
+        return bookings
+
     def report_inbound_messages(self, messages: list[Message]) -> list[int]:
         """Report received inbound SMS messages to Snippen.
 
@@ -150,6 +207,8 @@ class SnippenClient:
                     "sender": msg.sender,
                     "recipient": msg.recipient,
                     "body": msg.body,
+                    "booking_id": msg.booking_id,
+                    "conversation_id": msg.conversation_id,
                     "received_at": msg.created_at.isoformat(),
                     "modem_message_id": msg.modem_message_id,
                 }

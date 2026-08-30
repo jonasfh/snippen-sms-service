@@ -11,6 +11,7 @@ from snippen_sms.client import (
     SnippenClientError,
     SnippenNetworkError,
 )
+from snippen_sms.context import BookingContextResolver
 from snippen_sms.models import Message, MessageDirection
 from snippen_sms.storage import MessageStorage
 
@@ -25,10 +26,12 @@ class SyncService:
         storage: MessageStorage,
         client: SnippenClient,
         service_name: str = "snippen-sms-service",
+        resolver: BookingContextResolver | None = None,
     ) -> None:
         self.storage = storage
         self.client = client
         self.service_name = service_name
+        self.resolver = resolver
 
     def sync_inbox(self, limit: int = 100) -> list[int]:
         """Report unhandled received inbound SMS messages to Snippen and mark them processed.
@@ -40,8 +43,26 @@ class SyncService:
         if not unprocessed:
             return []
 
-        logger.debug("Reporting %d unprocessed inbound SMS to Snippen...", len(unprocessed))
-        acknowledged_ids = self.client.report_inbound_messages(unprocessed)
+        # Ensure context resolution is applied before reporting if resolver is available
+        if self.resolver is not None:
+            for msg in unprocessed:
+                if msg.booking_id is None and msg.direction == MessageDirection.INBOUND:
+                    try:
+                        self.resolver.resolve_incoming_message(msg)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "Booking context resolution failed for message %s during sync: %s",
+                            msg.id,
+                            exc,
+                        )
+
+        # Refresh messages after potential resolver modifications
+        fresh_unprocessed = [
+            self.storage.get_message(msg.id) or msg for msg in unprocessed if msg.id is not None
+        ]
+
+        logger.debug("Reporting %d unprocessed inbound SMS to Snippen...", len(fresh_unprocessed))
+        acknowledged_ids = self.client.report_inbound_messages(fresh_unprocessed)
 
         for msg_id in acknowledged_ids:
             self.storage.mark_inbox_processed(msg_id)
@@ -70,6 +91,9 @@ class SyncService:
             recipient = str(item.get("recipient") or item.get("to") or "").strip()
             body = str(item.get("body") or item.get("message") or item.get("text") or "").strip()
             sender = str(item.get("sender") or item.get("from") or "").strip() or self.service_name
+            booking_id = item.get("booking_id")
+            if booking_id is not None:
+                booking_id = str(booking_id).strip()
 
             if not recipient or not body:
                 logger.warning(
@@ -97,6 +121,7 @@ class SyncService:
                 body=body,
                 sender=sender,
                 external_id=external_id,
+                booking_id=booking_id,
             )
             enqueued.append(msg)
             logger.info(
