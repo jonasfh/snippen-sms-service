@@ -59,6 +59,7 @@ class GatewayService:
         pending_outbox = self.storage.count_outbox(
             status=MessageStatus.PENDING
         ) + self.storage.count_outbox(status=MessageStatus.QUEUED)
+        unprocessed_inbox = self.storage.count_inbox(status=MessageStatus.RECEIVED)
         return {
             "status": "running" if self._is_running else "stopped",
             "service": self.config.service_name,
@@ -69,6 +70,7 @@ class GatewayService:
             "database_path": self.config.database_path,
             "outbox_pending": pending_outbox,
             "outbox_total": self.storage.count_outbox(),
+            "inbox_unprocessed": unprocessed_inbox,
             "inbox_total": self.storage.count_inbox(),
             "total_messages": self.storage.count_messages(),
             "github_repo": self.config.github_repo,
@@ -243,7 +245,11 @@ class GatewayService:
             return updated or saved_msg
 
     async def poll_incoming_messages(self) -> list[Message]:
-        """Poll incoming SMS messages from the provider and persist them to storage."""
+        """Poll incoming SMS messages from the provider and persist them to storage.
+
+        Deduplicates incoming messages using the provider's message identifier
+        to ensure messages are not ingested or processed repeatedly.
+        """
         try:
             inbound_items = await self.provider.receive_sms()
         except Exception:
@@ -252,24 +258,53 @@ class GatewayService:
 
         persisted_messages: list[Message] = []
         for item in inbound_items:
-            msg = Message(
-                direction=MessageDirection.INBOUND,
-                sender=item.sender,
-                recipient=self.config.service_name,
-                body=item.body,
-                status=MessageStatus.RECEIVED,
-                modem_message_id=item.provider_message_id,
-                created_at=item.received_at,
-            )
-            saved = self.storage.save_message(msg)
-            persisted_messages.append(saved)
-            logger.info("Ingested inbound SMS ID %s from %s", saved.id, saved.sender)
+            # Check for duplicate if provider_message_id is provided
+            if item.provider_message_id:
+                existing = self.storage.get_message_by_modem_id(
+                    item.provider_message_id,
+                    direction=MessageDirection.INBOUND,
+                )
+                if existing is not None:
+                    logger.debug(
+                        "Skipping duplicate inbound SMS with provider ID %s (existing ID: %s)",
+                        item.provider_message_id,
+                        existing.id,
+                    )
+                    continue
+
+            try:
+                msg = Message(
+                    direction=MessageDirection.INBOUND,
+                    sender=item.sender,
+                    recipient=self.config.service_name,
+                    body=item.body,
+                    status=MessageStatus.RECEIVED,
+                    modem_message_id=item.provider_message_id,
+                    created_at=item.received_at,
+                )
+                saved = self.storage.save_message(msg)
+                persisted_messages.append(saved)
+                logger.info("Ingested inbound SMS ID %s from %s", saved.id, saved.sender)
+            except Exception:
+                logger.exception(
+                    "Failed to persist incoming message from %s (provider ID: %s)",
+                    item.sender,
+                    item.provider_message_id,
+                )
 
         return persisted_messages
 
     async def process_inbox(self) -> list[Message]:
         """Alias for poll_incoming_messages to ingest incoming provider messages."""
         return await self.poll_incoming_messages()
+
+    def get_unprocessed_inbox(self, limit: int = 100) -> list[Message]:
+        """Retrieve unhandled inbound messages in FIFO order."""
+        return self.storage.get_unprocessed_inbox(limit=limit)
+
+    def mark_inbox_processed(self, message_id: int) -> Message | None:
+        """Mark an inbound message as processed."""
+        return self.storage.mark_inbox_processed(message_id)
 
     async def start(self) -> None:
         """Initialize and start the gateway service."""

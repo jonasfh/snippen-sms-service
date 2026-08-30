@@ -190,8 +190,9 @@ flowchart TD
 
     subgraph Inbound Flow
         B1["SMS Provider (Modem/SIM)"] -->|"receive_sms()"| B2["Gateway Ingestion (process_inbox)"]
-        B2 -->|"save_message()"| B3[("Inbox (SQLite: RECEIVED)")]
-        B3 --> B4["Snippen Application Ingestion"]
+        B2 -->|"Deduplicate & save_message()"| B3[("Inbox (SQLite: RECEIVED)")]
+        B3 -->|"get_unprocessed_inbox()"| B4["Snippen Application Ingestion"]
+        B4 -->|"mark_inbox_processed()"| B5[("Inbox (SQLite: PROCESSED)")]
     end
 ```
 
@@ -201,9 +202,12 @@ flowchart TD
 3. **Failure Isolation & Non-Destructive Error Handling**: If provider delivery fails or network timeouts occur, the message status is updated to `FAILED` with detailed diagnostic error messages. Messages are never silently deleted or lost.
 4. **Service Restart Resilience**: Any pending outbox messages persist across gateway restarts and will be processed once the service restarts and the SMS provider is available.
 
-### Inbox Ingestion
+### Inbox Ingestion & Handling
 1. **Provider Polling**: The gateway periodically polls the SMS provider (`SmsProvider.receive_sms()`) via `GatewayService.poll_incoming_messages()` (or `process_inbox()`).
-2. **Local Storage**: Each inbound SMS is immediately persisted into the local SQLite database with `direction=inbound`, `status=received`, timestamp, and provider identifiers.
+2. **Deduplication**: Incoming messages are deduplicated against existing database records via `provider_message_id` / `modem_message_id` to prevent ingesting or processing duplicate deliveries.
+3. **Local Persistence**: Each unique inbound SMS is immediately persisted into the local SQLite database with `direction=inbound`, `status=received`, timestamp, and provider identifiers.
+4. **Unprocessed Message Distinction**: Downstream systems can query unhandled incoming messages via `GatewayService.get_unprocessed_inbox()` (or `MessageStorage.get_unprocessed_inbox()`) and transition them to `PROCESSED` using `mark_inbox_processed(message_id)`.
+5. **Fault Isolation**: Transient failures during receive polling or database storage do not result in dropped incoming messages or aborted service loops.
 
 ---
 
