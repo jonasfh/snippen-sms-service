@@ -16,6 +16,7 @@ Guide AI agents working in this repository.
   - Trailing whitespaces stripped.
   - A single newline (`\n`) at the end of the file.
   - Duplicate/excess trailing newlines removed.
+- **PR Merging Strategy**: When merging PRs, ALWAYS use **Rebase and merge** (`gh pr merge <id> --rebase --delete-branch`) by default. If rebasing issues or conflicts arise, create a standard merge commit (`gh pr merge <id> --merge --delete-branch`). Do NOT use squash and merge (`--squash`) unless explicitly instructed or required for a specific reason.
 - **Documentation**: Always update documentation (`README.md`, `DEV_README.md`, `docs/`, and architecture documents) whenever implementing new features, endpoints, data models, or database schemas. Keeping documentation in sync with the codebase is mandatory.
 
 ## Self-Improvement & Environment Adaptation
