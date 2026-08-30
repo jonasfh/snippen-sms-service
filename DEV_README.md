@@ -12,13 +12,15 @@ snippen-sms-service/
 ├── .agents/                  # Agent guidelines (Architecture, Workflow, Testing, Docs)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
-│   └── architecture.md       # High-level architecture, provider abstraction & flows
+│   ├── architecture.md       # High-level architecture, provider abstraction & flows
+│   └── snippen_booking_api_spec.md # WordPress REST API spec & implementation tasks
 ├── scripts/                  # Development & formatting utilities
 │   ├── format.py             # Whitespace & file formatting tool
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
 ├── src/
 │   └── snippen_sms/          # Application package
 │       ├── __init__.py       # Package version & exports
+│       ├── client.py         # Snippen API HTTP client & error handling
 │       ├── config.py         # Gateway configuration settings
 │       ├── gateway.py        # GatewayService lifecycle, send/receive orchestration & run loop
 │       ├── main.py           # Entry point & CLI runner
@@ -33,10 +35,12 @@ snippen-sms-service/
 │       │   ├── memory.py     # InMemorySmsProvider for testing & simulation
 │       │   └── mock.py       # MockSmsProvider for mock messaging & auto-replies
 │       ├── storage.py        # SQLite persistent storage repository
+│       ├── sync.py           # Two-way sync engine coordinating storage & Snippen API
 │       └── updater.py        # GitHub release checking and self-update management
 ├── tests/
 │   ├── conftest.py           # Pytest fixtures
 │   ├── test_build_release.py # Release build & checksum calculation tests
+│   ├── test_client.py        # SnippenClient HTTP client tests
 │   ├── test_format.py        # Formatter tests
 │   ├── test_gateway.py       # GatewayService lifecycle & provider integration tests
 │   ├── test_main.py          # Unit tests
@@ -44,6 +48,7 @@ snippen-sms-service/
 │   ├── test_mock_provider.py # Mock SMS provider and factory tests
 │   ├── test_providers.py     # SMS provider abstraction unit tests
 │   ├── test_storage.py       # SQLite message storage unit & integration tests
+│   ├── test_sync.py          # SyncService coordination & retry tests
 │   ├── test_updater.py       # GitHub release version checking & updater unit tests
 │   └── test_validate_pr.py   # PR validation tests
 ├── pyproject.toml            # Python packaging and dependency config

@@ -77,3 +77,74 @@ def test_handle_check_update_and_update_cli():
     ):
         exit_code = handle_update()
         assert exit_code == 1
+
+
+def test_cli_parser_sync_commands():
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "--api-url",
+            "https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+            "--sync-interval",
+            "10.0",
+        ]
+    )
+    assert args.api_url == "https://vestreholmensameie.no/wp-json/snippen/v1/sms"
+    assert args.sync_interval == 10.0
+
+    args_sync = parser.parse_args(
+        [
+            "sync",
+            "--api-url",
+            "https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+            "--api-token",
+            "tok",
+        ]
+    )
+    assert args_sync.command == "sync"
+    assert args_sync.api_url == "https://vestreholmensameie.no/wp-json/snippen/v1/sms"
+    assert args_sync.api_token == "tok"
+
+
+def test_handle_sync_cli():
+    from unittest.mock import patch
+
+    from snippen_sms.main import handle_sync
+
+    # Error when no URL
+    assert handle_sync(api_url=None, api_token=None) == 1
+
+    # Successful sync
+    with patch(
+        "snippen_sms.sync.SyncService.sync_all",
+        return_value={
+            "inbox_synced": 1,
+            "outbox_enqueued": 2,
+            "statuses_reported": 0,
+            "error": None,
+        },
+    ):
+        exit_code = handle_sync(
+            api_url="https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+            api_token="valid-token",
+            database_path=":memory:",
+        )
+        assert exit_code == 0
+
+    # Sync with error reported
+    with patch(
+        "snippen_sms.sync.SyncService.sync_all",
+        return_value={
+            "inbox_synced": 0,
+            "outbox_enqueued": 0,
+            "statuses_reported": 0,
+            "error": "Auth failed",
+        },
+    ):
+        exit_code = handle_sync(
+            api_url="https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+            api_token="bad-token",
+            database_path=":memory:",
+        )
+        assert exit_code == 1

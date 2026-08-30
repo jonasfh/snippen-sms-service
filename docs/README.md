@@ -7,6 +7,7 @@ Welcome to the documentation for **Snippen SMS Service** (`snippen-sms-service`)
 ## Documentation Index
 
 - **[System Architecture & Design](file:///workspaces/snippen-sms-service/docs/architecture.md)**: High-level architectural overview, system boundaries, two-way communication flows (inbound and outbound), and core design principles.
+- **[Snippen Booking WordPress API Spec & Tasks](file:///workspaces/snippen-sms-service/docs/snippen_booking_api_spec.md)**: WordPress REST API route specifications, Bearer authentication callbacks, JSON payload schemas, and copy-pasteable implementation tasks for `snippen-booking`.
 - **[Developer Guide](file:///workspaces/snippen-sms-service/DEV_README.md)**: Local development environment setup, Dev Container usage, testing with `pytest`, and linting rules.
 - **[User & Operational Overview](file:///workspaces/snippen-sms-service/README.md)**: High-level project purpose, operational goals, and repository information.
 - **[Agent Guidelines](file:///workspaces/snippen-sms-service/AGENTS.md)**: Automated engineering guidelines, issue workflows, and coding standards.

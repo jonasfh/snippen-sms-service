@@ -148,6 +148,40 @@ def handle_update(
         return 1
 
 
+def handle_sync(
+    api_url: str | None,
+    api_token: str | None,
+    database_path: str = "data/sms_gateway.db",
+) -> int:
+    """Execute a single one-shot sync with Snippen and display results."""
+    from snippen_sms.client import SnippenClient
+    from snippen_sms.storage import MessageStorage
+    from snippen_sms.sync import SyncService
+
+    if not api_url:
+        print("Error: No Snippen API URL provided. Set --api-url or SNIPPEN_SMS_API_URL.")
+        return 1
+
+    storage = MessageStorage(database_path)
+    client = SnippenClient(api_url=api_url, api_token=api_token)
+    sync_service = SyncService(storage=storage, client=client)
+
+    print(f"Connecting to Snippen API at {api_url}...")
+    res = sync_service.sync_all()
+
+    print("\nSynchronization Results:")
+    print(f"  - Inbound messages reported: {res['inbox_synced']}")
+    print(f"  - Outbound messages fetched:  {res['outbox_enqueued']}")
+    print(f"  - Statuses reported:         {res['statuses_reported']}")
+
+    if res.get("error"):
+        print(f"\n⚠️ Notice: Sync finished with error: {res['error']}")
+        return 1
+
+    print("\n✅ Synchronization completed successfully.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build command line argument parser."""
     parser = argparse.ArgumentParser(
@@ -185,6 +219,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="SMS provider implementation to use (default: mock)",
     )
+    parser.add_argument(
+        "--api-url",
+        type=str,
+        default=None,
+        help="Snippen API endpoint base URL (default: SNIPPEN_SMS_API_URL)",
+    )
+    parser.add_argument(
+        "--api-token",
+        type=str,
+        default=None,
+        help="Snippen API Bearer/Auth token (default: SNIPPEN_SMS_API_TOKEN)",
+    )
+    parser.add_argument(
+        "--sync-interval",
+        type=float,
+        default=None,
+        help="Snippen synchronization interval in seconds (default: 5.0)",
+    )
+    parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Disable automatic synchronization with Snippen",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
@@ -214,6 +271,53 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="SMS provider implementation to use (default: mock)",
+    )
+    run_parser.add_argument(
+        "--api-url",
+        type=str,
+        default=None,
+        help="Snippen API endpoint base URL",
+    )
+    run_parser.add_argument(
+        "--api-token",
+        type=str,
+        default=None,
+        help="Snippen API Bearer/Auth token",
+    )
+    run_parser.add_argument(
+        "--sync-interval",
+        type=float,
+        default=None,
+        help="Snippen synchronization interval in seconds",
+    )
+    run_parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Disable automatic synchronization with Snippen",
+    )
+
+    # Sync subcommand
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Execute a one-time synchronization cycle with Snippen",
+    )
+    sync_parser.add_argument(
+        "--api-url",
+        type=str,
+        default=None,
+        help="Snippen API endpoint base URL (default: SNIPPEN_SMS_API_URL)",
+    )
+    sync_parser.add_argument(
+        "--api-token",
+        type=str,
+        default=None,
+        help="Snippen API Bearer/Auth token (default: SNIPPEN_SMS_API_TOKEN)",
+    )
+    sync_parser.add_argument(
+        "--database-path",
+        type=str,
+        default="data/sms_gateway.db",
+        help="Database file path (default: data/sms_gateway.db)",
     )
 
     # Migrate subcommand
@@ -288,7 +392,12 @@ def main_cli() -> None:
 
     env_config = GatewayConfig.from_env()
 
-    if args.command == "migrate":
+    if args.command == "sync":
+        api_url = getattr(args, "api_url", None) or env_config.snippen_api_url
+        api_token = getattr(args, "api_token", None) or env_config.snippen_api_token
+        db_path = getattr(args, "database_path", env_config.database_path)
+        sys.exit(handle_sync(api_url=api_url, api_token=api_token, database_path=db_path))
+    elif args.command == "migrate":
         sys.exit(handle_migrate(args.database_path, getattr(args, "target_version", None)))
     elif args.command == "migrate-status":
         sys.exit(handle_migrate_status(args.database_path))
@@ -311,6 +420,13 @@ def main_cli() -> None:
         db_path = getattr(args, "database_path", "data/sms_gateway.db")
         poll_interval = getattr(args, "poll_interval", 2.0)
         provider_arg = getattr(args, "provider", None)
+        api_url = getattr(args, "api_url", None) or env_config.snippen_api_url
+        api_token = getattr(args, "api_token", None) or env_config.snippen_api_token
+        sync_interval = getattr(args, "sync_interval", None)
+        if sync_interval is None:
+            sync_interval = env_config.sync_interval_seconds
+        no_sync = getattr(args, "no_sync", False)
+        sync_enabled = not no_sync and env_config.sync_enabled
 
         config = GatewayConfig(
             service_name=env_config.service_name,
@@ -323,6 +439,11 @@ def main_cli() -> None:
             auto_update_check=env_config.auto_update_check,
             update_check_interval_seconds=env_config.update_check_interval_seconds,
             github_token=env_config.github_token,
+            snippen_api_url=api_url,
+            snippen_api_token=api_token,
+            sync_interval_seconds=sync_interval,
+            sync_timeout_seconds=env_config.sync_timeout_seconds,
+            sync_enabled=sync_enabled,
         )
 
         try:

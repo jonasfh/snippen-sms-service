@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 
+from snippen_sms.client import (
+    SnippenApiError,
+    SnippenAuthError,
+    SnippenClient,
+    SnippenClientError,
+    SnippenNetworkError,
+)
 from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService
 from snippen_sms.migrations import Migration, MigrationError, MigrationRunner
@@ -19,6 +26,7 @@ from snippen_sms.providers import (
     register_provider,
 )
 from snippen_sms.storage import MessageStorage
+from snippen_sms.sync import SyncService
 from snippen_sms.updater import (
     ReleaseInfo,
     SoftwareUpdater,
@@ -44,7 +52,13 @@ __all__ = [
     "ReleaseInfo",
     "SendResult",
     "SmsProvider",
+    "SnippenApiError",
+    "SnippenAuthError",
+    "SnippenClient",
+    "SnippenClientError",
+    "SnippenNetworkError",
     "SoftwareUpdater",
+    "SyncService",
     "UpdateCheckResult",
     "__version__",
     "calculate_sha256",

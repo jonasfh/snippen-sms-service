@@ -501,3 +501,35 @@ def test_storage_unprocessed_inbox_and_mark_processed(memory_storage: MessageSto
     processed_msgs = memory_storage.get_inbox(status=MessageStatus.PROCESSED)
     assert len(processed_msgs) == 1
     assert processed_msgs[0].id == msg1.id
+
+
+def test_storage_external_id_and_outbox_reporting(memory_storage: MessageStorage) -> None:
+    """Test storing messages with external_id, querying, and marking reported."""
+    msg = memory_storage.enqueue_outbox(
+        recipient="+4798765432",
+        body="Order confirmation",
+        external_id="wp-booking-777",
+    )
+    assert msg.id is not None
+    assert msg.external_id == "wp-booking-777"
+
+    # Query by external_id
+    retrieved = memory_storage.get_message_by_external_id("wp-booking-777")
+    assert retrieved is not None
+    assert retrieved.id == msg.id
+    assert retrieved.recipient == "+4798765432"
+
+    # Status transition to SENT
+    memory_storage.update_message_status(msg.id, status=MessageStatus.SENT)
+
+    unreported = memory_storage.get_unreported_outbox_statuses()
+    assert len(unreported) == 1
+    assert unreported[0].id == msg.id
+
+    # Mark reported
+    marked = memory_storage.mark_outbox_status_reported(msg.id)
+    assert marked is not None
+    assert marked.status == MessageStatus.DELIVERED
+
+    # Should no longer be in unreported list
+    assert len(memory_storage.get_unreported_outbox_statuses()) == 0

@@ -71,6 +71,7 @@ class MessageStorage:
             body=row["body"],
             status=MessageStatus(row["status"]),
             modem_message_id=row["modem_message_id"],
+            external_id=row["external_id"],
             error_message=row["error_message"],
             created_at=created_at_dt,
             modified_at=modified_at_dt,
@@ -89,8 +90,8 @@ class MessageStorage:
                     """
                     INSERT INTO messages (
                         direction, sender, recipient, body, status,
-                        modem_message_id, error_message, created_at, modified_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        modem_message_id, external_id, error_message, created_at, modified_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         message.direction.value,
@@ -99,6 +100,7 @@ class MessageStorage:
                         message.body,
                         message.status.value,
                         message.modem_message_id,
+                        message.external_id,
                         message.error_message,
                         message.created_at.isoformat(),
                         message.modified_at.isoformat(),
@@ -119,6 +121,7 @@ class MessageStorage:
                     body = ?,
                     status = ?,
                     modem_message_id = ?,
+                    external_id = ?,
                     error_message = ?,
                     modified_at = ?
                 WHERE id = ?
@@ -130,6 +133,7 @@ class MessageStorage:
                     message.body,
                     message.status.value,
                     message.modem_message_id,
+                    message.external_id,
                     message.error_message,
                     message.modified_at.isoformat(),
                     message.id,
@@ -157,6 +161,25 @@ class MessageStorage:
         """Retrieve a message by its provider/modem message ID and optional direction."""
         query = "SELECT * FROM messages WHERE modem_message_id = ?"
         params: list[Any] = [modem_message_id]
+        if direction is not None:
+            dir_val = direction.value if isinstance(direction, MessageDirection) else str(direction)
+            query += " AND direction = ?"
+            params.append(dir_val)
+        query += " ORDER BY id DESC LIMIT 1"
+        cursor = self.connection.execute(query, tuple(params))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_message(row)
+
+    def get_message_by_external_id(
+        self,
+        external_id: str,
+        direction: MessageDirection | str | None = None,
+    ) -> Message | None:
+        """Retrieve a message by its external system message ID and optional direction."""
+        query = "SELECT * FROM messages WHERE external_id = ?"
+        params: list[Any] = [external_id]
         if direction is not None:
             dir_val = direction.value if isinstance(direction, MessageDirection) else str(direction)
             query += " AND direction = ?"
@@ -205,12 +228,13 @@ class MessageStorage:
         status: MessageStatus | str,
         error_message: str | None = None,
         modem_message_id: str | None = None,
+        external_id: str | None = None,
     ) -> Message | None:
         """Update the status and optional metadata of a message."""
         status_val = status.value if isinstance(status, MessageStatus) else str(status)
         now = datetime.now(UTC).isoformat()
 
-        # Build update dynamically to avoid overriding modem_message_id/error_message if None unless supplied
+        # Build update dynamically to avoid overriding metadata if None unless supplied
         update_clauses = ["status = ?", "modified_at = ?"]
         params: list[Any] = [status_val, now]
 
@@ -221,6 +245,10 @@ class MessageStorage:
         if modem_message_id is not None:
             update_clauses.append("modem_message_id = ?")
             params.append(modem_message_id)
+
+        if external_id is not None:
+            update_clauses.append("external_id = ?")
+            params.append(external_id)
 
         params.append(message_id)
         query = f"UPDATE messages SET {', '.join(update_clauses)} WHERE id = ?"
@@ -274,6 +302,7 @@ class MessageStorage:
         body: str,
         sender: str = "snippen-sms-service",
         status: MessageStatus = MessageStatus.PENDING,
+        external_id: str | None = None,
     ) -> Message:
         """Add a new outbound message to the outbox."""
         message = Message(
@@ -282,6 +311,7 @@ class MessageStorage:
             recipient=recipient,
             body=body,
             status=status,
+            external_id=external_id,
         )
         return self.save_message(message)
 
@@ -355,6 +385,45 @@ class MessageStorage:
         return self.update_message_status(
             message_id=message_id,
             status=MessageStatus.PROCESSED,
+        )
+
+    def get_unreported_outbox_statuses(self, limit: int = 100) -> list[Message]:
+        """Retrieve outbound messages with external_id whose delivery status is not yet reported."""
+        query = """
+            SELECT * FROM messages
+            WHERE direction = ?
+              AND external_id IS NOT NULL
+              AND external_id NOT LIKE 'reported:%'
+              AND status IN (?, ?)
+            ORDER BY id ASC
+            LIMIT ?
+        """
+        cursor = self.connection.execute(
+            query,
+            (
+                MessageDirection.OUTBOUND.value,
+                MessageStatus.SENT.value,
+                MessageStatus.FAILED.value,
+                limit,
+            ),
+        )
+        return [self._row_to_message(row) for row in cursor.fetchall()]
+
+    def mark_outbox_status_reported(self, message_id: int) -> Message | None:
+        """Mark an outbound message status as reported back to Snippen."""
+        msg = self.get_message(message_id)
+        if msg is None:
+            return None
+        new_status = MessageStatus.DELIVERED if msg.status == MessageStatus.SENT else msg.status
+        ext_id = (
+            f"reported:{msg.external_id}"
+            if msg.external_id and msg.status == MessageStatus.FAILED
+            else msg.external_id
+        )
+        return self.update_message_status(
+            message_id=message_id,
+            status=new_status,
+            external_id=ext_id,
         )
 
     def count_outbox(self, status: MessageStatus | str | None = None) -> int:
