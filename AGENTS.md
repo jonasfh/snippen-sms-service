@@ -5,7 +5,7 @@ Guide AI agents working in this repository.
 
 ## Key Rules & Guidelines
 
-- **Python Standards & Best Practices**: Use Python 3.12+. Project source code resides in `src/snippen_sms/` (or `snippen_sms/`). In Dev Containers, the virtual environment is maintained at `/home/vscode/.venv` (outside `/workspaces/snippen-sms-service`) to prevent host/container `.venv` collisions.
+- **Python Standards & Best Practices**: Use Python 3.14+. Project source code resides in `src/snippen_sms/` (or `snippen_sms/`). In Dev Containers, the virtual environment is maintained at `/home/vscode/.venv` (outside `/workspaces/snippen-sms-service`) to prevent host/container `.venv` collisions.
 - **Testing & Quality Control**:
   - Always write `pytest` unit/integration tests for new functionality and update existing tests when modifying functionality.
   - Run linting (`ruff check .` / `flake8`) and tests (`pytest`) before completing a task. Resolving all linting errors and warnings is mandatory.

@@ -45,7 +45,7 @@ def format_text_file(file_path: Path) -> bool:
     """Format a single text file. Returns True if modified."""
     try:
         content = file_path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
+    except UnicodeDecodeError, OSError:
         return False
 
     lines = content.splitlines()
@@ -111,7 +111,7 @@ def main() -> None:
             check=True,
             capture_output=True,
         )
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except subprocess.SubprocessError, FileNotFoundError:
         pass
 
     # 2. Format all text files (strips trailing whitespaces and enforces exactly one EOF newline)

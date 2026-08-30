@@ -8,7 +8,7 @@
 
 ```
 snippen-sms-service/
-├── .devcontainer/            # Dev Container configuration (Python 3.12)
+├── .devcontainer/            # Dev Container configuration (Python 3.14)
 ├── .agents/                  # Agent guidelines (Architecture, Workflow, Testing, Docs)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
@@ -56,7 +56,7 @@ For high-level system architecture, communication flows, and boundaries, see [do
 
 ## Development Setup
 
-1. **Prerequisites**: Python 3.12+ and `pip`.
+1. **Prerequisites**: Python 3.14+ and `pip`.
 2. **Environment & Dependencies**:
    - In **Dev Container**, the virtual environment is automatically set up at `/home/vscode/.venv` (outside the workspace root) to prevent collisions with host OS environments.
    - For local CLI development outside container:

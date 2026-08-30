@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-29
+
+### Changed
+- Upgraded project runtime, Dev Container, dependencies, CI workflows, and documentation from Python 3.12 to Python 3.14 (`#17`).
+- Updated `pyproject.toml` with `requires-python = ">=3.14"` and `target-version = "py314"` for Ruff (`#17`).
+- Updated GitHub Actions workflows (`pr-validator.yml` and `deploy.yml`) to set up Python 3.14 runtime (`#17`).
+- Updated `.devcontainer/devcontainer.json` base image to Python 3.14 (`#17`).
+- Updated developer documentation, architecture guides, and agent guidelines for Python 3.14 (`#17`).
+
 ## [0.9.0] - 2026-08-29
 
 ### Added
