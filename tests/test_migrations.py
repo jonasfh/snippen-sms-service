@@ -210,13 +210,15 @@ def test_cli_migrate_handlers(tmp_path: Path, capsys: pytest.CaptureFixture[str]
     code = handle_migrate_status(db_file)
     assert code == 0
     captured = capsys.readouterr()
-    assert "Pending Migrations (1)" in captured.out
+    assert "Pending Migrations" in captured.out
+    assert "0001" in captured.out
 
     # Run migration
     code = handle_migrate(db_file)
     assert code == 0
     captured = capsys.readouterr()
-    assert "Applied 1 migration(s)" in captured.out
+    assert "Applied" in captured.out
+    assert "migration(s)" in captured.out
 
     # Run migration again (up to date)
     code = handle_migrate(db_file)
@@ -228,7 +230,7 @@ def test_cli_migrate_handlers(tmp_path: Path, capsys: pytest.CaptureFixture[str]
     code = handle_migrate_status(db_file)
     assert code == 0
     captured = capsys.readouterr()
-    assert "Applied Migrations (1)" in captured.out
+    assert "Applied Migrations" in captured.out
     assert "0001" in captured.out
     assert "Pending Migrations (0)" in captured.out
 

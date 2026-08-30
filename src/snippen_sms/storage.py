@@ -149,6 +149,25 @@ class MessageStorage:
             return None
         return self._row_to_message(row)
 
+    def get_message_by_modem_id(
+        self,
+        modem_message_id: str,
+        direction: MessageDirection | str | None = None,
+    ) -> Message | None:
+        """Retrieve a message by its provider/modem message ID and optional direction."""
+        query = "SELECT * FROM messages WHERE modem_message_id = ?"
+        params: list[Any] = [modem_message_id]
+        if direction is not None:
+            dir_val = direction.value if isinstance(direction, MessageDirection) else str(direction)
+            query += " AND direction = ?"
+            params.append(dir_val)
+        query += " ORDER BY id DESC LIMIT 1"
+        cursor = self.connection.execute(query, tuple(params))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_message(row)
+
     def list_messages(
         self,
         limit: int = 100,
@@ -299,21 +318,52 @@ class MessageStorage:
             direction=MessageDirection.OUTBOUND,
         )
 
-    def get_inbox(self, limit: int = 100, offset: int = 0) -> list[Message]:
-        """Retrieve messages from the inbox."""
+    def get_inbox(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        status: MessageStatus | str | None = None,
+    ) -> list[Message]:
+        """Retrieve messages from the inbox with optional status filter."""
         return self.list_messages(
             limit=limit,
             offset=offset,
+            status=status,
             direction=MessageDirection.INBOUND,
+        )
+
+    def get_unprocessed_inbox(self, limit: int = 100) -> list[Message]:
+        """Retrieve unprocessed inbound messages in FIFO order."""
+        query = """
+            SELECT * FROM messages
+            WHERE direction = ? AND status = ?
+            ORDER BY id ASC
+            LIMIT ?
+        """
+        cursor = self.connection.execute(
+            query,
+            (
+                MessageDirection.INBOUND.value,
+                MessageStatus.RECEIVED.value,
+                limit,
+            ),
+        )
+        return [self._row_to_message(row) for row in cursor.fetchall()]
+
+    def mark_inbox_processed(self, message_id: int) -> Message | None:
+        """Mark an inbound message as processed."""
+        return self.update_message_status(
+            message_id=message_id,
+            status=MessageStatus.PROCESSED,
         )
 
     def count_outbox(self, status: MessageStatus | str | None = None) -> int:
         """Count messages in the outbox."""
         return self.count_messages(status=status, direction=MessageDirection.OUTBOUND)
 
-    def count_inbox(self) -> int:
-        """Count messages in the inbox."""
-        return self.count_messages(direction=MessageDirection.INBOUND)
+    def count_inbox(self, status: MessageStatus | str | None = None) -> int:
+        """Count messages in the inbox with optional status filter."""
+        return self.count_messages(status=status, direction=MessageDirection.INBOUND)
 
     def close(self) -> None:
         """Close the database connection."""

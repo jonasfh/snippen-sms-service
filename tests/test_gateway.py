@@ -490,3 +490,181 @@ def test_gateway_startup_check_offline_graceful():
             await service.stop()
 
     asyncio.run(_test())
+
+
+def test_gateway_poll_incoming_deduplication():
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+
+        # First delivery of message
+        provider.simulate_inbound(
+            sender="+4791112233",
+            body="First delivery",
+            provider_message_id="msg-dedup-100",
+        )
+        first_poll = await service.poll_incoming_messages()
+        assert len(first_poll) == 1
+        assert first_poll[0].modem_message_id == "msg-dedup-100"
+        assert service.storage.count_inbox() == 1
+
+        # Simulate provider re-delivering the exact same provider_message_id
+        provider.simulate_inbound(
+            sender="+4791112233",
+            body="First delivery duplicate",
+            provider_message_id="msg-dedup-100",
+        )
+        second_poll = await service.poll_incoming_messages()
+        assert len(second_poll) == 0
+
+        # Total stored inbox count remains 1
+        assert service.storage.count_inbox() == 1
+
+        # A new unique message is ingested normally
+        provider.simulate_inbound(
+            sender="+4791112233",
+            body="Second unique message",
+            provider_message_id="msg-dedup-200",
+        )
+        third_poll = await service.poll_incoming_messages()
+        assert len(third_poll) == 1
+        assert third_poll[0].modem_message_id == "msg-dedup-200"
+        assert service.storage.count_inbox() == 2
+
+    asyncio.run(_test())
+
+
+def test_gateway_temporary_receive_failure_retains_messages():
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+
+        # Queue message in provider
+        provider.simulate_inbound(
+            sender="+4791119999",
+            body="Resilience test message",
+            provider_message_id="msg-resilient-1",
+        )
+
+        # Inject temporary receive failure
+        provider.simulate_receive_failure(True, error_message="SIM busy reading buffer")
+        failed_poll = await service.poll_incoming_messages()
+        assert failed_poll == []
+        assert service.storage.count_inbox() == 0
+
+        # Clear temporary failure and retry
+        provider.simulate_receive_failure(False)
+        recovered_poll = await service.poll_incoming_messages()
+        assert len(recovered_poll) == 1
+        assert recovered_poll[0].body == "Resilience test message"
+        assert recovered_poll[0].modem_message_id == "msg-resilient-1"
+        assert service.storage.count_inbox() == 1
+
+    asyncio.run(_test())
+
+
+def test_gateway_partial_persistence_failure():
+    async def _test():
+        from snippen_sms.providers.base import IncomingMessage
+
+        class BatchProvider(SmsProvider):
+            async def send_sms(self, recipient: str, body: str) -> SendResult:
+                return SendResult(success=True)
+
+            async def receive_sms(self):
+                return [
+                    IncomingMessage(sender="+4791", body="Msg 1", provider_message_id="p-1"),
+                    IncomingMessage(sender="+4792", body="Msg 2", provider_message_id="p-2"),
+                    IncomingMessage(sender="+4793", body="Msg 3", provider_message_id="p-3"),
+                ]
+
+        config = GatewayConfig(database_path=":memory:")
+        service = GatewayService(config=config, provider=BatchProvider())
+
+        # Cause an exception on saving msg 2
+        original_save = service.storage.save_message
+
+        def mock_save(msg):
+            if msg.modem_message_id == "p-2":
+                raise sqlite3.OperationalError("Simulated disk error on message 2")
+            return original_save(msg)
+
+        import sqlite3
+
+        service.storage.save_message = mock_save
+
+        ingested = await service.poll_incoming_messages()
+        # msg 1 and msg 3 should be successfully saved despite msg 2 failure
+        assert len(ingested) == 2
+        assert ingested[0].modem_message_id == "p-1"
+        assert ingested[1].modem_message_id == "p-3"
+        assert service.storage.count_inbox() == 2
+
+    asyncio.run(_test())
+
+
+def test_gateway_unprocessed_inbox_and_mark_processed_helpers():
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+
+        provider.simulate_inbound(sender="+4790001111", body="HELP 1")
+        provider.simulate_inbound(sender="+4790002222", body="HELP 2")
+
+        await service.poll_incoming_messages()
+
+        status = service.get_status()
+        assert status["inbox_unprocessed"] == 2
+        assert status["inbox_total"] == 2
+
+        unprocessed = service.get_unprocessed_inbox()
+        assert len(unprocessed) == 2
+        assert unprocessed[0].body == "HELP 1"
+        assert unprocessed[1].body == "HELP 2"
+
+        # Mark first message as processed
+        assert unprocessed[0].id is not None
+        updated = service.mark_inbox_processed(unprocessed[0].id)
+        assert updated is not None
+        assert updated.status == MessageStatus.PROCESSED
+
+        # Check status and remaining unprocessed
+        status_after = service.get_status()
+        assert status_after["inbox_unprocessed"] == 1
+        assert status_after["inbox_total"] == 2
+
+        remaining = service.get_unprocessed_inbox()
+        assert len(remaining) == 1
+        assert remaining[0].body == "HELP 2"
+
+    asyncio.run(_test())
+
+
+def test_gateway_mock_provider_auto_reply_flow():
+    async def _test():
+        from snippen_sms.providers.mock import MockSmsProvider
+
+        config = GatewayConfig(database_path=":memory:")
+        mock_provider = MockSmsProvider()
+        mock_provider.add_auto_reply(trigger="BOOK", reply="CONFIRMED 456")
+        service = GatewayService(config=config, provider=mock_provider)
+
+        # Send outbound SMS that matches auto reply trigger
+        sent = await service.send_sms(recipient="+4793334444", body="Please confirm BOOK #123")
+        assert sent.status == MessageStatus.SENT
+
+        # Inbound auto-reply should be ready in mock provider
+        ingested = await service.poll_incoming_messages()
+        assert len(ingested) == 1
+        assert ingested[0].sender == "+4793334444"
+        assert ingested[0].body == "CONFIRMED 456"
+        assert ingested[0].status == MessageStatus.RECEIVED
+
+        unprocessed = service.get_unprocessed_inbox()
+        assert len(unprocessed) == 1
+        assert unprocessed[0].body == "CONFIRMED 456"
+
+    asyncio.run(_test())

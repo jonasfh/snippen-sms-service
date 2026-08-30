@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.10.1"
+__version__ = "0.11.0"
 
 from snippen_sms.config import GatewayConfig
 from snippen_sms.gateway import GatewayService

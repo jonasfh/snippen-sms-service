@@ -22,6 +22,7 @@ class MessageStatus(str, Enum):
     QUEUED = "queued"
     SENT = "sent"
     RECEIVED = "received"
+    PROCESSED = "processed"
     FAILED = "failed"
     DELIVERED = "delivered"
 

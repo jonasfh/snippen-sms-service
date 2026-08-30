@@ -394,3 +394,110 @@ def test_storage_inbox_helpers(memory_storage: MessageStorage) -> None:
     assert len(inbox) == 2
     assert inbox[0].sender == "+4791112244"
     assert inbox[1].sender == "+4791112233"
+
+
+def test_storage_get_message_by_modem_id(memory_storage: MessageStorage) -> None:
+    """Test finding messages by modem_message_id and direction."""
+    assert memory_storage.get_message_by_modem_id("modem-123") is None
+
+    inbound = memory_storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791112233",
+            recipient="Snippen",
+            body="Inbound with modem ID",
+            status=MessageStatus.RECEIVED,
+            modem_message_id="modem-inbound-1",
+        )
+    )
+    outbound = memory_storage.save_message(
+        Message(
+            direction=MessageDirection.OUTBOUND,
+            sender="Snippen",
+            recipient="+4791112233",
+            body="Outbound with modem ID",
+            status=MessageStatus.SENT,
+            modem_message_id="modem-outbound-1",
+        )
+    )
+
+    found_in = memory_storage.get_message_by_modem_id("modem-inbound-1")
+    assert found_in is not None
+    assert found_in.id == inbound.id
+    assert found_in.direction == MessageDirection.INBOUND
+
+    found_in_dir = memory_storage.get_message_by_modem_id(
+        "modem-inbound-1",
+        direction=MessageDirection.INBOUND,
+    )
+    assert found_in_dir is not None
+    assert found_in_dir.id == inbound.id
+
+    assert (
+        memory_storage.get_message_by_modem_id(
+            "modem-inbound-1",
+            direction=MessageDirection.OUTBOUND,
+        )
+        is None
+    )
+
+    found_out = memory_storage.get_message_by_modem_id(
+        "modem-outbound-1",
+        direction=MessageDirection.OUTBOUND,
+    )
+    assert found_out is not None
+    assert found_out.id == outbound.id
+
+
+def test_storage_unprocessed_inbox_and_mark_processed(memory_storage: MessageStorage) -> None:
+    """Test retrieving unprocessed inbox messages and marking them as processed."""
+    msg1 = memory_storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791110001",
+            recipient="Snippen",
+            body="First message",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+    msg2 = memory_storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4791110002",
+            recipient="Snippen",
+            body="Second message",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+
+    assert memory_storage.count_inbox(status=MessageStatus.RECEIVED) == 2
+    assert memory_storage.count_inbox(status=MessageStatus.PROCESSED) == 0
+
+    unprocessed = memory_storage.get_unprocessed_inbox()
+    assert len(unprocessed) == 2
+    assert unprocessed[0].id == msg1.id
+    assert unprocessed[1].id == msg2.id
+
+    # Mark first message as processed
+    assert msg1.id is not None
+    updated = memory_storage.mark_inbox_processed(msg1.id)
+    assert updated is not None
+    assert updated.status == MessageStatus.PROCESSED
+
+    # Check counts
+    assert memory_storage.count_inbox(status=MessageStatus.RECEIVED) == 1
+    assert memory_storage.count_inbox(status=MessageStatus.PROCESSED) == 1
+
+    # Unprocessed list should now only have msg2
+    unprocessed_after = memory_storage.get_unprocessed_inbox()
+    assert len(unprocessed_after) == 1
+    assert unprocessed_after[0].id == msg2.id
+
+    # Filtered get_inbox
+    received_msgs = memory_storage.get_inbox(status=MessageStatus.RECEIVED)
+    assert len(received_msgs) == 1
+    assert received_msgs[0].id == msg2.id
+
+    processed_msgs = memory_storage.get_inbox(status=MessageStatus.PROCESSED)
+    assert len(processed_msgs) == 1
+    assert processed_msgs[0].id == msg1.id

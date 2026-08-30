@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-30
+
+### Added
+- Inbound SMS message deduplication by provider/modem message identifier in `GatewayService.poll_incoming_messages()` (`#26`).
+- Message status `MessageStatus.PROCESSED` for distinguishing unhandled incoming messages from processed ones (`#26`).
+- Inbox querying and status transition helpers (`get_unprocessed_inbox`, `mark_inbox_processed`, `get_message_by_modem_id`) in `MessageStorage` and `GatewayService` (`#26`).
+- Status filtering support for `MessageStorage.get_inbox()` and `MessageStorage.count_inbox()` (`#26`).
+- Unprocessed inbox count reporting (`inbox_unprocessed`) in `GatewayService.get_status()` (`#26`).
+- Database migration `0002_messages_modem_id_index.sql` adding performance index on `modem_message_id` (`#26`).
+- Comprehensive unit and integration tests covering inbound message detection, deduplication, fault tolerance/temporary failure resilience, and unprocessed inbox lifecycle (`#26`).
+- Updated system architecture documentation with inbound message lifecycle and deduplication flow (`#26`).
+
 ## [0.10.1] - 2026-08-30
 
 ### Fixed
