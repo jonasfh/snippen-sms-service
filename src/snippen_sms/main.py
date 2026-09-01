@@ -182,6 +182,39 @@ def handle_sync(
     return 0
 
 
+def handle_send(
+    recipient: str,
+    body: str,
+    provider_name: str | None = None,
+    provider_url: str | None = None,
+    database_path: str = "data/sms_gateway.db",
+) -> int:
+    """Send an SMS directly using the configured provider."""
+    env_config = GatewayConfig.from_env()
+    config = GatewayConfig(
+        service_name=env_config.service_name,
+        database_path=database_path,
+        provider=provider_name or env_config.provider,
+        provider_url=provider_url or env_config.provider_url,
+        sync_enabled=False,
+    )
+    service = GatewayService(config=config)
+    print(f"Sending SMS to {recipient} via provider '{config.provider}'...")
+    try:
+        msg = asyncio.run(service.send_sms(recipient=recipient, body=body))
+        if msg.status.value == "sent":
+            print(f"✅ SMS sent successfully! (ID: {msg.id}, Provider ID: {msg.modem_message_id})")
+            return 0
+        else:
+            print(
+                f"❌ SMS delivery failed (status: {msg.status.value}). Error: {msg.error_message}"
+            )
+            return 1
+    except Exception as exc:  # noqa: BLE001
+        print(f"❌ Exception while sending SMS: {exc}")
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build command line argument parser."""
     parser = argparse.ArgumentParser(
@@ -218,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="SMS provider implementation to use (default: mock)",
+    )
+    parser.add_argument(
+        "--provider-url",
+        type=str,
+        default=None,
+        help="SMS HTTP provider base URL (default: SNIPPEN_SMS_PROVIDER_URL)",
     )
     parser.add_argument(
         "--api-url",
@@ -273,6 +312,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="SMS provider implementation to use (default: mock)",
     )
     run_parser.add_argument(
+        "--provider-url",
+        type=str,
+        default=None,
+        help="SMS HTTP provider base URL",
+    )
+    run_parser.add_argument(
         "--api-url",
         type=str,
         default=None,
@@ -294,6 +339,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-sync",
         action="store_true",
         help="Disable automatic synchronization with Snippen",
+    )
+
+    # Send subcommand
+    send_parser = subparsers.add_parser(
+        "send",
+        help="Directly send an SMS message via configured provider",
+    )
+    send_parser.add_argument(
+        "--to",
+        type=str,
+        required=True,
+        help="Destination phone number",
+    )
+    send_parser.add_argument(
+        "--message",
+        "--text",
+        dest="message",
+        type=str,
+        required=True,
+        help="Text content of the SMS message",
+    )
+    send_parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        help="SMS provider implementation to use",
+    )
+    send_parser.add_argument(
+        "--provider-url",
+        type=str,
+        default=None,
+        help="SMS provider base URL",
+    )
+    send_parser.add_argument(
+        "--database-path",
+        type=str,
+        default="data/sms_gateway.db",
+        help="Database file path (default: data/sms_gateway.db)",
     )
 
     # Sync subcommand
@@ -392,7 +475,17 @@ def main_cli() -> None:
 
     env_config = GatewayConfig.from_env()
 
-    if args.command == "sync":
+    if args.command == "send":
+        sys.exit(
+            handle_send(
+                recipient=args.to,
+                body=args.message,
+                provider_name=getattr(args, "provider", None),
+                provider_url=getattr(args, "provider_url", None),
+                database_path=getattr(args, "database_path", env_config.database_path),
+            )
+        )
+    elif args.command == "sync":
         api_url = getattr(args, "api_url", None) or env_config.snippen_api_url
         api_token = getattr(args, "api_token", None) or env_config.snippen_api_token
         db_path = getattr(args, "database_path", env_config.database_path)
@@ -420,6 +513,7 @@ def main_cli() -> None:
         db_path = getattr(args, "database_path", "data/sms_gateway.db")
         poll_interval = getattr(args, "poll_interval", 2.0)
         provider_arg = getattr(args, "provider", None)
+        provider_url_arg = getattr(args, "provider_url", None)
         api_url = getattr(args, "api_url", None) or env_config.snippen_api_url
         api_token = getattr(args, "api_token", None) or env_config.snippen_api_token
         sync_interval = getattr(args, "sync_interval", None)
@@ -434,6 +528,7 @@ def main_cli() -> None:
             poll_interval_seconds=poll_interval,
             database_path=db_path,
             provider=provider_arg or env_config.provider,
+            provider_url=provider_url_arg or env_config.provider_url,
             github_repo=env_config.github_repo,
             check_updates_on_startup=env_config.check_updates_on_startup,
             auto_update_check=env_config.auto_update_check,

@@ -35,7 +35,15 @@ class GatewayService:
     ) -> None:
         self.config = config or GatewayConfig()
         self.storage = storage or MessageStorage(self.config.database_path)
-        self.provider = provider or get_provider(self.config.provider)
+        if provider is not None:
+            self.provider = provider
+        else:
+            provider_kwargs: dict[str, Any] = {}
+            if self.config.provider_url:
+                provider_kwargs["base_url"] = self.config.provider_url
+            if self.config.provider_timeout_seconds:
+                provider_kwargs["timeout_seconds"] = self.config.provider_timeout_seconds
+            self.provider = get_provider(self.config.provider, **provider_kwargs)
         self.updater = updater or SoftwareUpdater(
             github_repo=self.config.github_repo,
             github_token=self.config.github_token,

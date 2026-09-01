@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 
 from snippen_sms.client import (
     SnippenApiError,
@@ -28,6 +28,7 @@ from snippen_sms.models import (
     MessageStatus,
 )
 from snippen_sms.providers import (
+    HttpSmsProvider,
     IncomingMessage,
     InMemorySmsProvider,
     MockSMSProvider,
@@ -55,6 +56,7 @@ __all__ = [
     "ConversationState",
     "GatewayConfig",
     "GatewayService",
+    "HttpSmsProvider",
     "InMemorySmsProvider",
     "IncomingMessage",
     "Message",

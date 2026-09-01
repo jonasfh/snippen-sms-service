@@ -148,3 +148,38 @@ def test_handle_sync_cli():
             database_path=":memory:",
         )
         assert exit_code == 1
+
+
+def test_cli_parser_send_command():
+    parser = build_parser()
+    args_send = parser.parse_args(
+        [
+            "send",
+            "--to",
+            "+4799887766",
+            "--message",
+            "Test SMS content",
+            "--provider",
+            "fake",
+            "--provider-url",
+            "http://localhost:3000",
+        ]
+    )
+    assert args_send.command == "send"
+    assert args_send.to == "+4799887766"
+    assert args_send.message == "Test SMS content"
+    assert args_send.provider == "fake"
+    assert args_send.provider_url == "http://localhost:3000"
+
+
+def test_handle_send_cli():
+    from snippen_sms.main import handle_send
+
+    # Successful direct send with memory provider
+    exit_code = handle_send(
+        recipient="+4799887766",
+        body="Test message body",
+        provider_name="memory",
+        database_path=":memory:",
+    )
+    assert exit_code == 0

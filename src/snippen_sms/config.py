@@ -15,6 +15,8 @@ class GatewayConfig:
     poll_interval_seconds: float = 2.0
     database_path: str = "data/sms_gateway.db"
     provider: str = "mock"
+    provider_url: str | None = None
+    provider_timeout_seconds: float = 10.0
     github_repo: str = "jonasfh/snippen-sms-service"
     check_updates_on_startup: bool = True
     auto_update_check: bool = True
@@ -49,6 +51,8 @@ class GatewayConfig:
             poll_interval_seconds=float(os.getenv("SNIPPEN_SMS_POLL_INTERVAL", "2.0")),
             database_path=os.getenv("SNIPPEN_SMS_DATABASE_PATH", "data/sms_gateway.db"),
             provider=os.getenv("SNIPPEN_SMS_PROVIDER", "mock"),
+            provider_url=os.getenv("SNIPPEN_SMS_PROVIDER_URL"),
+            provider_timeout_seconds=float(os.getenv("SNIPPEN_SMS_PROVIDER_TIMEOUT", "10.0")),
             github_repo=os.getenv("SNIPPEN_SMS_GITHUB_REPO", "jonasfh/snippen-sms-service"),
             check_updates_on_startup=check_startup_env in ("true", "1", "yes"),
             auto_update_check=auto_check_env in ("true", "1", "yes"),

@@ -45,7 +45,9 @@ The gateway service can be configured via CLI flags or environment variables:
 | Log Level | `SNIPPEN_SMS_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | Poll Interval | `SNIPPEN_SMS_POLL_INTERVAL` | `2.0` | Polling loop tick interval in seconds |
 | Database Path | `SNIPPEN_SMS_DATABASE_PATH` | `data/sms_gateway.db` | Path to SQLite database file (or `:memory:`) |
-| Provider | `SNIPPEN_SMS_PROVIDER` | `mock` | SMS provider backend (`mock`, `memory`) |
+| Provider | `SNIPPEN_SMS_PROVIDER` | `mock` | SMS provider backend (`mock`, `memory`, `fake`, `http`) |
+| Provider URL | `SNIPPEN_SMS_PROVIDER_URL` | *(None)* | Remote SMS Provider endpoint URL (e.g. `http://127.0.0.1:3000`) |
+| Provider Timeout | `SNIPPEN_SMS_PROVIDER_TIMEOUT` | `10.0` | HTTP request timeout for SMS provider in seconds |
 | Snippen API URL | `SNIPPEN_SMS_API_URL` | *(None)* | Snippen WordPress REST API base URL |
 | Snippen API Token | `SNIPPEN_SMS_API_TOKEN` | *(None)* | Shared Bearer/API token for Snippen authentication |
 | Sync Interval | `SNIPPEN_SMS_SYNC_INTERVAL` | `5.0` | Synchronization interval in seconds |
@@ -71,6 +73,76 @@ python -m snippen_sms.main
 # Or run with custom provider, poll interval, log level, and database path
 python -m snippen_sms.main --provider mock --poll-interval 1.0 --log-level DEBUG
 ```
+
+Send a test SMS directly via CLI:
+
+```bash
+# Send an SMS directly using configured provider
+snippen-sms send --to "+4799887766" --message "Hei! Din kode er 1234." --provider mock
+```
+
+---
+
+## End-to-End Testing with Fake SMS Provider
+
+You can test both outbound dispatching and inbound message polling end-to-end locally using the **Fake SMS Provider** in `snippen-testing`:
+
+### 1. Start the Fake SMS Provider
+
+In a terminal in `/workspaces/snippen-testing`:
+
+```bash
+npm start
+# Server starts on http://127.0.0.1:3000
+```
+
+### 2. Start Snippen SMS Service against Fake Provider
+
+In a terminal in `/workspaces/snippen-sms-service`:
+
+```bash
+snippen-sms run --provider fake --provider-url http://127.0.0.1:3000 --log-level DEBUG
+```
+
+### 3. Send Outbound SMS (CLI)
+
+In another terminal, send an SMS:
+
+```bash
+snippen-sms send --to "+4799887766" --message "Adgangskode: 4821" --provider fake --provider-url http://127.0.0.1:3000
+```
+
+Verify that the message was received by the fake provider via HTTP:
+
+```bash
+curl "http://127.0.0.1:3000/messages?direction=outbound"
+```
+
+### 4. Inject Inbound SMS & Poll (HTTP + CLI)
+
+> [!NOTE]
+> The `POST /messages/inbound` endpoint on `snippen-testing` is a **test injection endpoint** used to simulate an incoming message from a guest. It is **not** a webhook exposed by the SMS service. `snippen-sms-service` polls the provider (`GET /messages?direction=inbound`) and deduplicates incoming messages.
+
+Simulate a guest replying with an SMS:
+
+```bash
+curl -X POST "http://127.0.0.1:3000/messages/inbound" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "+4799887766", "text": "Hei, vi har låst oss ute."}'
+```
+
+Watch the running `snippen-sms-service` log. On the next polling cycle, the service will:
+1. Fetch the inbound SMS from the fake provider.
+2. Ingest and persist the message into SQLite with status `received`.
+3. Deduplicate automatically on subsequent poll ticks so messages are never processed twice.
+
+To clear all messages in the fake provider between tests:
+
+```bash
+curl -X DELETE "http://127.0.0.1:3000/messages"
+```
+
+---
 
 Check for software updates and upgrade:
 
@@ -98,7 +170,6 @@ Trigger manual Snippen API synchronization:
 # Execute a one-time synchronization cycle with Snippen
 snippen-sms sync --api-url https://vestreholmensameie.no/wp-json/snippen/v1/sms --api-token <token>
 ```
-
 
 Run the test suite, code linter, and formatting tool in the development environment:
 
