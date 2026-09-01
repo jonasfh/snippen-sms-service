@@ -33,6 +33,7 @@ snippen-sms-service/
 │       ├── providers/        # SMS provider abstraction layer
 │       │   ├── __init__.py   # Provider exports & factory registry
 │       │   ├── base.py       # SmsProvider ABC, SendResult, IncomingMessage
+│       │   ├── http.py       # HttpSmsProvider for HTTP SMS gateways & fake-provider
 │       │   ├── memory.py     # InMemorySmsProvider for testing & simulation
 │       │   └── mock.py       # MockSmsProvider for mock messaging & auto-replies
 │       ├── storage.py        # SQLite persistent storage repository
@@ -43,8 +44,10 @@ snippen-sms-service/
 │   ├── test_build_release.py # Release build & checksum calculation tests
 │   ├── test_client.py        # SnippenClient HTTP client tests
 │   ├── test_context.py       # Booking context resolution & dialogue session tests
+│   ├── test_fake_provider_e2e.py # End-to-end integration tests with fake SMS provider
 │   ├── test_format.py        # Formatter tests
 │   ├── test_gateway.py       # GatewayService lifecycle & provider integration tests
+│   ├── test_http_provider.py # HttpSmsProvider unit tests
 │   ├── test_main.py          # Unit tests
 │   ├── test_migrations.py    # Database migration unit & integration tests
 │   ├── test_mock_provider.py # Mock SMS provider and factory tests
@@ -89,6 +92,49 @@ For high-level system architecture, communication flows, and boundaries, see [do
    # Validate PR version bump and changelog
    python scripts/validate_pr.py --base origin/main
    ```
+
+## Manual & End-to-End Testing with Fake SMS Provider
+
+To test the complete SMS messaging cycle (outbound dispatch, inbound message injection, polling, and deduplication) between `snippen-sms-service` and the fake SMS provider in `snippen-testing`:
+
+### 1. Launch the Fake SMS Provider
+From the `snippen-testing` workspace:
+```bash
+cd /workspaces/snippen-testing
+npm start
+# Listens on http://127.0.0.1:3000
+```
+
+### 2. Start the SMS Gateway Service
+From the `snippen-sms-service` workspace:
+```bash
+cd /workspaces/snippen-sms-service
+snippen-sms run --provider fake --provider-url http://127.0.0.1:3000 --log-level DEBUG
+```
+
+### 3. Send Outbound SMS (CLI & Inspection)
+Send an outbound SMS message:
+```bash
+snippen-sms send --to "+4799887766" --message "Din adgangskode er 4821" --provider fake --provider-url http://127.0.0.1:3000
+```
+Inspect outbound messages stored in the fake provider:
+```bash
+curl "http://127.0.0.1:3000/messages?direction=outbound"
+```
+
+### 4. Inject Inbound SMS & Verify Ingestion
+Inject a simulated inbound SMS reply:
+```bash
+curl -X POST "http://127.0.0.1:3000/messages/inbound" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "+4799887766", "text": "Hei, adgangskoden virket fint!"}'
+```
+Observe the `snippen-sms-service` logs as it polls the fake provider (`GET /messages?direction=inbound`), ingests the message into the local SQLite database, and resolves any active booking context.
+
+Clear provider state when needed:
+```bash
+curl -X DELETE "http://127.0.0.1:3000/messages"
+```
 
 ## CI/CD Workflows
 

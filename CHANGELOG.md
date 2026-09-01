@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-09-01
+
+### Added
+- Implemented `HttpSmsProvider` connecting `snippen-sms-service` to remote HTTP SMS providers and the `snippen-testing` fake SMS provider (`#42`).
+- Registered `http`, `fake`, and `snippen-testing` aliases in `PROVIDER_REGISTRY` (`#42`).
+- Added `SNIPPEN_SMS_PROVIDER_URL` and `SNIPPEN_SMS_PROVIDER_TIMEOUT` environment variable configurations and `--provider-url` CLI parameter (`#42`).
+- Added `snippen-sms send` CLI command to directly send SMS messages via configured providers (`#42`).
+- Added comprehensive unit tests in `tests/test_http_provider.py` and end-to-end integration tests in `tests/test_fake_provider_e2e.py` covering outbound delivery, inbound polling/deduplication, and failure handling (`#42`).
+
+### Changed
+- Updated `GatewayService` to pass provider configuration parameters (`provider_url`, `timeout_seconds`) when instantiating providers (`#42`).
+- Extended documentation in `README.md` and `DEV_README.md` with step-by-step testing instructions using CLI and HTTP calls (`#42`).
+
 ## [0.14.0] - 2026-08-30
 
 ### Added

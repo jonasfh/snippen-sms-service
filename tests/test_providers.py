@@ -165,3 +165,22 @@ def test_in_memory_provider_clear():
         assert res.success is True
 
     asyncio.run(_test())
+
+
+def test_provider_registry_http_and_fake():
+    from snippen_sms.providers import HttpSmsProvider, get_provider
+
+    prov_http = get_provider("http", base_url="http://localhost:3000")
+    assert isinstance(prov_http, HttpSmsProvider)
+    assert prov_http.base_url == "http://localhost:3000"
+
+    prov_fake = get_provider("fake", base_url="http://fake-host:8080")
+    assert isinstance(prov_fake, HttpSmsProvider)
+    assert prov_fake.base_url == "http://fake-host:8080"
+
+    prov_testing = get_provider("snippen-testing")
+    assert isinstance(prov_testing, HttpSmsProvider)
+    assert prov_testing.base_url == "http://127.0.0.1:3000"
+
+    with pytest.raises(ValueError, match="Unknown SMS provider 'unknown_provider'"):
+        get_provider("unknown_provider")
