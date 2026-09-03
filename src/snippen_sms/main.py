@@ -27,10 +27,55 @@ def setup_logging(level_name: str = "INFO") -> None:
     )
 
 
-def get_status() -> dict[str, Any]:
+def get_status(config: GatewayConfig | None = None) -> dict[str, Any]:
     """Return status of the SMS service (convenience helper)."""
-    service = GatewayService()
+    service = GatewayService(config=config)
     return service.get_status()
+
+
+def handle_status(
+    database_path: str = "data/sms_gateway.db",
+    json_output: bool = False,
+) -> int:
+    """Print diagnostic health and status report of the SMS gateway service."""
+    import json
+
+    env_config = GatewayConfig.from_env()
+    config = GatewayConfig(
+        service_name=env_config.service_name,
+        database_path=database_path,
+        provider=env_config.provider,
+        provider_url=env_config.provider_url,
+        sync_enabled=False,
+        check_updates_on_startup=False,
+    )
+    try:
+        status = get_status(config)
+        if json_output:
+            print(json.dumps(status, indent=2))
+        else:
+            print(f"Service:            {status.get('service', 'snippen-sms-service')}")
+            print(f"Status:             {status.get('status', 'unknown')}")
+            print(f"Version:            v{status.get('version', __version__)}")
+            print(f"Provider:           {status.get('provider', 'unknown')}")
+            print(f"Database:           {status.get('database_path', database_path)}")
+            print(
+                f"Messages:           {status.get('total_messages', 0)} total "
+                f"({status.get('outbox_pending', 0)} outbox pending, "
+                f"{status.get('inbox_unprocessed', 0)} inbox unprocessed)"
+            )
+            print(f"API Sync:           {'Enabled' if status.get('sync_enabled') else 'Disabled'}")
+            print(
+                f"Context Resolver:   "
+                f"{'Enabled' if status.get('booking_resolution_enabled') else 'Disabled'}"
+            )
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        if json_output:
+            print(json.dumps({"status": "error", "error": str(exc)}, indent=2))
+        else:
+            print(f"❌ Error checking service status: {exc}")
+        return 1
 
 
 async def run_gateway(config: GatewayConfig) -> None:
@@ -462,6 +507,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Database file path to apply migrations to post-upgrade",
     )
 
+    # Status subcommand
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Show gateway service status and database health",
+    )
+    status_parser.add_argument(
+        "--database-path",
+        type=str,
+        default="data/sms_gateway.db",
+        help="Database file path (default: data/sms_gateway.db)",
+    )
+    status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output status report in JSON format",
+    )
+
+    # Health subcommand (alias for status)
+    health_parser = subparsers.add_parser(
+        "health",
+        help="Check gateway service health (alias for status)",
+    )
+    health_parser.add_argument(
+        "--database-path",
+        type=str,
+        default="data/sms_gateway.db",
+        help="Database file path (default: data/sms_gateway.db)",
+    )
+    health_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output health report in JSON format",
+    )
+
     return parser
 
 
@@ -508,6 +587,10 @@ def main_cli() -> None:
                 database_path=db_path,
             )
         )
+    elif args.command in ("status", "health"):
+        db_path = getattr(args, "database_path", env_config.database_path)
+        json_out = getattr(args, "json", False)
+        sys.exit(handle_status(database_path=db_path, json_output=json_out))
     else:
         # Default action: run gateway service
         db_path = getattr(args, "database_path", "data/sms_gateway.db")
