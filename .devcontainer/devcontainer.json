@@ -2,6 +2,10 @@
   "name": "snippen-sms-service-python",
   "image": "mcr.microsoft.com/devcontainers/python:3.14-bookworm",
   "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "latest",
+      "enableNonRootDocker": "true"
+    },
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "customizations": {
@@ -13,7 +17,8 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "mermaidchart.vscode-mermaid-chart"
+        "mermaidchart.vscode-mermaid-chart",
+        "ms-azuretools.vscode-docker"
       ],
       "recommendations": [
         "google.google-antigravity"
