@@ -144,6 +144,59 @@ curl -X DELETE "http://127.0.0.1:3000/messages"
 
 ---
 
+Check gateway service health and diagnostics:
+
+```bash
+# Check service and database health in human-readable format
+snippen-sms status
+
+# Check health in structured JSON format
+snippen-sms status --json
+
+# Alias subcommand
+snippen-sms health
+```
+
+---
+
+## Running with Docker
+
+`snippen-sms-service` includes a production-ready `Dockerfile` based on `python:3.14-slim` running as an unprivileged non-root user (`appuser`).
+
+### 1. Build the Docker Image
+
+```bash
+docker build -t snippen-sms-service .
+```
+
+### 2. Run the Container
+
+Run the gateway daemon with a persistent volume for the SQLite database:
+
+```bash
+docker run -d \
+  --name snippen-sms-service \
+  --restart unless-stopped \
+  -v snippen-sms-data:/app/data \
+  -e SNIPPEN_SMS_PROVIDER=http \
+  -e SNIPPEN_SMS_PROVIDER_URL=http://fake-sms-provider:3000 \
+  -e SNIPPEN_SMS_API_URL=http://snippen-booking:8080/wp-json/snippen/v1/sms \
+  -e SNIPPEN_SMS_API_TOKEN=test-integration-token \
+  -e SNIPPEN_SMS_SYNC_INTERVAL=1.0 \
+  -e SNIPPEN_SMS_POLL_INTERVAL=1.0 \
+  snippen-sms-service
+```
+
+### 3. Container Healthcheck
+
+The container includes a built-in `HEALTHCHECK` running `snippen-sms status || exit 1`. You can check the container status at any time:
+
+```bash
+docker inspect --format='{{json .State.Health}}' snippen-sms-service
+```
+
+---
+
 Check for software updates and upgrade:
 
 ```bash

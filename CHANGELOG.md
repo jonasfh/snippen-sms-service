@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-09-03
+
+### Added
+- Production-ready `Dockerfile` based on `python:3.14-slim` with non-root user `appuser`, volume mount `/app/data`, and container `HEALTHCHECK` (`#44`).
+- Container ignore configuration in `.dockerignore` excluding caches, tests, and temporary artifacts (`#44`).
+- CLI subcommands `snippen-sms status` and `snippen-sms health` with optional `--json` format output and exit code reporting for container health inspection (`#44`).
+- Automated startup migration tests on fresh SQLite database paths (`#44`).
+
+### Changed
+- Extended `README.md` and `DEV_README.md` with Docker build, run, and containerized integration testing instructions (`#44`).
+
 ## [0.15.0] - 2026-09-01
 
 ### Added

@@ -56,6 +56,8 @@ snippen-sms-service/
 │   ├── test_sync.py          # SyncService coordination & retry tests
 │   ├── test_updater.py       # GitHub release version checking & updater unit tests
 │   └── test_validate_pr.py   # PR validation tests
+├── .dockerignore             # Docker build context exclusions
+├── Dockerfile                # Production container image definition (Python 3.14-slim)
 ├── pyproject.toml            # Python packaging and dependency config
 ├── README.md                 # User documentation
 ├── DEV_README.md             # Developer documentation
