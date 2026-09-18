@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-09-18
+
+### Added
+- MicroPython firmware foundation under `firmware/` for standalone Lilygo T-Call A7670E ESP32 gateway (`#49`):
+  - `firmware/boot.py`: Autonomous cold-boot hardware initialization sequence (GPIO 12 power rail, GPIO 5 reset, GPIO 4 PWRKEY 1.5s pulse, and UART1 115200 baud).
+  - `firmware/config.py`: Local and JSON configuration management with default GPIO pinouts, timers, WiFi, and Snippen REST API parameters.
+  - `firmware/config.example.py`: Local configuration override template for device deployments.
+  - `firmware/main.py`: Main `GatewayApp` coordination event loop with non-blocking ticks for inbox checking, outbox polling, and system heartbeat.
+- Automated deployment tool `scripts/deploy_firmware.py` providing `deploy`, `ls`, `repl`, `reset`, and `run` commands utilizing `mpremote` (`#49`).
+- Host-side MicroPython unit test mock framework in `tests/mocks/micropython_mocks.py` simulating `machine.Pin`, `machine.UART`, `machine.WDT`, `utime`, and `network.WLAN` (`#49`).
+- Unit test suites covering firmware configuration, boot sequence, main loop, and automated deployment script (`#49`).
+
 ## [0.16.2] - 2026-09-18
 
 ### Added

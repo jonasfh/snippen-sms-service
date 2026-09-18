@@ -263,3 +263,48 @@ Lilygo T-Call A7670E fungerer som en **100% frittstående SMS-gateway** plugget 
 3. **Long Polling for utgående meldinger:** ESP32-en sender en "hanging GET" (med f.eks. 20-30 sekunders timeout) mot Snippen Booking sitt outbox-endepunkt. Så fort en SMS opprettes i WordPress, returnerer kallet umiddelbart, og ESP32 sender meldingen ut over 4G på brøkdelen av et sekund.
 4. **Umiddelbar levering av innkommende meldinger:** Når en gjest svarer på en SMS, leses meldingen ut fra SIM-minnet over UART, postes direkte til `/wp-json/snippen/v1/sms/inbound`, og slettes deretter fra SIM-kortet for å unngå at minnet fylles opp.
 5. **All forretningslogikk i WordPress:** ESP32 utfører kun maskinvare-oppgaver (WiFi-forbindelse, API-kall og SMS-transport). All bookinglogikk, adgangskoder, og gjestedialog håndteres av Snippen Booking-pluginet.
+
+---
+
+## 10. Firmware-struktur og Utviklingsflyt (`firmware/`)
+
+MicroPython-firmwaren ligger i `firmware/` og er adskilt fra vertsbiblioteket `src/snippen_sms/`:
+
+```
+firmware/
+├── boot.py            # Maskinvareinit, modem power rail (GPIO 12), reset (GPIO 5), PWRKEY-puls (GPIO 4), UART1
+├── config.py          # Systemoppsett, pinouts, tidsavbrudd og API-konfigurasjon
+├── config.example.py  # Mal for lokale overstyringer (WiFi-passord og API-nøkkel)
+└── main.py            # GatewayApp-hovedløkke: WiFi-status, outbox-polling, SMS-sjekk og heartbeat
+```
+
+### Automatisert Deployment med `mpremote`
+Skriptet `scripts/deploy_firmware.py` automatiserer overføring og administrasjon via `mpremote`:
+
+```bash
+# 1. Installer / oppdater firmwarefiler på ESP32 (med automatisk soft-reset)
+python scripts/deploy_firmware.py deploy
+
+# 2. Deploy med egne lokale innstillinger (config_local.py eller config.json)
+python scripts/deploy_firmware.py deploy --include-config
+
+# 3. Inspiser filer på mikrokontrolleren
+python scripts/deploy_firmware.py ls
+
+# 4. Åpne MicroPython REPL interaktivt
+python scripts/deploy_firmware.py repl
+
+# 5. Nullstill mikrokontrolleren (soft eller hard reset)
+python scripts/deploy_firmware.py reset
+python scripts/deploy_firmware.py reset --hard
+
+# 6. Testkjøre et skript på enheten uten permanent overføring
+python scripts/deploy_firmware.py run firmware/main.py
+```
+
+### Automatiserte Tester og Mocks
+Firmwarekoden er testet med standard `pytest` under CPython ved hjelp av mikrokontroller-mocking i `tests/mocks/micropython_mocks.py` (som mocker `machine.Pin`, `machine.UART`, `utime`, `network.WLAN` etc.):
+
+```bash
+pytest tests/test_firmware_*.py tests/test_deploy_firmware.py -v
+```
