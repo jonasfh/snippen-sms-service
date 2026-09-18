@@ -17,11 +17,11 @@ A lightweight, dedicated two-way SMS gateway service designed for the **Snippen*
 ## System Topology Overview
 
 ```
-[ Snippen Booking App ] <---> [ Snippen SMS Gateway ] <---> [ SMS Modem / SIM ] <---> [ Cellular Network ] <---> [ End User ]
+[ Snippen Booking (WordPress) ] <=== HTTPS (WiFi) ===> [ Lilygo T-Call A7670E (ESP32) ] <=== 4G LTE ===> [ Mobile Network ] <===> [ End User ]
 ```
 
-- **Snippen Booking Platform**: Manages business rules, booking schedules, guest records, and decides what messages to send or actions to take.
-- **Snippen SMS Gateway**: Handles message queuing, rate limiting, modem hardware interfacing, inbound message polling, and health monitoring.
+- **Snippen Booking Platform** (`https://vestreholmensameie.no`): Manages business rules, booking schedules, guest records, and decides what messages to send or actions to take.
+- **Lilygo T-Call A7670E Standalone Gateway**: Self-contained IoT hardware appliance plugged directly into power at Snippen grendehus. Connects to Snippen Booking over local WiFi via HTTPS long-polling and transmits/receives SMS through its built-in SimCom A7670E 4G modem.
 
 ---
 
@@ -29,6 +29,7 @@ A lightweight, dedicated two-way SMS gateway service designed for the **Snippen*
 
 - 📚 **[Documentation Overview](file:///workspaces/snippen-sms-service/docs/README.md)**: Index of all documentation resources.
 - 📐 **[System Architecture & Design](file:///workspaces/snippen-sms-service/docs/architecture.md)**: High-level architectural design, system boundaries, sequence diagrams, and design principles.
+- 📱 **[Lilygo T-Call A7670E Guide](file:///workspaces/snippen-sms-service/docs/README_LILYGO.md)**: Hardware specifications, pinout, MicroPython setup, SIM configuration, and AT commands.
 - 🔌 **[Snippen Booking WordPress API Spec](file:///workspaces/snippen-sms-service/docs/snippen_booking_api_spec.md)**: WordPress REST API routes, Bearer token authorization, and plugin implementation tasks.
 - 🛠️ **[Developer Guide](file:///workspaces/snippen-sms-service/DEV_README.md)**: Setup instructions, Dev Container configuration, testing, and linting.
 - 🤖 **[Agent Guidelines](file:///workspaces/snippen-sms-service/AGENTS.md)**: Project workflows and conventions for automated agents.

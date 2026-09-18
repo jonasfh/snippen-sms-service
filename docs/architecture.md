@@ -8,9 +8,9 @@ Rather than relying on costly third-party cloud messaging aggregators for ongoin
 
 ```mermaid
 flowchart LR
-    A["Snippen Booking App"] <-->|"SMS Requests & Events"| B["Snippen SMS Gateway"]
-    B <-->|"Provider Interface"| C["SMS Provider (Modem / Mock)"]
-    C <-->|"Cellular Radio (GSM/LTE)"| D["Mobile Network"]
+    A["Snippen Booking App<br>(vestreholmensameie.no)"] <-->|"HTTPS over WiFi<br>(Long-poll Outbox & Inbound Push)"| B["Lilygo T-Call A7670E<br>(Standalone ESP32 Gateway)"]
+    B <-->|"Internal UART<br>(GPIO 26/25)"| C["SimCom A7670E 4G Modem"]
+    C <-->|"Cellular Radio (4G/LTE)"| D["Mobile Network<br>(Telia)"]
     D <-->|"SMS"| E["End User / Guest"]
 ```
 
@@ -30,6 +30,51 @@ The SMS Gateway operates as an independent subsystem with a clear separation of 
   - Manages outbound message queueing, transmission timing, delivery status tracking, and error recovery.
   - Ingests inbound messages from the SMS provider and exposes them for Snippen to consume.
   - Monitors provider health, signal quality, and cellular connection status.
+
+---
+
+## Standalone Hardware Appliance Architecture (Lilygo T-Call A7670E)
+
+The physical gateway runs as a completely standalone, low-power IoT device plugged into a 5V wall socket at Snippen grendehus. A host computer or Raspberry Pi is not required.
+
+```mermaid
+flowchart TD
+    subgraph Standalone Lilygo T-Call A7670E
+        direction TB
+        subgraph ESP32 Microcontroller
+            WIFI["WiFi Manager<br>(Auto-reconnect)"]
+            API_CLIENT["Snippen REST Client<br>(HTTPS over WiFi)"]
+            LOOP["Event Loop<br>(Outbox Poll & Inbound Push)"]
+            AT_ENGINE["AT Command Engine<br>(SMS & SIM Manager)"]
+            WDT["Hardware Watchdog<br>& Health Monitor"]
+
+            WIFI --- API_CLIENT
+            API_CLIENT --- LOOP
+            LOOP --- AT_ENGINE
+            AT_ENGINE --- WDT
+        end
+
+        subgraph SimCom A7670E Modem
+            MODEM_RADIO["4G LTE Cellular Radio<br>(Telia SIM)"]
+            MODEM_PINS["Hardware Control<br>(GPIO 12: VCC, 5: RST, 4: PWRKEY)"]
+        end
+
+        AT_ENGINE <-->|"UART1: 115200 Baud<br>(TX: GPIO 26, RX: GPIO 25)"| MODEM_RADIO
+        WDT -->|"Power Management"| MODEM_PINS
+    end
+
+    API_CLIENT <-->|"Long-poll Outbox (GET)<br>Inbound Delivery (POST)<br>Delivery Status (POST)"| SNIPPEN["Snippen Booking<br>(https://vestreholmensameie.no)"]
+    MODEM_RADIO <-->|"Cellular SMS"| GUEST["End User / Guest"]
+```
+
+### Key Hardware & Operational Characteristics
+1. **Zero Host Overhead**: Completely eliminates Raspberry Pi OS maintenance, Linux security patches, SD-card corruption risks, and external USB cabling issues.
+2. **Minimal Power Consumption**: Consumes only 1-2W in idle and standard operation, running reliably on any standard 5V/2A USB-C power supply.
+3. **Dual Network Interfaces**:
+   - **Local WiFi**: Handles high-speed HTTPS communication with `https://vestreholmensameie.no`.
+   - **Cellular 4G LTE**: Handles SMS transmission and reception directly on Telia's network via the SimCom A7670E.
+4. **Resilient Long Polling**: The ESP32 maintains an HTTP long-polling loop against Snippen Booking, dispatching outbound SMS within milliseconds of booking creation while keeping network and CPU usage minimal.
+5. **Fail-Safe Recovery**: Equipped with hardware watchdog (`machine.WDT`), automatic WiFi re-association, and hardware power-cycling of the cellular modem (GPIO 12/4) if modem unresponsiveness is detected.
 
 ---
 

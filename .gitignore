@@ -16,3 +16,4 @@ home/
 config.tar.gz
 dist/
 build/
+.env

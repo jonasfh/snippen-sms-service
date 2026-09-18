@@ -24,6 +24,9 @@ dev = [
     "ruff>=0.3.0",
     "packaging>=23.0",
     "build>=1.0.0",
+    "esptool>=5.0.0",
+    "mpremote>=1.20.0",
+    "pyserial>=3.5",
 ]
 
 [tool.setuptools.dynamic]
