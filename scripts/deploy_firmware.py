@@ -33,8 +33,12 @@ def find_default_port() -> str | None:
 
 def build_mpremote_base_cmd(port: str | None) -> list[str]:
     """Construct base command invoking mpremote with optional port specification."""
-    # Run via sys.executable -m mpremote for portability within virtual environment
-    cmd = [sys.executable, "-m", "mpremote"]
+    python_bin = sys.executable
+    venv_python = Path("/home/vscode/.venv/bin/python")
+    if "venv" not in python_bin and venv_python.exists():
+        python_bin = str(venv_python)
+
+    cmd = [python_bin, "-m", "mpremote"]
     if port:
         cmd.extend(["connect", port])
     return cmd
@@ -75,9 +79,12 @@ def deploy_firmware(
 
     if include_config:
         local_cfg = firmware_dir / "config_local.py"
+        dot_cfg = firmware_dir / "config.local.py"
         json_cfg = firmware_dir / "config.json"
         if local_cfg.exists():
             files_to_deploy.append("config_local.py")
+        elif dot_cfg.exists():
+            files_to_deploy.append("config.local.py")
         elif json_cfg.exists():
             files_to_deploy.append("config.json")
 

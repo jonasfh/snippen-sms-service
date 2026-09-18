@@ -34,14 +34,18 @@ def test_get_default_config() -> None:
     assert cfg["inbox_check_interval_sec"] == 5
 
 
-def test_load_config_defaults(tmp_path: Path) -> None:
+def test_load_config_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "config_local", None)
+    monkeypatch.chdir(tmp_path)
     non_existent = tmp_path / "non_existent_config.json"
     loaded = config.load_config(str(non_existent))
     assert loaded["pin_modem_power"] == 12
     assert loaded["wifi_ssid"] == ""
 
 
-def test_load_config_json_overrides(tmp_path: Path) -> None:
+def test_load_config_json_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "config_local", None)
+    monkeypatch.chdir(tmp_path)
     json_path = tmp_path / "test_config.json"
     data = {
         "wifi_ssid": "Test-WiFi",
@@ -69,3 +73,18 @@ def test_load_config_module_overrides(tmp_path: Path, monkeypatch: pytest.Monkey
     loaded = config.load_config(str(non_existent))
     assert loaded["wifi_ssid"] == "Module-WiFi"
     assert loaded["heartbeat_interval_sec"] == 60
+
+
+def test_load_config_dot_local_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ensure config_local is not in sys.modules
+    monkeypatch.delitem(sys.modules, "config_local", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    dot_local = tmp_path / "config.local.py"
+    dot_local.write_text(
+        'WIFI_SSID = "Dot-Local-WiFi"\nLONG_POLL_TIMEOUT_SEC = 50\n', encoding="utf-8"
+    )
+
+    loaded = config.load_config(str(tmp_path / "non_existent.json"))
+    assert loaded["wifi_ssid"] == "Dot-Local-WiFi"
+    assert loaded["long_poll_timeout_sec"] == 50
