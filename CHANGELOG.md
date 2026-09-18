@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.2] - 2026-09-18
+
+### Added
+- Added USB hardware device passthrough (`--privileged`, `/dev` bind mount) and `dialout` group configuration in `.devcontainer/devcontainer.json`.
+- Added `esptool`, `mpremote`, and `pyserial` to development dependencies in `pyproject.toml`.
+- Added standalone Lilygo T-Call A7670E documentation in `docs/README_LILYGO.md` with hardware pinout, AT command diagnostics, MicroPython flashing, permanent SIM PIN deactivation, and SMS verification.
+- Added template environment file `default.env` and added `.env` to `.gitignore`.
+
+### Changed
+- Updated system architecture in `docs/architecture.md`, `README.md`, and `docs/README.md` to reflect the standalone Lilygo IoT gateway model utilizing WiFi HTTPS long-polling against Snippen Booking (`https://vestreholmensameie.no`) and cellular SMS dispatch over Telia 4G.
+
 ## [0.16.1] - 2026-09-03
 
 ### Added
