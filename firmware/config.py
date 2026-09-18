@@ -63,10 +63,10 @@ def get_default_config() -> dict:
 
 
 def load_config(config_path: str = "config.json") -> dict:
-    """Load configuration with overrides from config.json or config_local.py if available."""
+    """Load configuration with overrides from config_local.py, config.local.py, or config.json if available."""
     cfg = get_default_config()
 
-    # Attempt 1: Load overrides from local Python config file if present
+    # Attempt 1: Load overrides from config_local module if present
     try:
         import config_local  # type: ignore[import-not-found]
 
@@ -79,7 +79,22 @@ def load_config(config_path: str = "config.json") -> dict:
     except Exception:  # noqa: BLE001, S110
         pass
 
-    # Attempt 2: Load overrides from config.json if present
+    # Attempt 2: Load overrides from config.local.py file if present
+    try:
+        with open("config.local.py") as f:
+            code = f.read()
+        local_scope = {}
+        exec(code, local_scope)  # noqa: S102
+        for key in cfg:
+            upper_key = key.upper()
+            if upper_key in local_scope:
+                cfg[key] = local_scope[upper_key]
+            elif key in local_scope:
+                cfg[key] = local_scope[key]
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    # Attempt 3: Load overrides from config.json if present
     try:
         with open(config_path, "r") as f:
             overrides = json.load(f)

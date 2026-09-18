@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - 2026-09-18
+
+### Added
+- Added on-device WiFi connection test script `firmware/test_wifi.py` and host-side test runner `scripts/test_wifi.py` (`#56`).
+- Added on-device Snippen API authentication ping test `firmware/test_api.py` and host-side test runner `scripts/test_api_ping.py` (`#56`).
+- Added support for loading overrides from `config.local.py` alongside `config_local.py` in `firmware/config.py` and `scripts/deploy_firmware.py` (`#56`).
+- Added `firmware/config.local.py`, `firmware/config_local.py`, and `firmware/config.json` to `.gitignore` to prevent secret leakage (`#56`).
+- Added unit tests for diagnostic test runners in `tests/test_diagnostic_scripts.py` (`#56`).
+
 ## [0.17.0] - 2026-09-18
 
 ### Added
