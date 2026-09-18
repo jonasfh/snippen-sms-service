@@ -12,9 +12,16 @@ snippen-sms-service/
 ├── .agents/                  # Agent guidelines (Architecture, Testing, common-agent-instructions submodule)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
+│   ├── README_LILYGO.md      # Standalone Lilygo T-Call A7670E guide & pinout
 │   ├── architecture.md       # High-level architecture, provider abstraction & flows
 │   └── snippen_booking_api_spec.md # WordPress REST API spec & implementation tasks
+├── firmware/                 # MicroPython standalone gateway firmware
+│   ├── boot.py               # Hardware init, modem power rail & UART1 configuration
+│   ├── config.py             # Hardware pinouts, timers & API settings
+│   ├── config.example.py     # Local config overrides template
+│   └── main.py               # Main application loop coordinating WiFi, API & SMS
 ├── scripts/                  # Development & formatting utilities
+│   ├── deploy_firmware.py    # Automated firmware deployment via mpremote
 │   ├── format.py             # Whitespace & file formatting tool
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
 ├── src/
@@ -90,6 +97,9 @@ For high-level system architecture, communication flows, and boundaries, see [do
 
    # Build distribution packages and generate SHA-256 checksums
    python scripts/build_release.py
+
+   # Deploy firmware to Lilygo ESP32 via mpremote
+   python scripts/deploy_firmware.py deploy [--include-config]
 
    # Validate PR version bump and changelog
    python scripts/validate_pr.py --base origin/main

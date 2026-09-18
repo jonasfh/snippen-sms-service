@@ -1,0 +1,96 @@
+"""Configuration module for Snippen SMS Gateway on Lilygo T-Call A7670E (MicroPython)."""
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
+# Hardware Pinout (Lilygo T-Call A7670E)
+PIN_MODEM_POWER = 12  # VCC Power Rail: Set HIGH to power modem
+PIN_MODEM_RESET = 5  # Reset: Active-low internally, hold HIGH during operation
+PIN_MODEM_PWRKEY = 4  # PWRKEY: Pulse HIGH for 1.5s to turn modem on
+PIN_MODEM_TX = 26  # ESP32 TX -> Modem RX
+PIN_MODEM_RX = 25  # ESP32 RX -> Modem TX
+
+# Modem UART settings
+MODEM_UART_ID = 1
+MODEM_BAUDRATE = 115200
+MODEM_UART_TIMEOUT_MS = 2000
+MODEM_PWRKEY_PULSE_MS = 1500
+MODEM_BOOT_WAIT_SEC = 6
+
+# WiFi Settings
+WIFI_SSID = ""
+WIFI_PASSWORD = ""
+WIFI_CONNECT_TIMEOUT_SEC = 20
+
+# Snippen Booking API Settings
+SNIPPEN_API_BASE_URL = "https://vestreholmensameie.no/wp-json/snippen/v1"
+SNIPPEN_API_TOKEN = ""
+
+# Polling & Operation Loop Timers
+OUTBOX_POLL_INTERVAL_SEC = 5
+LONG_POLL_TIMEOUT_SEC = 25
+INBOX_CHECK_INTERVAL_SEC = 5
+HEARTBEAT_INTERVAL_SEC = 30
+WATCHDOG_TIMEOUT_SEC = 60
+
+
+def get_default_config() -> dict:
+    """Return dictionary of default system configuration."""
+    return {
+        "pin_modem_power": PIN_MODEM_POWER,
+        "pin_modem_reset": PIN_MODEM_RESET,
+        "pin_modem_pwrkey": PIN_MODEM_PWRKEY,
+        "pin_modem_tx": PIN_MODEM_TX,
+        "pin_modem_rx": PIN_MODEM_RX,
+        "modem_uart_id": MODEM_UART_ID,
+        "modem_baudrate": MODEM_BAUDRATE,
+        "modem_uart_timeout_ms": MODEM_UART_TIMEOUT_MS,
+        "modem_pwrkey_pulse_ms": MODEM_PWRKEY_PULSE_MS,
+        "modem_boot_wait_sec": MODEM_BOOT_WAIT_SEC,
+        "wifi_ssid": WIFI_SSID,
+        "wifi_password": WIFI_PASSWORD,
+        "wifi_connect_timeout_sec": WIFI_CONNECT_TIMEOUT_SEC,
+        "snippen_api_base_url": SNIPPEN_API_BASE_URL,
+        "snippen_api_token": SNIPPEN_API_TOKEN,
+        "outbox_poll_interval_sec": OUTBOX_POLL_INTERVAL_SEC,
+        "long_poll_timeout_sec": LONG_POLL_TIMEOUT_SEC,
+        "inbox_check_interval_sec": INBOX_CHECK_INTERVAL_SEC,
+        "heartbeat_interval_sec": HEARTBEAT_INTERVAL_SEC,
+        "watchdog_timeout_sec": WATCHDOG_TIMEOUT_SEC,
+    }
+
+
+def load_config(config_path: str = "config.json") -> dict:
+    """Load configuration with overrides from config.json or config_local.py if available."""
+    cfg = get_default_config()
+
+    # Attempt 1: Load overrides from local Python config file if present
+    try:
+        import config_local  # type: ignore[import-not-found]
+
+        for key in cfg:
+            upper_key = key.upper()
+            if hasattr(config_local, upper_key):
+                cfg[key] = getattr(config_local, upper_key)
+            elif hasattr(config_local, key):
+                cfg[key] = getattr(config_local, key)
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    # Attempt 2: Load overrides from config.json if present
+    try:
+        with open(config_path, "r") as f:
+            overrides = json.load(f)
+            if isinstance(overrides, dict):
+                for k, v in overrides.items():
+                    key_lower = k.lower()
+                    if key_lower in cfg:
+                        cfg[key_lower] = v
+                    elif k in cfg:
+                        cfg[k] = v
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    return cfg

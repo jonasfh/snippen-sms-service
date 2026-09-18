@@ -236,6 +236,9 @@ ruff check .
 
 # Run project formatter
 python scripts/format.py
+
+# Deploy MicroPython firmware to Lilygo ESP32
+python scripts/deploy_firmware.py deploy
 ```
 
 For detailed development environment instructions, see the [Developer Guide](file:///workspaces/snippen-sms-service/DEV_README.md).
