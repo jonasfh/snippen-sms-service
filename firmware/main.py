@@ -16,12 +16,19 @@ except ImportError:
         return {}
 
 
+try:
+    from modem import ModemDriver
+except ImportError:
+    ModemDriver = None
+
+
 class GatewayApp:
     """MicroPython SMS Gateway coordinator."""
 
     def __init__(self, config: dict | None = None, uart: object | None = None) -> None:
         self.config = config if config is not None else load_config()
         self.uart = uart
+        self.modem = None
         self.running = False
         self.cycle_count = 0
         self.last_heartbeat = 0
@@ -46,12 +53,30 @@ class GatewayApp:
         else:
             print("[main] Modem UART connection verified.")
 
+        if ModemDriver is not None and self.uart is not None:
+            self.modem = ModemDriver(uart=self.uart, config=self.config)
+            if not self.modem.init_modem():
+                print("[main] Warning: Modem AT initialization reported errors.")
+            else:
+                print("[main] Modem AT engine initialized successfully.")
+
         return True
 
     def process_inbox(self) -> int:
-        """Poll incoming SMS from SIM card (stub hook for Issue #50)."""
-        # Detailed AT command parsing implemented in Issue #50
-        return 0
+        """Poll incoming SMS from SIM card (Issue #50)."""
+        if self.modem is None:
+            return 0
+        try:
+            auto_delete = self.config.get("sms_auto_delete", True)
+            messages = self.modem.read_inbound_sms(delete_after_read=auto_delete)
+            if messages:
+                print(f"[main] Received {len(messages)} inbound SMS from SIM storage.")
+                for msg in messages:
+                    print(f"[main] Inbound SMS from {msg.get('sender')}: {msg.get('body')}")
+            return len(messages)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main] Error processing inbox: {exc}")
+            return 0
 
     def poll_outbox(self) -> int:
         """Poll outbound SMS from Snippen Booking API (stub hook for Issue #52)."""
@@ -61,6 +86,16 @@ class GatewayApp:
     def heartbeat(self) -> None:
         """Log diagnostic status and perform health maintenance."""
         print(f"[main] Heartbeat tick - cycle #{self.cycle_count}")
+        if self.modem is not None:
+            try:
+                sig = self.modem.get_signal_quality()
+                if sig and sig.get("dbm") is not None:
+                    print(f"[main] Cellular signal: RSSI {sig['rssi']} ({sig['dbm']} dBm)")
+                reg = self.modem.get_network_registration()
+                if reg:
+                    print(f"[main] Cellular network: {reg.get('description', 'Unknown')}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Modem status check error during heartbeat: {exc}")
 
     def tick(self) -> None:
         """Execute one iteration of the gateway event loop."""

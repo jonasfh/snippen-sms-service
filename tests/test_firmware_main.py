@@ -91,3 +91,30 @@ def test_gateway_app_stop(mpy_env: MicroPythonEnvironment) -> None:
     app.running = True
     app.stop()
     assert app.running is False
+
+
+def test_gateway_app_process_inbox_with_modem(mpy_env: MicroPythonEnvironment) -> None:
+    import main
+
+    mock_uart = MockUART(1)
+    mock_uart.auto_responses = {
+        "AT+CMGF=1": b"OK\r\n",
+        'AT+CSCS="GSM"': b"OK\r\n",
+        'AT+CMGL="ALL"': (
+            b'+CMGL: 1,"REC UNREAD","+4799999999",,"26/09/19,17:05:00+08"\r\n'
+            b"Hei fra test!\r\nOK\r\n"
+        ),
+        "AT+CMGD=1": b"OK\r\n",
+        "AT+CSQ": b"+CSQ: 20,0\r\nOK\r\n",
+        "AT+CREG?": b"+CREG: 0,1\r\nOK\r\n",
+    }
+
+    app = main.GatewayApp(uart=mock_uart)
+    app.setup()
+    assert app.modem is not None
+
+    count = app.process_inbox()
+    assert count == 1
+
+    # Heartbeat check
+    app.heartbeat()

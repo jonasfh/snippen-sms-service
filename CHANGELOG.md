@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-09-19
+
+### Added
+- Implemented MicroPython cellular modem engine driver `firmware/modem.py` for SimCom A7670E over UART1 on Lilygo T-Call (`#50`):
+  - AT command engine with non-blocking line reading, automatic echo suppression (`ATE0`), text mode configuration (`AT+CMGF=1`), and GSM charset selection (`AT+CSCS="GSM"`).
+  - Outbound SMS delivery with phone number normalization, `>` prompt synchronization, Ctrl+Z transmission, and `+CMGS` message reference tracking.
+  - Inbound SMS retrieval draining unread messages, parsing multi-line bodies, sender numbers, and timestamps.
+  - Automatic SIM memory management deleting read messages (`AT+CMGD`) to prevent SIM storage overflow.
+  - Diagnostic queries for signal quality (`AT+CSQ` with dBm calculation) and network registration (`AT+CREG?`).
+- Added on-device modem diagnostic test `firmware/test_modem.py` and host-side runner `scripts/test_modem_live.py` (`#50`).
+- Integrated `ModemDriver` into `firmware/main.py` (`GatewayApp`) for SIM inbox processing and heartbeat cellular status telemetry (`#50`).
+- Enhanced deployment tool `scripts/deploy_firmware.py` to deploy `modem.py` (`#50`).
+- Enhanced `MockUART` with scripted AT responses and automated response simulation in `tests/mocks/micropython_mocks.py` (`#50`).
+- Added unit tests for modem driver and live diagnostic runner in `tests/test_firmware_modem.py` and `tests/test_diagnostic_scripts.py` (`#50`).
+
 ## [0.17.1] - 2026-09-18
 
 ### Added

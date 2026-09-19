@@ -275,7 +275,11 @@ firmware/
 ├── boot.py            # Maskinvareinit, modem power rail (GPIO 12), reset (GPIO 5), PWRKEY-puls (GPIO 4), UART1
 ├── config.py          # Systemoppsett, pinouts, tidsavbrudd og API-konfigurasjon
 ├── config.example.py  # Mal for lokale overstyringer (WiFi-passord og API-nøkkel)
-└── main.py            # GatewayApp-hovedløkke: WiFi-status, outbox-polling, SMS-sjekk og heartbeat
+├── modem.py           # SimCom A7670E modemdriver: AT-motor, SMS sending/mottak, signal (CSQ), CREG og SIM-minne
+├── main.py            # GatewayApp-hovedløkke: WiFi-status, outbox-polling, SMS-sjekk og heartbeat
+├── test_api.py        # Diagnosetest for Snippen API autentisering
+├── test_modem.py      # Diagnosetest for A7670E cellular modem, dekning og SIM SMS-minne
+└── test_wifi.py       # Diagnosetest for WiFi-tilkobling
 ```
 
 ### Automatisert Deployment med `mpremote`
@@ -302,9 +306,24 @@ python scripts/deploy_firmware.py reset --hard
 python scripts/deploy_firmware.py run firmware/main.py
 ```
 
+### On-Device Diagnosetester mot Fysisk Maskinvare
+
+Når Lilygo er koblet til via USB (`/dev/ttyACM0`), kan diagnostiske tester kjøres direkte mot mikrokontrolleren og 4G-modemet:
+
+```bash
+# Test 4G-modem, AT-kommunikasjon, signalstyrke (CSQ), nettregistrering (CREG) og SIM SMS-minne:
+python scripts/test_modem_live.py
+
+# Test WiFi-tilkobling mot lokalt nettverk:
+python scripts/test_wifi.py
+
+# Test REST API-kommunikasjon mot Snippen Booking:
+python scripts/test_api_ping.py
+```
+
 ### Automatiserte Tester og Mocks
 Firmwarekoden er testet med standard `pytest` under CPython ved hjelp av mikrokontroller-mocking i `tests/mocks/micropython_mocks.py` (som mocker `machine.Pin`, `machine.UART`, `utime`, `network.WLAN` etc.):
 
 ```bash
-pytest tests/test_firmware_*.py tests/test_deploy_firmware.py -v
+pytest tests/test_firmware_*.py tests/test_diagnostic_scripts.py tests/test_deploy_firmware.py -v
 ```
