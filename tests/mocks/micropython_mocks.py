@@ -22,7 +22,12 @@ class MockPin:
         self.pin_id = pin_id
         self.mode = mode
         self.pull = pull
-        self._value = value if value is not None else 0
+        if value is not None:
+            self._value = value
+        elif pull == MockPin.PULL_UP:
+            self._value = 1
+        else:
+            self._value = 0
         self.value_history: list[int] = [self._value]
         MockPin.instances[pin_id] = self
 

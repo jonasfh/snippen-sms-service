@@ -21,23 +21,74 @@ try:
 except ImportError:
     ModemDriver = None
 
+try:
+    from button import ButtonHandler
+except ImportError:
+    ButtonHandler = None
+
 
 class GatewayApp:
     """MicroPython SMS Gateway coordinator."""
 
-    def __init__(self, config: dict | None = None, uart: object | None = None) -> None:
+    def __init__(
+        self,
+        config: dict | None = None,
+        uart: object | None = None,
+        button: object | None = None,
+    ) -> None:
         self.config = config if config is not None else load_config()
         self.uart = uart
+        self.button = button
         self.modem = None
+        self.is_provisioning_mode = False
+        self.provisioning_started_at = 0
         self.running = False
         self.cycle_count = 0
         self.last_heartbeat = 0
         self.last_inbox_check = 0
         self.last_outbox_poll = 0
 
+    def enter_provisioning_mode(self, reason: str = "manual") -> None:
+        """Switch gateway into BLE provisioning mode (Issue #59)."""
+        if self.is_provisioning_mode:
+            return
+        print(f"[main] Entering provisioning mode (reason: {reason})...")
+        self.is_provisioning_mode = True
+        self.provisioning_started_at = time.time()
+
+    def exit_provisioning_mode(self, reason: str = "manual") -> None:
+        """Exit BLE provisioning mode and resume normal gateway loop (Issue #59)."""
+        if not self.is_provisioning_mode:
+            return
+        print(f"[main] Exiting provisioning mode (reason: {reason})...")
+        self.is_provisioning_mode = False
+
+    def on_boot_long_press(self) -> None:
+        """Callback when BOOT button (GPIO 0) is held for >= 3 seconds."""
+        print("[main] BOOT button long-press detected.")
+        if self.is_provisioning_mode:
+            self.exit_provisioning_mode(reason="button_toggle")
+        else:
+            self.enter_provisioning_mode(reason="button_long_press")
+
     def setup(self) -> bool:
         """Verify hardware state and setup subsystem connections."""
         print("[main] Initializing Snippen SMS Gateway application...")
+
+        # Initialize physical BOOT button handler
+        if self.button is None and ButtonHandler is not None:
+            btn_pin = self.config.get("pin_boot_button", 0)
+            long_press_ms = self.config.get("button_long_press_ms", 3000)
+            debounce_ms = self.config.get("button_debounce_ms", 50)
+            try:
+                self.button = ButtonHandler(
+                    pin_id=btn_pin,
+                    long_press_ms=long_press_ms,
+                    debounce_ms=debounce_ms,
+                    on_long_press=self.on_boot_long_press,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Warning: Failed to initialize BOOT button on GPIO {btn_pin}: {exc}")
 
         # If UART not provided, try to obtain from boot module
         if self.uart is None:
@@ -59,6 +110,14 @@ class GatewayApp:
                 print("[main] Warning: Modem AT initialization reported errors.")
             else:
                 print("[main] Modem AT engine initialized successfully.")
+
+        # Check if device is unconfigured or if BOOT button is held at boot
+        wifi_ssid = self.config.get("wifi_ssid", "")
+        api_token = self.config.get("snippen_api_token", "")
+        if not wifi_ssid or not api_token:
+            self.enter_provisioning_mode(reason="unconfigured")
+        elif self.button is not None and self.button.is_down():
+            self.enter_provisioning_mode(reason="boot_button_pressed")
 
         return True
 
@@ -101,6 +160,17 @@ class GatewayApp:
         """Execute one iteration of the gateway event loop."""
         self.cycle_count += 1
         now = time.time()
+
+        # Poll physical button state
+        if self.button is not None:
+            self.button.poll()
+
+        # Handle provisioning mode lifecycle
+        if self.is_provisioning_mode:
+            timeout_sec = self.config.get("provisioning_timeout_sec", 300)
+            if now - self.provisioning_started_at >= timeout_sec:
+                self.exit_provisioning_mode(reason="timeout")
+            return
 
         # Check inbox interval
         inbox_interval = self.config.get("inbox_check_interval_sec", 5)

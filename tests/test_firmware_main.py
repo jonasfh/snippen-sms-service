@@ -118,3 +118,124 @@ def test_gateway_app_process_inbox_with_modem(mpy_env: MicroPythonEnvironment) -
 
     # Heartbeat check
     app.heartbeat()
+
+
+def test_gateway_app_auto_enters_provisioning_when_unconfigured(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import main
+
+    # Missing wifi_ssid and token
+    app = main.GatewayApp(config={"wifi_ssid": "", "snippen_api_token": ""})
+    assert app.setup() is True
+    assert app.is_provisioning_mode is True
+
+
+def test_gateway_app_configured_starts_in_normal_mode(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import main
+
+    app = main.GatewayApp(config={"wifi_ssid": "SnippenGuest", "snippen_api_token": "secret-tok"})
+    assert app.setup() is True
+    assert app.is_provisioning_mode is False
+
+
+def test_gateway_app_enters_provisioning_when_button_held_at_boot(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import button
+    import main
+
+    from tests.mocks.micropython_mocks import MockPin
+
+    mock_pin = MockPin(pin_id=0, value=0)  # Pin 0 is held down (LOW)
+    btn = button.ButtonHandler(pin=mock_pin, active_low=True)
+
+    app = main.GatewayApp(
+        config={"wifi_ssid": "SnippenGuest", "snippen_api_token": "secret-tok"},
+        button=btn,
+    )
+    assert app.setup() is True
+    assert app.is_provisioning_mode is True
+
+
+def test_gateway_app_button_long_press_toggles_provisioning(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import main
+
+    app = main.GatewayApp(config={"wifi_ssid": "SnippenGuest", "snippen_api_token": "secret-tok"})
+    app.setup()
+    assert app.is_provisioning_mode is False
+
+    # First long press activates provisioning mode
+    app.on_boot_long_press()
+    assert app.is_provisioning_mode is True
+
+    # Second long press deactivates provisioning mode
+    app.on_boot_long_press()
+    assert app.is_provisioning_mode is False
+
+
+def test_gateway_app_provisioning_timeout(mpy_env: MicroPythonEnvironment) -> None:
+    import main
+
+    app = main.GatewayApp(
+        config={
+            "wifi_ssid": "SnippenGuest",
+            "snippen_api_token": "secret-tok",
+            "provisioning_timeout_sec": 300,
+        }
+    )
+    app.setup()
+    app.enter_provisioning_mode()
+    assert app.is_provisioning_mode is True
+
+    # Fast-forward time past 300 seconds
+    mpy_env.mock_time.sleep(301)
+    app.tick()
+    assert app.is_provisioning_mode is False
+
+
+def test_gateway_app_suspends_polling_during_provisioning(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import main
+
+    inbox_polled = False
+    outbox_polled = False
+
+    class TestApp(main.GatewayApp):
+        def process_inbox(self) -> int:
+            nonlocal inbox_polled
+            inbox_polled = True
+            return 0
+
+        def poll_outbox(self) -> int:
+            nonlocal outbox_polled
+            outbox_polled = True
+            return 0
+
+    app = TestApp(
+        config={
+            "wifi_ssid": "SnippenGuest",
+            "snippen_api_token": "secret-tok",
+            "inbox_check_interval_sec": 1,
+            "outbox_poll_interval_sec": 1,
+            "provisioning_timeout_sec": 300,
+        }
+    )
+    app.setup()
+    app.enter_provisioning_mode()
+
+    # Tick during provisioning mode
+    app.tick()
+    assert inbox_polled is False
+    assert outbox_polled is False
+
+    # Exit provisioning mode and tick again
+    app.exit_provisioning_mode()
+    app.tick()
+    assert inbox_polled is True
+    assert outbox_polled is True

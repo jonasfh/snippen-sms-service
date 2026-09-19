@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-09-19
+
+### Added
+- Implemented MicroPython physical button handler `firmware/button.py` with input debouncing and configurable long-press detection (`#59`):
+  - Configured BOOT button (`GPIO 0`) as active-low input with internal pull-up.
+  - Implemented debouncing filtering transient contact bounce glitches.
+  - Supported long-press threshold detection (default 3000 ms) and short-press event detection.
+  - Added physical button held-at-boot detection (`is_down()`).
+- Integrated provisioning state machine into `firmware/main.py` (`GatewayApp`) (`#59`):
+  - Automatically enter provisioning mode on cold boot if `wifi_ssid` or `snippen_api_token` is unconfigured.
+  - Automatically enter provisioning mode on cold boot if BOOT button is held down.
+  - Toggle provisioning mode at runtime via 3-second long-press on BOOT button.
+  - Added configurable provisioning timeout (default 300 seconds) returning device to normal gateway operation.
+  - Suspended routine inbox and outbox polling loops while provisioning mode is active.
+- Added button pinouts, debouncing, and provisioning parameters to `firmware/config.py` (`#59`).
+- Added `button.py` to deployment tool `scripts/deploy_firmware.py` (`#59`).
+- Updated `MockPin` in `tests/mocks/micropython_mocks.py` to default pull-up input pins to logic level 1 (`#59`).
+- Added comprehensive unit tests in `tests/test_firmware_button.py` and expanded `tests/test_firmware_main.py` (`#59`).
+
 ## [0.18.0] - 2026-09-19
 
 ### Added

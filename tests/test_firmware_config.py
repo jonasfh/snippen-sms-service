@@ -36,6 +36,10 @@ def test_get_default_config() -> None:
     assert cfg["modem_sms_timeout_ms"] == 15000
     assert cfg["modem_sim_pin"] == ""
     assert cfg["sms_auto_delete"] is True
+    assert cfg["pin_boot_button"] == 0
+    assert cfg["button_long_press_ms"] == 3000
+    assert cfg["button_debounce_ms"] == 50
+    assert cfg["provisioning_timeout_sec"] == 300
 
 
 def test_load_config_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
