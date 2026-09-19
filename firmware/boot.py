@@ -105,6 +105,41 @@ def init_uart(cfg: dict | None = None) -> UART:
     return modem_uart
 
 
+def power_off_modem(cfg: dict | None = None) -> None:
+    """Power down SimCom A7670E modem by disabling power rail and asserting reset."""
+    global pin_pwr, pin_rst, pin_pwrkey
+    if cfg is None:
+        cfg = load_config()
+
+    pwr_pin_id = cfg.get("pin_modem_power", 12)
+    rst_pin_id = cfg.get("pin_modem_reset", 5)
+    pwrkey_pin_id = cfg.get("pin_modem_pwrkey", 4)
+
+    if pin_pwr is None:
+        pin_pwr = Pin(pwr_pin_id, Pin.OUT)
+    if pin_rst is None:
+        pin_rst = Pin(rst_pin_id, Pin.OUT)
+    if pin_pwrkey is None:
+        pin_pwrkey = Pin(pwrkey_pin_id, Pin.OUT)
+
+    print("[boot] Powering down modem (disabling power rail and asserting reset)...")
+    pin_pwrkey.value(0)
+    pin_rst.value(0)
+    pin_pwr.value(0)
+    time.sleep_ms(500)
+
+
+def power_cycle_modem(cfg: dict | None = None) -> UART:
+    """Perform full hardware power-cycle recovery and re-initialize UART."""
+    if cfg is None:
+        cfg = load_config()
+    print("[boot] Initiating modem hardware power-cycle recovery...")
+    power_off_modem(cfg)
+    time.sleep_ms(1000)
+    power_on_modem(cfg)
+    return init_uart(cfg)
+
+
 def boot() -> bool:
     """Run full hardware boot sequence."""
     print("[boot] Lilygo T-Call A7670E starting cold boot sequence...")

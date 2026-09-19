@@ -87,11 +87,16 @@ def deploy_firmware(
         "main.py",
         "config.py",
         "modem.py",
+        "sms_encoding.py",
+        "snippen_api.py",
         "button.py",
         "ble_config.py",
         "wifi.py",
         "test_ble_provisioning.py",
         "test_button.py",
+        "test_modem.py",
+        "test_api.py",
+        "test_wifi.py",
     ]
 
     if include_config:
@@ -130,11 +135,15 @@ def deploy_firmware(
     print("[deploy] All firmware files copied successfully.")
 
     if do_reset:
-        print("[deploy] Performing soft reset on device...")
-        reset_cmd = [*build_mpremote_base_cmd(port), "soft-reset"]
-        ret = run_mpremote_command(reset_cmd, dry_run=dry_run)
-        if ret != 0:
-            return ret
+        if dry_run:
+            print(f"[dry-run] Would perform hardware reset on {port}...")
+        else:
+            print("[deploy] Performing hardware reset on device...")
+            ret = hardware_reset_device(port)
+            if ret != 0:
+                print("[deploy] Warning: Hardware reset failed, attempting soft-reset fallback...")
+                reset_cmd = [*build_mpremote_base_cmd(port), "soft-reset"]
+                run_mpremote_command(reset_cmd, dry_run=dry_run)
 
         if follow:
             return monitor_device(port=port, dry_run=dry_run)
