@@ -17,7 +17,14 @@ Dette kopierer de nyeste firmware-modulene over og starter den interaktive BLE-s
 ### Alternativ B: Teste normal gateway-kjøring
 Hvis hele firmwaren er deployet (`python scripts/deploy_firmware.py deploy`):
 1. Hold inne **`BOOT`-knappen (GPIO 0)** på Lilygo-kortet i **3 sekunder**.
-2. Terminalen/LED indikerer at enheten har gått inn i provisioning-modus og har startet BLE-annonsering.
+2. Terminalen (serieporten) logger at enheten har gått inn i provisioning-modus og har startet BLE-annonsering.
+
+> [!NOTE]
+> **Maskinvare-LEDer på Lilygo T-Call A7670E:**
+> - **Grønn LED på undersiden (fast):** Strøm- og batterikretsindikator.
+> - **LED ved BOOT_7076 (fast):** Strømskinne til 4G LTE-modemet (GPIO 12).
+> - **LED ved RST (blinker):** Modemet sitt **NETLIGHT**-lys (viser mobilnettstatus fra SimCom-modemet).
+> Det er ingen egen programvare-LED på kortet for BLE; følg med i serieport/terminal eller sjekk nRF Connect.
 
 ---
 

@@ -4,8 +4,6 @@ Implements BLE peripheral advertising and GATT service/characteristics for wirel
 configuration from a companion Android application.
 """
 
-from __future__ import annotations
-
 try:
     import ubluetooth as bluetooth  # type: ignore[import-not-found]
 except ImportError:
@@ -49,8 +47,13 @@ def build_advertising_payload(
     name: str | None = None,
     service_uuid: object | None = None,
     appearance: int = 0,
+    include_flags: bool = True,
 ) -> bytearray:
-    """Build standard BLE GAP advertising payload bytearray."""
+    """Build standard BLE GAP advertising payload bytearray.
+
+    In BLE legacy advertising, advertising packets and scan response packets
+    are strictly capped at 31 bytes each.
+    """
     payload = bytearray()
 
     def _append(ad_type: int, data: bytes | bytearray) -> None:
@@ -58,8 +61,9 @@ def build_advertising_payload(
         payload.append(ad_type)
         payload.extend(data)
 
-    # Flags: 0x06 = General Discoverable Mode + BR/EDR Not Supported
-    _append(0x01, b"\x06")
+    if include_flags:
+        # Flags: 0x06 = General Discoverable Mode + BR/EDR Not Supported
+        _append(0x01, b"\x06")
 
     if appearance:
         _append(0x19, bytes([appearance & 0xFF, (appearance >> 8) & 0xFF]))
@@ -142,6 +146,16 @@ class BLEConfigServer:
         self._services_registered = True
         return True
 
+    def _start_advertising(self) -> None:
+        """Start or resume BLE GAP advertising with split payloads to respect 31-byte limit."""
+        ble = self._get_ble()
+        if ble is None:
+            return
+        service_uuid = bluetooth.UUID(SERVICE_UUID_STR)
+        adv_payload = build_advertising_payload(name=self.device_name, include_flags=True)
+        resp_payload = build_advertising_payload(service_uuid=service_uuid, include_flags=False)
+        ble.gap_advertise(250000, adv_data=adv_payload, resp_data=resp_payload, connectable=True)
+
     def start(self) -> bool:
         """Activate BLE, register services, and begin advertising."""
         ble = self._get_ble()
@@ -173,10 +187,8 @@ class BLEConfigServer:
         self.update_config_characteristic(self.config)
         self.notify_status({"status": "ready", "device": self.device_name})
 
-        # Build advertising payload and start advertising
-        service_uuid = bluetooth.UUID(SERVICE_UUID_STR)
-        adv_payload = build_advertising_payload(name=self.device_name, service_uuid=service_uuid)
-        ble.gap_advertise(250000, adv_data=adv_payload, connectable=True)
+        # Begin advertising with split payloads
+        self._start_advertising()
 
         self.is_running = True
         self.last_activity_time = time.time()
@@ -205,10 +217,11 @@ class BLEConfigServer:
         print("[ble] BLE server stopped.")
 
     def _irq_handler(self, event: int, data: tuple) -> None:
+        """Handle MicroPython BLE IRQ callback events."""
         self.last_activity_time = time.time()
 
         if event == _IRQ_CENTRAL_CONNECT:
-            conn_handle = data[0]
+            conn_handle, _addr_type, _addr = data[0], data[1], data[2]
             self.conn_handle = conn_handle
             print(f"[ble] Central connected (handle: {conn_handle})")
             self.notify_status({"status": "connected", "conn_handle": conn_handle})
@@ -221,11 +234,7 @@ class BLEConfigServer:
 
             # Resume advertising if still running
             if self.is_running and self.ble is not None:
-                service_uuid = bluetooth.UUID(SERVICE_UUID_STR)
-                adv_payload = build_advertising_payload(
-                    name=self.device_name, service_uuid=service_uuid
-                )
-                self.ble.gap_advertise(250000, adv_data=adv_payload, connectable=True)
+                self._start_advertising()
 
         elif event == _IRQ_GATTS_WRITE:
             conn_handle, value_handle = data[0], data[1]

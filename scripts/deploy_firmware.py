@@ -83,6 +83,7 @@ def deploy_firmware(
         "button.py",
         "ble_config.py",
         "wifi.py",
+        "test_ble_provisioning.py",
     ]
 
     if include_config:
