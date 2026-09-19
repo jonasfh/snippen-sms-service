@@ -168,12 +168,29 @@ class MockTime:
 
 
 class MockWLAN:
-    def __init__(self, interface_id: int) -> None:
+    instances: ClassVar[dict[int, MockWLAN]] = {}
+
+    def __new__(cls, interface_id: int) -> Self:
+        if interface_id not in cls.instances:
+            inst = super().__new__(cls)
+            inst._init_wlan(interface_id)
+            cls.instances[interface_id] = inst
+        return cls.instances[interface_id]
+
+    def _init_wlan(self, interface_id: int) -> None:
         self.interface_id = interface_id
         self._is_active = False
         self._is_connected = False
         self._connected_ssid: str | None = None
         self._ip_config = ("192.168.1.100", "255.255.255.0", "192.168.1.1", "8.8.8.8")
+        self._scan_results: list[tuple] | None = None
+
+    def __init__(self, interface_id: int) -> None:
+        pass
+
+    @classmethod
+    def reset_registry(cls) -> None:
+        cls.instances.clear()
 
     def active(self, is_active: bool | None = None) -> bool:
         if is_active is not None:
@@ -200,6 +217,14 @@ class MockWLAN:
 
     def status(self) -> int:
         return 3 if self._is_connected else 0
+
+    def scan(self) -> list[tuple]:
+        if hasattr(self, "_scan_results") and self._scan_results is not None:
+            return self._scan_results
+        return [
+            (b"SnippenGuest", b"\x11\x22\x33\x44\x55\x66", 1, -55, 3, 0),
+            (b"OtherAP", b"\xaa\xbb\xcc\xdd\xee\xff", 6, -78, 4, 0),
+        ]
 
 
 class MockUUID:
@@ -376,6 +401,7 @@ class MicroPythonEnvironment:
     def install(self) -> None:
         MockPin.reset_registry()
         MockUART.reset_registry()
+        MockWLAN.reset_registry()
         MockBLE.reset_instance()
         self.mock_time.reset()
         self.reset_called = False
@@ -428,4 +454,5 @@ class MicroPythonEnvironment:
         sys.modules.pop("utime", None)
         MockPin.reset_registry()
         MockUART.reset_registry()
+        MockWLAN.reset_registry()
         MockBLE.reset_instance()

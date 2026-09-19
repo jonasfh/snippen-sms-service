@@ -127,3 +127,34 @@ def load_config(config_path: str = "config.json") -> dict:
         pass
 
     return cfg
+
+
+def save_config(updates: dict, config_path: str = "config.json") -> bool:
+    """Safely persist configuration overrides to JSON file on device flash (Issue #61)."""
+    valid_keys = get_default_config()
+    existing: dict = {}
+
+    # Load existing overrides if present
+    try:
+        with open(config_path, "r") as f:
+            content = json.load(f)
+            if isinstance(content, dict):
+                existing = content
+    except Exception:  # noqa: BLE001
+        existing = {}
+
+    # Merge verified updates
+    for k, v in updates.items():
+        k_lower = k.lower()
+        if k_lower in valid_keys:
+            existing[k_lower] = v
+
+    # Write back to config file
+    try:
+        with open(config_path, "w") as f:
+            json.dump(existing, f)
+        print(f"[config] Saved configuration overrides to {config_path}")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[config] Error saving configuration to {config_path}: {exc}")
+        return False

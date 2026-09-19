@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-09-19
+
+### Added
+- Implemented MicroPython WiFi scanner, connection testing, and STA management module `firmware/wifi.py` (`#61`):
+  - `scan_networks()`: Scans nearby 2.4 GHz WiFi networks using `network.WLAN(network.STA_IF).scan()`, deduplicating SSIDs and sorting by signal strength (RSSI).
+  - `test_connection()`: Connects temporarily to verify credentials without altering permanent state, returning assigned IP or detailed error code.
+  - `connect_wifi()`: Connection manager with timeout and status reporting for operational gateway loops.
+- Implemented persistent JSON configuration storage in `firmware/config.py` (`save_config()`) allowing overrides written via BLE or local files to be saved to flash (`#61`).
+- Connected BLE provisioning interface in `firmware/main.py` (`GatewayApp`) (`#61`):
+  - `SCAN_WIFI` command executes on-device WiFi scan and returns network list over BLE.
+  - `TEST_WIFI` command verifies credentials and reports IP address or error over BLE.
+  - `APPLY_AND_EXIT` and config writes persist settings to `config.json` before returning to normal loop.
+  - Streamed real-time telemetry (WiFi status, IP, 4G cellular RSSI/dBm, network registration) via BLE Status characteristic.
+- Added interactive on-device manual test script `firmware/test_ble_provisioning.py` and host-side launcher `scripts/test_ble_live.py` for testing with generic BLE tools (`#61`).
+- Added comprehensive manual test guide `docs/BLE_MANUAL_TESTING.md` for testing with nRF Connect for Mobile (`#61`).
+- Added `wifi.py` to deployment tool `scripts/deploy_firmware.py` (`#61`).
+- Added comprehensive unit tests in `tests/test_firmware_provisioning.py` and expanded `tests/test_diagnostic_scripts.py` (`#61`).
+
 ## [0.20.0] - 2026-09-19
 
 ### Added

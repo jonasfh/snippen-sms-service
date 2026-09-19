@@ -279,10 +279,14 @@ firmware/
 ├── config.example.py  # Mal for lokale overstyringer (WiFi-passord og API-nøkkel)
 ├── modem.py           # SimCom A7670E modemdriver: AT-motor, SMS sending/mottak, signal (CSQ), CREG og SIM-minne
 ├── main.py            # GatewayApp-hovedløkke: WiFi-status, outbox-polling, SMS-sjekk og heartbeat
+├── wifi.py            # WiFi scanning, tilkoblingsverifisering og nettverkshåndtering
 ├── test_api.py        # Diagnosetest for Snippen API autentisering
+├── test_ble_provisioning.py # Interaktiv diagnosetest for BLE provisioning
 ├── test_modem.py      # Diagnosetest for A7670E cellular modem, dekning og SIM SMS-minne
 └── test_wifi.py       # Diagnosetest for WiFi-tilkobling
 ```
+
+Se også **[docs/BLE_MANUAL_TESTING.md](file:///workspaces/snippen-sms-service/docs/BLE_MANUAL_TESTING.md)** for en komplett steg-for-steg guide til manuell testing via mobilapper som nRF Connect.
 
 ### Automatisert Deployment med `mpremote`
 Skriptet `scripts/deploy_firmware.py` automatiserer overføring og administrasjon via `mpremote`:

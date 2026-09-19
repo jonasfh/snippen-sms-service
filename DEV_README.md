@@ -12,6 +12,7 @@ snippen-sms-service/
 ├── .agents/                  # Agent guidelines (Architecture, Testing, common-agent-instructions submodule)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
+│   ├── BLE_MANUAL_TESTING.md # Manual testing guide for BLE provisioning via nRF Connect
 │   ├── README_LILYGO.md      # Standalone Lilygo T-Call A7670E guide & pinout
 │   ├── architecture.md       # High-level architecture, provider abstraction & flows
 │   └── snippen_booking_api_spec.md # WordPress REST API spec & implementation tasks
@@ -23,13 +24,16 @@ snippen-sms-service/
 │   ├── config.example.py     # Local config overrides template
 │   ├── modem.py              # SimCom A7670E modem driver (AT engine, SMS, SIM memory)
 │   ├── main.py               # Main application loop coordinating WiFi, API & SMS
+│   ├── wifi.py               # WiFi scanning, connection verification & STA manager
 │   ├── test_api.py           # On-device Snippen API ping test
+│   ├── test_ble_provisioning.py # On-device interactive manual test for BLE provisioning
 │   ├── test_modem.py         # On-device cellular modem and SIM memory diagnostic test
 │   └── test_wifi.py          # On-device WiFi connection test
 ├── scripts/                  # Development & formatting utilities
 │   ├── deploy_firmware.py    # Automated firmware deployment via mpremote
 │   ├── format.py             # Whitespace & file formatting tool
 │   ├── test_api_ping.py      # Host runner for API authentication ping
+│   ├── test_ble_live.py      # Host runner for interactive on-device BLE provisioning test
 │   ├── test_modem_live.py    # Host runner for live modem & SIM diagnostics
 │   ├── test_wifi.py          # Host runner for on-device WiFi testing
 │   └── validate_pr.py        # PR SemVer & changelog validation tool

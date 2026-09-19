@@ -9,11 +9,14 @@ except ImportError:
     import time
 
 try:
-    from config import load_config
+    from config import load_config, save_config
 except ImportError:
 
     def load_config():  # type: ignore[misc]
         return {}
+
+    def save_config(updates, config_path="config.json"):  # type: ignore[misc]
+        return True
 
 
 try:
@@ -30,6 +33,11 @@ try:
     from ble_config import BLEConfigServer
 except ImportError:
     BLEConfigServer = None
+
+try:
+    import wifi
+except ImportError:
+    wifi = None
 
 
 class GatewayApp:
@@ -76,17 +84,76 @@ class GatewayApp:
             self.ble_server.stop()
 
     def on_ble_config_received(self, new_config: dict) -> None:
-        """Callback when companion app writes new configuration parameters (Issue #60)."""
+        """Callback when companion app writes new configuration parameters (Issue #60, #61)."""
         print(f"[main] Configuration received via BLE: {list(new_config.keys())}")
         self.config.update(new_config)
+        save_config(new_config)
 
     def on_ble_command(self, cmd: str, payload: dict) -> dict:
-        """Callback when companion app sends a remote control command (Issue #60)."""
+        """Callback when companion app sends a remote control command (Issue #60, #61)."""
         print(f"[main] Command received via BLE: {cmd}")
-        if cmd == "APPLY_AND_EXIT":
-            self.exit_provisioning_mode(reason="command")
-            return {"cmd": cmd, "status": "ok", "message": "Exited provisioning mode"}
+        if cmd == "SCAN_WIFI":
+            if wifi is not None:
+                networks = wifi.scan_networks()
+                return {"cmd": "SCAN_WIFI", "status": "ok", "networks": networks}
+            return {"cmd": "SCAN_WIFI", "status": "error", "message": "WiFi module unavailable"}
+
+        if cmd == "TEST_WIFI":
+            ssid = payload.get("wifi_ssid") or self.config.get("wifi_ssid", "")
+            password = payload.get("wifi_password") or self.config.get("wifi_password", "")
+            if wifi is not None:
+                res = wifi.test_connection(ssid, password)
+                return {"cmd": "TEST_WIFI", **res}
+            return {"cmd": "TEST_WIFI", "status": "error", "message": "WiFi module unavailable"}
+
+        if cmd in ("APPLY_AND_EXIT", "SAVE_CONFIG"):
+            save_config(self.config)
+            if cmd == "APPLY_AND_EXIT":
+                self.exit_provisioning_mode(reason="command")
+                return {
+                    "cmd": cmd,
+                    "status": "ok",
+                    "message": "Saved configuration and exited provisioning mode",
+                }
+            return {"cmd": cmd, "status": "ok", "message": "Configuration saved to flash"}
+
+        if cmd == "GET_STATUS":
+            return {"cmd": cmd, "status": "ok", "telemetry": self.get_telemetry_status()}
+
         return {"cmd": cmd, "status": "ok"}
+
+    def get_telemetry_status(self) -> dict:
+        """Compile real-time operational status for BLE telemetry reporting (Issue #61)."""
+        status: dict = {
+            "status": "provisioning" if self.is_provisioning_mode else "running",
+            "cycle_count": self.cycle_count,
+            "wifi_ssid": self.config.get("wifi_ssid", ""),
+        }
+        try:
+            import network
+
+            wlan = network.WLAN(network.STA_IF)
+            status["wifi_connected"] = wlan.isconnected()
+            if wlan.isconnected():
+                ip, _mask, gw, _dns = wlan.ifconfig()
+                status["ip"] = ip
+                status["gateway"] = gw
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+        if self.modem is not None:
+            try:
+                sig = self.modem.get_signal_quality()
+                if sig:
+                    status["cellular_rssi"] = sig.get("rssi")
+                    status["cellular_dbm"] = sig.get("dbm")
+                reg = self.modem.get_network_registration()
+                if reg:
+                    status["cellular_net"] = reg.get("description", "Unknown")
+            except Exception:  # noqa: BLE001, S110
+                pass
+
+        return status
 
     def on_boot_long_press(self) -> None:
         """Callback when BOOT button (GPIO 0) is held for >= 3 seconds."""
@@ -208,6 +275,8 @@ class GatewayApp:
         if self.is_provisioning_mode:
             if self.ble_server is not None:
                 self.ble_server.poll(now)
+                if self.ble_server.conn_handle is not None and (self.cycle_count % 5 == 0):
+                    self.ble_server.notify_status(self.get_telemetry_status())
             timeout_sec = self.config.get("provisioning_timeout_sec", 300)
             if now - self.provisioning_started_at >= timeout_sec:
                 self.exit_provisioning_mode(reason="timeout")
