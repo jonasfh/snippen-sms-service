@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <!-- Background Card -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="#38bdf8" stroke-width="4" opacity="0.25" />
+
+  <!-- Message Bubble Base -->
+  <path d="M128 144 h256 a48 48 0 0 1 48 48 v144 a48 48 0 0 1 -48 48 h-80 l-64 48 v-48 h-112 a48 48 0 0 1 -48 -48 v-144 a48 48 0 0 1 48 -48 z" fill="url(#accentGrad)" />
+
+  <!-- Radio / Signal Waves & Bluetooth runes -->
+  <circle cx="256" cy="256" r="32" fill="#ffffff" />
+  <path d="M216 216 a56 56 0 0 1 80 0" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" />
+  <path d="M188 188 a96 96 0 0 1 136 0" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" />
+  <path d="M256 224 v64 m-16 -48 l32 32 m0 -32 l-32 32" fill="none" stroke="#0f172a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

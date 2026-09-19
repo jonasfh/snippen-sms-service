@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-09-19
+
+### Added
+- Implemented mobile-first Web Bluetooth configuration UI and PWA manifest (`#72`):
+  - `tools/web-config/index.html`: Responsive, touch-friendly interface for BLE gateway configuration and diagnostics.
+  - `tools/web-config/css/styles.css`: Dark mode design system with Inter typography, card micro-interactions, signal strength bars, and loading states.
+  - `tools/web-config/js/app.js`: Application controller managing connection, WiFi scanning, connection verification, token masking, and live telemetry updates.
+  - Built-in **Simulator Mode** toggle allowing full UI testing and demonstration in any browser without Bluetooth hardware.
+  - PWA support with `manifest.json`, offline caching service worker `sw.js`, and SVG icon asset `assets/icon.svg` allowing "Add to Home Screen" on mobile devices.
+- Updated agent instructions in `AGENTS.md` to clarify that running full Python test suites is not required when iteratively developing frontend/web assets in `tools/web-config/`.
+
 ## [0.23.0] - 2026-09-19
 
 ### Added
