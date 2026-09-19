@@ -12,6 +12,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import test_api_ping
+import test_ble_live
 import test_modem_live
 import test_wifi
 
@@ -67,4 +68,22 @@ def test_modem_find_default_port(monkeypatch: pytest.MonkeyPatch) -> None:
         test_modem_live.glob, "glob", lambda pat: ["/dev/ttyACM0"] if "ACM" in pat else []
     )
     port = test_modem_live.find_default_port()
+    assert port == "/dev/ttyACM0"
+
+
+def test_ble_script_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["test_ble_live.py", "--dry-run", "--port", "/dev/ttyACM0"],
+    )
+    ret = test_ble_live.main()
+    assert ret == 0
+
+
+def test_ble_find_default_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        test_ble_live.glob, "glob", lambda pat: ["/dev/ttyACM0"] if "ACM" in pat else []
+    )
+    port = test_ble_live.find_default_port()
     assert port == "/dev/ttyACM0"

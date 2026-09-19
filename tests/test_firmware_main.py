@@ -242,10 +242,13 @@ def test_gateway_app_suspends_polling_during_provisioning(
 
 
 def test_gateway_app_ble_server_lifecycle_and_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     mpy_env: MicroPythonEnvironment,
 ) -> None:
     import main
 
+    monkeypatch.chdir(tmp_path)
     app = main.GatewayApp(config={"wifi_ssid": "OldSSID", "snippen_api_token": "old_token"})
     app.setup()
     assert app.ble_server is not None
