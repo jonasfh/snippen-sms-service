@@ -20,6 +20,21 @@ except ImportError:
 
 
 try:
+    import gc
+except ImportError:
+    gc = None
+
+try:
+    import machine
+except ImportError:
+    machine = None
+
+try:
+    import boot
+except ImportError:
+    boot = None
+
+try:
     from modem import ModemDriver
 except ImportError:
     ModemDriver = None
@@ -39,6 +54,11 @@ try:
 except ImportError:
     wifi = None
 
+try:
+    from snippen_api import SnippenApiClient
+except ImportError:
+    SnippenApiClient = None
+
 
 class GatewayApp:
     """MicroPython SMS Gateway coordinator."""
@@ -55,6 +75,8 @@ class GatewayApp:
         self.button = button
         self.ble_server = ble_server
         self.modem = None
+        self.api_client = None
+        self.wdt = None
         self.is_provisioning_mode = False
         self.provisioning_started_at = 0
         self.running = False
@@ -62,6 +84,9 @@ class GatewayApp:
         self.last_heartbeat = 0
         self.last_inbox_check = 0
         self.last_outbox_poll = 0
+        self.last_wifi_reconnect = 0
+        self.wifi_backoff_sec = 5
+        self.consecutive_modem_failures = 0
 
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
         """Switch gateway into BLE provisioning mode (Issue #59, #60)."""
@@ -155,6 +180,12 @@ class GatewayApp:
             except Exception:  # noqa: BLE001, S110
                 pass
 
+        if gc is not None and hasattr(gc, "mem_free"):
+            try:
+                status["free_heap"] = gc.mem_free()
+            except Exception:  # noqa: BLE001, S110
+                pass
+
         return status
 
     def on_boot_long_press(self) -> None:
@@ -203,7 +234,9 @@ class GatewayApp:
             try:
                 import boot
 
-                self.uart = boot.modem_uart
+                self.uart = getattr(boot, "modem_uart", None)
+                if self.uart is None and hasattr(boot, "init_uart"):
+                    self.uart = boot.init_uart(self.config)
             except (ImportError, AttributeError):
                 pass
 
@@ -219,18 +252,40 @@ class GatewayApp:
             else:
                 print("[main] Modem AT engine initialized successfully.")
 
+        # Initialize hardware watchdog (Issue #53)
+        enable_wdt = self.config.get("enable_watchdog", True)
+        if enable_wdt and machine is not None and hasattr(machine, "WDT"):
+            wdt_timeout = self.config.get("watchdog_timeout_ms", 60000)
+            try:
+                self.wdt = machine.WDT(timeout=wdt_timeout)
+                print(f"[main] Hardware watchdog enabled ({wdt_timeout}ms timeout).")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Warning: Failed to initialize hardware watchdog: {exc}")
+
+        # Initialize Snippen REST API client (Issue #52)
+        if self.api_client is None and SnippenApiClient is not None:
+            api_url = self.config.get(
+                "snippen_api_base_url", "https://vestreholmensameie.no/wp-json/snippen/v1"
+            )
+            api_token = self.config.get("snippen_api_token", "")
+            self.api_client = SnippenApiClient(base_url=api_url, api_token=api_token)
+
         # Check if device is unconfigured or if BOOT button is held at boot
         wifi_ssid = self.config.get("wifi_ssid", "")
+        wifi_pwd = self.config.get("wifi_password", "")
         api_token = self.config.get("snippen_api_token", "")
         if not wifi_ssid or not api_token:
             self.enter_provisioning_mode(reason="unconfigured")
         elif self.button is not None and self.button.is_down():
             self.enter_provisioning_mode(reason="boot_button_pressed")
+        elif wifi_ssid and wifi is not None and not wifi.is_connected():
+            print(f"[main] Initiating WiFi connection to '{wifi_ssid}'...")
+            wifi.start_connect(wifi_ssid, wifi_pwd)
 
         return True
 
     def process_inbox(self) -> int:
-        """Poll incoming SMS from SIM card (Issue #50)."""
+        """Poll incoming SMS from SIM card and forward to Snippen Booking (Issue #50, #52)."""
         if self.modem is None:
             return 0
         try:
@@ -240,34 +295,125 @@ class GatewayApp:
                 print(f"[main] Received {len(messages)} inbound SMS from SIM storage.")
                 for msg in messages:
                     print(f"[main] Inbound SMS from {msg.get('sender')}: {msg.get('body')}")
+                if self.api_client is not None and wifi is not None and wifi.is_connected():
+                    ok = self.api_client.report_inbound_sms(messages)
+                    if ok:
+                        print(f"[main] Forwarded {len(messages)} inbound SMS to Snippen Booking.")
+                    else:
+                        print("[main] Warning: Failed to forward inbound SMS to Snippen Booking.")
             return len(messages)
         except Exception as exc:  # noqa: BLE001
             print(f"[main] Error processing inbox: {exc}")
             return 0
 
     def poll_outbox(self) -> int:
-        """Poll outbound SMS from Snippen Booking API (stub hook for Issue #52)."""
-        # HTTPS long-polling loop implemented in Issue #52
-        return 0
+        """Poll outbound SMS from Snippen Booking API and transmit over cellular modem (Issue #52)."""
+        if self.api_client is None or self.modem is None:
+            return 0
+        if wifi is not None and not wifi.is_connected():
+            return 0
+
+        try:
+            limit = self.config.get("outbox_batch_limit", 5)
+            messages = self.api_client.fetch_outbox(limit=limit)
+            if not messages:
+                return 0
+
+            print(f"[main] Fetched {len(messages)} pending outbound SMS from Snippen Booking.")
+            statuses: list[dict] = []
+            for msg in messages:
+                raw_id = msg.get("id") or msg.get("external_id")
+                msg_id = str(raw_id) if raw_id is not None else ""
+                recipient = msg.get("recipient", "")
+                body = msg.get("body", "")
+                print(f"[main] Transmitting outbound SMS #{msg_id} to {recipient}...")
+
+                success, ref_or_err = self.modem.send_sms(recipient, body)
+                if success:
+                    print(f"[main] Outbound SMS #{msg_id} delivered (ref: {ref_or_err}).")
+                    statuses.append(
+                        {
+                            "external_id": msg_id,
+                            "status": "sent",
+                            "modem_message_id": str(ref_or_err) if ref_or_err else "OK",
+                        }
+                    )
+                else:
+                    print(f"[main] Outbound SMS #{msg_id} transmission failed: {ref_or_err}")
+                    statuses.append(
+                        {
+                            "external_id": msg_id,
+                            "status": "failed",
+                            "error_message": str(ref_or_err),
+                        }
+                    )
+
+            if statuses:
+                self.api_client.report_outbox_status(statuses)
+            return len(messages)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main] Error polling outbox: {exc}")
+            return 0
 
     def heartbeat(self) -> None:
-        """Log diagnostic status and perform health maintenance."""
+        """Log diagnostic status and perform health maintenance (Issue #53)."""
         print(f"[main] Heartbeat tick - cycle #{self.cycle_count}")
+
+        # Memory garbage collection and heap telemetry
+        if gc is not None:
+            gc.collect()
+            if hasattr(gc, "mem_free"):
+                free_bytes = gc.mem_free()
+                print(f"[health] Memory: Free heap {free_bytes} bytes")
+                if free_bytes < 20480:
+                    print("[health] Warning: Free heap low (<20KB). Performing aggressive GC.")
+                    gc.collect()
+
+        # Modem health check & recovery
         if self.modem is not None:
-            try:
-                sig = self.modem.get_signal_quality()
-                if sig and sig.get("dbm") is not None:
-                    print(f"[main] Cellular signal: RSSI {sig['rssi']} ({sig['dbm']} dBm)")
-                reg = self.modem.get_network_registration()
-                if reg:
-                    print(f"[main] Cellular network: {reg.get('description', 'Unknown')}")
-            except Exception as exc:  # noqa: BLE001
-                print(f"[main] Modem status check error during heartbeat: {exc}")
+            modem_ok = self.modem.check_at(retries=2, delay_ms=300)
+            if not modem_ok:
+                self.consecutive_modem_failures += 1
+                print(
+                    f"[health] Warning: Modem AT ping failed (consecutive failures: {self.consecutive_modem_failures})."
+                )
+                if self.consecutive_modem_failures >= 3:
+                    print(
+                        "[health] Modem unresponsive for 3 consecutive checks. Initiating hardware power-cycle..."
+                    )
+                    if boot is not None and hasattr(boot, "power_cycle_modem"):
+                        try:
+                            self.uart = boot.power_cycle_modem(self.config)
+                            if ModemDriver is not None:
+                                self.modem = ModemDriver(uart=self.uart, config=self.config)
+                                self.modem.init_modem()
+                        except Exception as exc:  # noqa: BLE001
+                            print(f"[health] Error during modem power-cycle recovery: {exc}")
+                    self.consecutive_modem_failures = 0
+            else:
+                self.consecutive_modem_failures = 0
+                try:
+                    sig = self.modem.get_signal_quality()
+                    if sig and sig.get("dbm") is not None:
+                        print(f"[main] Cellular signal: RSSI {sig['rssi']} ({sig['dbm']} dBm)")
+                    reg = self.modem.get_network_registration()
+                    if reg:
+                        print(f"[main] Cellular network: {reg.get('description', 'Unknown')}")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[main] Modem signal query error during heartbeat: {exc}")
 
     def tick(self) -> None:
         """Execute one iteration of the gateway event loop."""
         self.cycle_count += 1
         now = time.time()
+
+        # Feed hardware watchdog (Issue #53)
+        if self.wdt is not None and hasattr(self.wdt, "feed"):
+            self.wdt.feed()
+
+        # Periodic garbage collection to maintain stable heap
+        if gc is not None and (self.cycle_count % 10 == 0):
+            gc.collect()
 
         # Poll physical button state
         if self.button is not None:
@@ -283,6 +429,18 @@ class GatewayApp:
             if now - self.provisioning_started_at >= timeout_sec:
                 self.exit_provisioning_mode(reason="timeout")
             return
+
+        # Non-blocking WiFi reconnect check (Issue #52, #53)
+        if wifi is not None and not wifi.is_connected():
+            if now - self.last_wifi_reconnect >= self.wifi_backoff_sec:
+                self.last_wifi_reconnect = now
+                ssid = self.config.get("wifi_ssid", "")
+                pwd = self.config.get("wifi_password", "")
+                if ssid:
+                    wifi.start_connect(ssid, pwd)
+                    self.wifi_backoff_sec = min(60, self.wifi_backoff_sec * 2)
+        elif wifi is not None and wifi.is_connected():
+            self.wifi_backoff_sec = 5
 
         # Check inbox interval
         inbox_interval = self.config.get("inbox_check_interval_sec", 5)

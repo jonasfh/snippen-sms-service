@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-09-19
+
+### Added
+- Supported character encodings for emojis and international characters (`#51`):
+  - Created `firmware/sms_encoding.py` implementing GSM 03.38 7-bit character set validation (`is_gsm7`) and UCS-2 / UTF-16BE hex encoding/decoding (`encode_ucs2_hex`, `decode_ucs2_hex`, `is_ucs2_hex`, `decode_inbound_text`).
+  - Added support for UTF-16 surrogate pairs (e.g. 🤖, 🎉) and international characters (Norwegian æ, ø, å).
+  - Integrated dynamic UCS-2 switching in `firmware/modem.py` for outbound messages containing non-GSM characters, preventing `CMS ERROR: SMS size more than expected`.
+  - Added transparent UCS-2 hex decoding for inbound SMS bodies and sender numbers.
+- Implemented MicroPython HTTPS REST client and WiFi manager (`#52`):
+  - Created `firmware/snippen_api.py` (`SnippenApiClient`) communicating with Snippen Booking REST API (`https://vestreholmensameie.no/wp-json/snippen/v1/sms`) with Bearer token authentication.
+  - Implemented `fetch_outbox` for retrieving queued outbound SMS messages, cellular modem transmission, and delivery outcome reporting via `report_outbox_status` (`sent`/`failed`).
+  - Implemented `report_inbound_sms` for forwarding newly received tenant SMS messages directly into the WordPress communication history.
+  - Added non-blocking WiFi status checking and connection initiation (`is_connected`, `start_connect`, `ensure_connected`) in `firmware/wifi.py`.
+- Implemented ESP32 system health, hardware watchdog, and recovery (`#53`):
+  - Enabled ESP32 hardware watchdog (`machine.WDT`) with configurable timeout (default 60s), fed on every event loop tick and maintained during BLE provisioning mode.
+  - Added cellular modem health monitoring in `firmware/main.py`: verifies AT responsiveness during heartbeat ticks and automatically triggers hardware power-cycle recovery (`boot.power_cycle_modem()`) if the modem becomes unresponsive for 3 consecutive checks.
+  - Added `power_off_modem` and `power_cycle_modem` GPIO hardware sequencing in `firmware/boot.py`.
+  - Added non-blocking WiFi auto-reconnection with exponential backoff on network dropouts.
+  - Added memory management: periodic `gc.collect()`, free heap monitoring, and aggressive garbage collection when free heap drops below 20 KB.
+
 ## [0.27.0] - 2026-09-19
 
 ### Added

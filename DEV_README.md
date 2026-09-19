@@ -175,6 +175,28 @@ Clear provider state when needed:
 curl -X DELETE "http://127.0.0.1:3000/messages"
 ```
 
+## MicroPython Firmware Architecture (Lilygo T-Call A7670E)
+
+The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP32 board located in `firmware/`:
+
+- **Character Encoding (`firmware/sms_encoding.py`)**:
+  - Automatically identifies whether an outbound message fits in the GSM 03.38 7-bit character set.
+  - Plain GSM-7 / ASCII messages are transmitted in standard text mode up to 160 characters.
+  - Messages containing emojis (e.g. 🤖) or unsupported unicode characters are dynamically encoded in UCS-2 (UTF-16BE hex with surrogate pairs), switching the modem to `AT+CSCS="UCS2"` and preventing `CMS ERROR`.
+  - Inbound SMS bodies and sender numbers received in UCS-2 hex are transparently decoded into UTF-8 strings preserving emojis and Norwegian letters (æ, ø, å).
+
+- **REST API Synchronization (`firmware/snippen_api.py`)**:
+  - Connects securely to the Snippen Booking WordPress REST endpoints (`https://vestreholmensameie.no/wp-json/snippen/v1/sms`) using Bearer token authentication (`Authorization: Bearer <token>` and `X-API-Key: <token>`).
+  - Periodically polls pending outbound messages from `GET /sms/outbox` and dispatches them via the cellular modem.
+  - Reports transmission outcomes (`sent` with modem message ID or `failed` with diagnostic error message) via `POST /sms/outbox/status`.
+  - Forwards newly received incoming SMS directly to the WordPress inbox via `POST /sms/inbox`.
+
+- **System Health, Watchdog & Recovery (`firmware/main.py`)**:
+  - **Hardware Watchdog (`machine.WDT`)**: Configurable hardware watchdog (default 60s timeout) fed on every tick of the event loop. Continues feeding during BLE provisioning mode.
+  - **Modem Health & Recovery**: Performs periodic AT heartbeats (`AT`, `AT+CSQ`, `AT+CREG?`). If the modem fails 3 consecutive health checks, a hardware power-cycle sequence (`boot.power_cycle_modem()`) is executed via GPIO 12/5/4 to restore the cellular radio.
+  - **Memory Management**: Periodic `gc.collect()` in the main event loop, free heap monitoring, and aggressive garbage collection if free memory drops below 20 KB.
+  - **Non-blocking WiFi Reconnect**: Automatic background reconnection with exponential backoff without stalling the main loop or starving the hardware watchdog.
+
 ## CI/CD Workflows
 
 - **PR Validator (`.github/workflows/pr-validator.yml`)**:

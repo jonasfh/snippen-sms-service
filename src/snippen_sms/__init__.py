@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.27.0"
+__version__ = "0.28.0"
 
 from snippen_sms.client import (
     SnippenApiError,
