@@ -370,3 +370,74 @@ def test_run_modem_diagnostic_script(
     monkeypatch.setattr(test_modem.boot, "modem_uart", mock_uart)
 
     assert test_modem.run_modem_test() is True
+
+
+def test_send_sms_with_emojis_ucs2(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    commands_received: list[str] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd_str = data.decode("utf-8", errors="ignore")
+        commands_received.append(cmd_str)
+
+        if 'AT+CSCS="UCS2"' in cmd_str:
+            return b"OK\r\n"
+        if 'AT+CSCS="GSM"' in cmd_str:
+            return b"OK\r\n"
+        if "AT+CMGS=" in cmd_str:
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            return b"\r\n+CMGS: 99\r\n\r\nOK\r\n"
+        return None
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    success, ref = driver.send_sms("+4799999999", "Hei 🤖 fra Snippen!")
+
+    assert success is True
+    assert ref == "99"
+
+    # Verify that UCS-2 mode was selected, number was hex-encoded, body was hex-encoded, and GSM mode was restored
+    all_traffic = "".join(commands_received)
+    assert 'AT+CSCS="UCS2"' in all_traffic
+    # Phone number +4799999999 in UCS-2 hex
+    assert "002B00340037" in all_traffic
+    # Emoji 🤖 (D83EDD16) in UCS-2 hex
+    assert "D83EDD16" in all_traffic
+    # Mode restored to GSM
+    assert 'AT+CSCS="GSM"' in all_traffic
+
+
+def test_read_inbound_sms_ucs2_decoding(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+    from sms_encoding import encode_ucs2_hex
+
+    uart = MockUART(1)
+
+    # Inbound message with Norwegian letters and emoji encoded in UCS-2 hex
+    sender_raw = "+4798765432"
+    body_plain = "Hei! Koden er mottatt 🤖. Hilsen fra Snippen, vi ses i kveld! ÆØÅ æøå"
+    body_hex = encode_ucs2_hex(body_plain)
+
+    cmgl_response = (
+        f'+CMGL: 1,"REC UNREAD","{sender_raw}",,"26/09/19,19:30:00+08"\r\n{body_hex}\r\nOK\r\n'
+    )
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == 'AT+CMGL="ALL"':
+            return cmgl_response.encode("utf-8")
+        if cmd.startswith("AT+CMGD="):
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    messages = driver.read_inbound_sms(delete_after_read=False)
+
+    assert len(messages) == 1
+    assert messages[0]["index"] == 1
+    assert messages[0]["sender"] == sender_raw
+    assert messages[0]["body"] == body_plain
