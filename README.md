@@ -25,14 +25,31 @@ A lightweight, dedicated two-way SMS gateway service designed for the **Snippen*
 
 ---
 
+## Web Bluetooth Gateway Configurator (PWA)
+
+Configure and monitor the Lilygo ESP32 SMS Gateway wirelessly over Bluetooth Low Energy (BLE) directly from your smartphone or PC browser without installing native apps:
+
+🌐 **[Launch Web Configurator (GitHub Pages)](https://jonasfh.github.io/snippen-sms-service/)**
+📖 **[Web Configurator User Guide](docs/BLE_WEB_CONFIG.md)**
+
+Features:
+- **Zero Install / PWA**: Runs in Google Chrome on Android or Desktop; installable to home screen.
+- **WiFi Setup**: Triggers on-device 2.4 GHz WiFi scan, displays RSSI signal strength, and verifies connection credentials.
+- **API Setup**: Configures Snippen Booking API endpoint and token securely.
+- **Live Diagnostics**: Telemetry cards for assigned IP address, WiFi RSSI, cellular 4G signal (CSQ), and firmware version.
+- **Simulator Mode**: Built-in simulator toggle for instant preview and testing in any browser without hardware.
+
+---
+
 ## Documentation
 
-- 📚 **[Documentation Overview](file:///workspaces/snippen-sms-service/docs/README.md)**: Index of all documentation resources.
-- 📐 **[System Architecture & Design](file:///workspaces/snippen-sms-service/docs/architecture.md)**: High-level architectural design, system boundaries, sequence diagrams, and design principles.
-- 📱 **[Lilygo T-Call A7670E Guide](file:///workspaces/snippen-sms-service/docs/README_LILYGO.md)**: Hardware specifications, pinout, MicroPython setup, SIM configuration, and AT commands.
-- 🔌 **[Snippen Booking WordPress API Spec](file:///workspaces/snippen-sms-service/docs/snippen_booking_api_spec.md)**: WordPress REST API routes, Bearer token authorization, and plugin implementation tasks.
-- 🛠️ **[Developer Guide](file:///workspaces/snippen-sms-service/DEV_README.md)**: Setup instructions, Dev Container configuration, testing, and linting.
-- 🤖 **[Agent Guidelines](file:///workspaces/snippen-sms-service/AGENTS.md)**: Project workflows and conventions for automated agents.
+- 📚 **[Documentation Overview](docs/README.md)**: Index of all documentation resources.
+- 🌐 **[Web Configurator Guide](docs/BLE_WEB_CONFIG.md)**: Mobile BLE provisioning and diagnostics via Chrome / PWA.
+- 📐 **[System Architecture & Design](docs/architecture.md)**: High-level architectural design, system boundaries, sequence diagrams, and design principles.
+- 📱 **[Lilygo T-Call A7670E Guide](docs/README_LILYGO.md)**: Hardware specifications, pinout, MicroPython setup, SIM configuration, and AT commands.
+- 🔌 **[Snippen Booking WordPress API Spec](docs/snippen_booking_api_spec.md)**: WordPress REST API routes, Bearer token authorization, and plugin implementation tasks.
+- 🛠️ **[Developer Guide](DEV_README.md)**: Setup instructions, Dev Container configuration, testing, and linting.
+- 🤖 **[Agent Guidelines](AGENTS.md)**: Project workflows and conventions for automated agents.
 
 ---
 

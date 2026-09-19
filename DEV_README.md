@@ -12,6 +12,7 @@ snippen-sms-service/
 ├── .agents/                  # Agent guidelines (Architecture, Testing, common-agent-instructions submodule)
 ├── docs/                     # System documentation & architecture guides
 │   ├── README.md             # Documentation overview
+│   ├── BLE_WEB_CONFIG.md     # User and deployment guide for Web Bluetooth PWA
 │   ├── BLE_MANUAL_TESTING.md # Manual testing guide for BLE provisioning via nRF Connect
 │   ├── README_LILYGO.md      # Standalone Lilygo T-Call A7670E guide & pinout
 │   ├── architecture.md       # High-level architecture, provider abstraction & flows
