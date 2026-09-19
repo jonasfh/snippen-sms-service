@@ -37,6 +37,10 @@ snippen-sms-service/
 │   ├── test_modem_live.py    # Host runner for live modem & SIM diagnostics
 │   ├── test_wifi.py          # Host runner for on-device WiFi testing
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
+├── tools/                    # Companion configuration and testing tools
+│   └── web-config/           # Web Bluetooth (PWA) configuration app
+│       ├── js/ble.js         # Core Web BLE GATT client engine & mock client
+│       └── test/test.html    # Browser-based test suite for BLE client
 
 ├── src/
 │   └── snippen_sms/          # Application package
@@ -102,6 +106,9 @@ For high-level system architecture, communication flows, and boundaries, see [do
    ```bash
    # Run test suite
    pytest
+
+   # Run BLE Web Config client contract tests
+   pytest tests/test_web_config_contract.py
 
    # Run lint checks
    ruff check .

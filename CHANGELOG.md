@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-09-19
+
+### Added
+- Implemented Web Bluetooth (PWA) client engine `tools/web-config/js/ble.js` (`#71`):
+  - `SnippenBLEClient`: Full Web Bluetooth GATT client handling device discovery (`Snippen-SMS-*`), connection lifecycle, and GATT characteristic communications.
+  - Config characteristic (`6e400002`): Reading active config and writing JSON payloads.
+  - Status characteristic (`6e400003`): Subscribing to streaming device status and telemetry notifications.
+  - Command characteristic (`6e400004`): Dispatches commands with Promise-based response matching (`scanWifi`, `testWifi`, `applyAndExit`).
+  - `MockSnippenBLEClient`: Built-in simulator for offline preview, UI prototyping, and automated browser testing.
+- Added browser test runner `tools/web-config/test/test.html` for client engine verification (`#71`).
+- Added Python contract test `tests/test_web_config_contract.py` verifying GATT UUIDs, commands, and token masking parity between MicroPython firmware and the Web BLE client (`#71`).
+
 ## [0.22.0] - 2026-09-19
 
 ### Added

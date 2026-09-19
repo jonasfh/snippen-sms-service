@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snippen BLE Client Tests</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #0f172a;
+      color: #f8fafc;
+    }
+    h1 { color: #38bdf8; }
+    .test-suite { margin-top: 1.5rem; }
+    .test-case {
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.5rem;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e293b;
+      font-size: 0.95rem;
+    }
+    .test-case.pass { border-left: 4px solid #22c55e; }
+    .test-case.fail { border-left: 4px solid #ef4444; background: #3f1d24; }
+    .status-badge {
+      font-weight: bold;
+      font-size: 0.8rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+    .status-badge.pass { background: #15803d; color: #dcfce7; }
+    .status-badge.fail { background: #b91c1c; color: #fee2e2; }
+    #summary {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 1.1rem;
+      background: #334155;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Snippen BLE Client Test Suite</h1>
+  <p>Verifying Web Bluetooth client engine and protocol handlers.</p>
+  <div id="results" class="test-suite"></div>
+  <div id="summary">Running tests...</div>
+
+  <script type="module">
+    import {
+      SERVICE_UUID,
+      CHAR_CONFIG_UUID,
+      CHAR_STATUS_UUID,
+      CHAR_COMMAND_UUID,
+      DEVICE_NAME_PREFIX,
+      maskToken,
+      encodeJson,
+      decodeJson,
+      isWebBluetoothSupported,
+      SnippenBLEClient,
+      MockSnippenBLEClient
+    } from '../js/ble.js';
+
+    const resultsEl = document.getElementById('results');
+    const summaryEl = document.getElementById('summary');
+    let passed = 0;
+    let failed = 0;
+
+    function assert(condition, message) {
+      if (!condition) {
+        throw new Error(message || 'Assertion failed');
+      }
+    }
+
+    async function runTest(name, fn) {
+      const row = document.createElement('div');
+      row.className = 'test-case';
+      try {
+        await fn();
+        passed++;
+        row.classList.add('pass');
+        row.innerHTML = `<span>✔ ${name}</span><span class="status-badge pass">PASS</span>`;
+      } catch (err) {
+        failed++;
+        row.classList.add('fail');
+        row.innerHTML = `<span>✖ ${name} - <small>${err.message}</small></span><span class="status-badge fail">FAIL</span>`;
+        console.error(`Test failed: ${name}`, err);
+      }
+      resultsEl.appendChild(row);
+    }
+
+    async function runAll() {
+      await runTest('UUID constants are defined correctly', () => {
+        assert(SERVICE_UUID === '6e400001-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid SERVICE_UUID');
+        assert(CHAR_CONFIG_UUID === '6e400002-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_CONFIG_UUID');
+        assert(CHAR_STATUS_UUID === '6e400003-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_STATUS_UUID');
+        assert(CHAR_COMMAND_UUID === '6e400004-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_COMMAND_UUID');
+        assert(DEVICE_NAME_PREFIX === 'Snippen-SMS', 'Invalid DEVICE_NAME_PREFIX');
+      });
+
+      await runTest('maskToken masks strings as expected', () => {
+        assert(maskToken('') === '', 'Empty token should return empty');
+        assert(maskToken('short') === '******', 'Short token (<=6 chars) should return asterisks');
+        assert(maskToken('abcdefghij') === 'ab****ij', 'Standard token should mask middle characters');
+      });
+
+      await runTest('encodeJson and decodeJson are bijective', () => {
+        const obj = { wifi_ssid: 'TestSSID', rssi: -45, active: true };
+        const encoded = encodeJson(obj);
+        assert(encoded instanceof Uint8Array, 'Should return Uint8Array');
+        const decoded = decodeJson(encoded);
+        assert(decoded.wifi_ssid === 'TestSSID', 'Decoded SSID mismatch');
+        assert(decoded.rssi === -45, 'Decoded RSSI mismatch');
+        assert(decoded.active === true, 'Decoded boolean mismatch');
+      });
+
+      await runTest('isWebBluetoothSupported returns boolean', () => {
+        const sup = isWebBluetoothSupported();
+        assert(typeof sup === 'boolean', 'Must return boolean');
+      });
+
+      await runTest('MockSnippenBLEClient connects and emits connected event', async () => {
+        const client = new MockSnippenBLEClient();
+        let eventFired = false;
+        client.addEventListener('connected', (e) => {
+          eventFired = true;
+          assert(e.detail.deviceName.includes('Snippen-SMS'), 'Device name mismatch');
+        });
+        const details = await client.connect();
+        assert(client.isConnected === true, 'Client should be marked connected');
+        assert(eventFired === true, 'Connected event did not fire');
+        assert(details.deviceId === 'mock-device-id', 'Device ID mismatch');
+      });
+
+      await runTest('MockSnippenBLEClient reads and writes config', async () => {
+        const client = new MockSnippenBLEClient();
+        await client.connect();
+        const cfg = await client.readConfig();
+        assert(cfg.wifi_ssid === 'Snippen-Local', 'Initial SSID mismatch');
+
+        await client.writeConfig({ wifi_ssid: 'NewSSID', snippen_api_token: 'supersecrettoken123' });
+        const updated = await client.readConfig();
+        assert(updated.wifi_ssid === 'NewSSID', 'Updated SSID mismatch');
+        assert(updated.snippen_api_token === 'su****23', 'Token should be masked');
+      });
+
+      await runTest('MockSnippenBLEClient runs scanWifi and testWifi commands', async () => {
+        const client = new MockSnippenBLEClient();
+        await client.connect();
+        const networks = await client.scanWifi();
+        assert(Array.isArray(networks) && networks.length > 0, 'Networks should be a non-empty array');
+        assert(networks[0].ssid === 'Snippen-Local', 'Network SSID mismatch');
+
+        const testRes = await client.testWifi('NewSSID', 'password123');
+        assert(testRes.status === 'ok', 'Status should be ok');
+        assert(testRes.connected === true, 'Should be connected');
+        assert(testRes.ip === '192.168.1.142', 'IP should be present');
+      });
+
+      await runTest('MockSnippenBLEClient applyAndExit triggers disconnect', async () => {
+        const client = new MockSnippenBLEClient();
+        await client.connect();
+        let disconnectFired = false;
+        client.addEventListener('disconnected', () => {
+          disconnectFired = true;
+        });
+        const res = await client.applyAndExit();
+        assert(res.status === 'ok', 'Apply status should be ok');
+        await new Promise((r) => setTimeout(r, 200));
+        assert(client.isConnected === false, 'Should be disconnected');
+        assert(disconnectFired === true, 'Disconnect event should have fired');
+      });
+
+      await runTest('SnippenBLEClient enforces connection check before commands', async () => {
+        const client = new SnippenBLEClient();
+        let threw = false;
+        try {
+          await client.scanWifi();
+        } catch (err) {
+          threw = true;
+          assert(err.message.includes('Not connected'), 'Error message mismatch');
+        }
+        assert(threw, 'Should have thrown Not connected error');
+      });
+
+      summaryEl.textContent = `All tests completed: ${passed} passed, ${failed} failed.`;
+      summaryEl.style.background = failed === 0 ? '#14532d' : '#7f1d1d';
+    }
+
+    runAll();
+  </script>
+</body>
+</html>
