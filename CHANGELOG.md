@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-09-19
+
+### Added
+- Implemented automated GitHub Pages deployment workflow `.github/workflows/deploy-pages.yml` (`#73`):
+  - Automatically builds and deploys `tools/web-config/` to GitHub Pages (`https://jonasfh.github.io/snippen-sms-service/`) upon pushes to `main`.
+- Created comprehensive user and developer guide `docs/BLE_WEB_CONFIG.md` (`#73`):
+  - Provisioning instructions for Android Chrome, Desktop Chrome/Edge, and iOS (Bluefy).
+  - PWA home screen installation, offline caching, and troubleshooting.
+- Updated documentation in `README.md`, `DEV_README.md`, and `docs/README.md` with links to the live web app and deployment guide (`#73`).
+
 ## [0.24.0] - 2026-09-19
 
 ### Added
