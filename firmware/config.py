@@ -39,6 +39,12 @@ INBOX_CHECK_INTERVAL_SEC = 5
 HEARTBEAT_INTERVAL_SEC = 30
 WATCHDOG_TIMEOUT_SEC = 60
 
+# Physical Button & BLE Provisioning Settings (Issue #59)
+PIN_BOOT_BUTTON = 0  # BOOT Button on ESP32 (active-low, pull-up)
+BUTTON_LONG_PRESS_MS = 3000  # Milliseconds to trigger long-press event
+BUTTON_DEBOUNCE_MS = 50  # Milliseconds for debounce filtering
+PROVISIONING_TIMEOUT_SEC = 300  # 5 minutes provisioning mode timeout
+
 
 def get_default_config() -> dict:
     """Return dictionary of default system configuration."""
@@ -67,6 +73,10 @@ def get_default_config() -> dict:
         "inbox_check_interval_sec": INBOX_CHECK_INTERVAL_SEC,
         "heartbeat_interval_sec": HEARTBEAT_INTERVAL_SEC,
         "watchdog_timeout_sec": WATCHDOG_TIMEOUT_SEC,
+        "pin_boot_button": PIN_BOOT_BUTTON,
+        "button_long_press_ms": BUTTON_LONG_PRESS_MS,
+        "button_debounce_ms": BUTTON_DEBOUNCE_MS,
+        "provisioning_timeout_sec": PROVISIONING_TIMEOUT_SEC,
     }
 
 

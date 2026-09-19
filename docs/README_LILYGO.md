@@ -273,6 +273,7 @@ MicroPython-firmwaren ligger i `firmware/` og er adskilt fra vertsbiblioteket `s
 ```
 firmware/
 ├── boot.py            # Maskinvareinit, modem power rail (GPIO 12), reset (GPIO 5), PWRKEY-puls (GPIO 4), UART1
+├── button.py          # BOOT-knapp (GPIO 0) inngangshåndtering med debouncing og 3s langt trykk
 ├── config.py          # Systemoppsett, pinouts, tidsavbrudd og API-konfigurasjon
 ├── config.example.py  # Mal for lokale overstyringer (WiFi-passord og API-nøkkel)
 ├── modem.py           # SimCom A7670E modemdriver: AT-motor, SMS sending/mottak, signal (CSQ), CREG og SIM-minne

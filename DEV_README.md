@@ -17,6 +17,7 @@ snippen-sms-service/
 │   └── snippen_booking_api_spec.md # WordPress REST API spec & implementation tasks
 ├── firmware/                 # MicroPython standalone gateway firmware
 │   ├── boot.py               # Hardware init, modem power rail & UART1 configuration
+│   ├── button.py             # BOOT button (GPIO 0) debounced input & long-press handler
 │   ├── config.py             # Hardware pinouts, timers & API settings
 │   ├── config.example.py     # Local config overrides template
 │   ├── modem.py              # SimCom A7670E modem driver (AT engine, SMS, SIM memory)
