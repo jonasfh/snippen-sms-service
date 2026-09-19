@@ -87,3 +87,96 @@ def test_ble_find_default_port(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     port = test_ble_live.find_default_port()
     assert port == "/dev/ttyACM0"
+
+
+def test_button_script_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import test_button_live
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["test_button_live.py", "--dry-run", "--port", "/dev/ttyACM0"],
+    )
+    ret = test_button_live.main()
+    assert ret == 0
+
+
+def test_button_find_default_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    import test_button_live
+
+    monkeypatch.setattr(
+        test_button_live.glob, "glob", lambda pat: ["/dev/ttyACM0"] if "ACM" in pat else []
+    )
+    port = test_button_live.find_default_port()
+    assert port == "/dev/ttyACM0"
+
+
+def test_deploy_firmware_deploy_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deploy_firmware
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["deploy_firmware.py", "deploy", "--dry-run", "--port", "/dev/ttyACM0"],
+    )
+    ret = deploy_firmware.main()
+    assert ret == 0
+
+
+def test_deploy_firmware_follow_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deploy_firmware
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["deploy_firmware.py", "deploy", "--dry-run", "-f", "--port", "/dev/ttyACM0"],
+    )
+    ret = deploy_firmware.main()
+    assert ret == 0
+
+
+def test_deploy_firmware_verbose_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deploy_firmware
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["deploy_firmware.py", "deploy", "--dry-run", "-v", "--port", "/dev/ttyACM0"],
+    )
+    ret = deploy_firmware.main()
+    assert ret == 0
+
+
+def test_deploy_firmware_monitor_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deploy_firmware
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["deploy_firmware.py", "monitor", "--dry-run", "--port", "/dev/ttyACM0"],
+    )
+    ret = deploy_firmware.main()
+    assert ret == 0
+
+
+def test_deploy_firmware_subcommands_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deploy_firmware
+
+    for cmd in ["ls", "repl", "reset"]:
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["deploy_firmware.py", cmd, "--dry-run", "--port", "/dev/ttyACM0"],
+        )
+        ret = deploy_firmware.main()
+        assert ret == 0
+
+
+def test_deploy_firmware_find_default_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deploy_firmware
+
+    monkeypatch.setattr(
+        deploy_firmware.glob, "glob", lambda pat: ["/dev/ttyACM0"] if "ACM" in pat else []
+    )
+    port = deploy_firmware.find_default_port()
+    assert port == "/dev/ttyACM0"

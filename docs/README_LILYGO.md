@@ -295,20 +295,26 @@ Skriptet `scripts/deploy_firmware.py` automatiserer overføring og administrasjo
 # 1. Installer / oppdater firmwarefiler på ESP32 (med automatisk soft-reset)
 python scripts/deploy_firmware.py deploy
 
-# 2. Deploy med egne lokale innstillinger (config_local.py eller config.json)
+# 2. Deploy og følg live loggutskrift kontinuerlig ('tail -f' uten å avbryte main.py)
+python scripts/deploy_firmware.py deploy -f
+
+# 3. Deploy med egne lokale innstillinger (config_local.py eller config.json)
 python scripts/deploy_firmware.py deploy --include-config
 
-# 3. Inspiser filer på mikrokontrolleren
+# 4. Lytt kontinuerlig på serieporten (tail -f) når enheten allerede kjører
+python scripts/deploy_firmware.py monitor
+
+# 5. Inspiser filer på mikrokontrolleren
 python scripts/deploy_firmware.py ls
 
-# 4. Åpne MicroPython REPL interaktivt
+# 6. Åpne MicroPython REPL interaktivt
 python scripts/deploy_firmware.py repl
 
-# 5. Nullstill mikrokontrolleren (soft eller hard reset)
+# 7. Nullstill mikrokontrolleren (soft eller hard reset)
 python scripts/deploy_firmware.py reset
 python scripts/deploy_firmware.py reset --hard
 
-# 6. Testkjøre et skript på enheten uten permanent overføring
+# 8. Testkjøre et skript på enheten uten permanent overføring
 python scripts/deploy_firmware.py run firmware/main.py
 ```
 
