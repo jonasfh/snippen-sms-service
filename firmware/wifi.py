@@ -24,8 +24,12 @@ def get_wlan() -> object | None:
     return wlan
 
 
-def scan_networks() -> list[dict]:
+def scan_networks(max_results: int = 10, min_rssi: int = -85) -> list[dict]:
     """Scan for available 2.4 GHz WiFi networks.
+
+    Args:
+        max_results: Maximum number of networks to return (default 10).
+        min_rssi: Minimum signal strength in dBm to filter out unusable/distant networks.
 
     Returns:
         List of dicts sorted by RSSI descending:
@@ -71,7 +75,13 @@ def scan_networks() -> list[dict]:
 
     # Sort networks with highest signal strength (less negative RSSI) first
     networks.sort(key=lambda x: x.get("rssi", -100), reverse=True)
-    return networks
+
+    # Filter out weak signals (< min_rssi) to keep BLE payload compact, unless all are weak
+    filtered = [n for n in networks if n.get("rssi", -100) >= min_rssi]
+    if filtered:
+        networks = filtered
+
+    return networks[:max_results]
 
 
 def test_connection(ssid: str, password: str = "", timeout_sec: int = 15) -> dict:

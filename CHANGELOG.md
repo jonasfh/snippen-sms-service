@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-09-19
+
+### Fixed
+- Fixed MicroPython BLE GATT buffer truncation (`#77`):
+  - Increased characteristic buffer size to 1024 bytes via `ble.gatts_set_buffer(handle, 1024)` in `firmware/ble_config.py`, preventing 20-byte default truncation on config writes (`syntax error in JSON`) and command responses.
+  - Configured 512-byte MTU capacity (`ble.config(mtu=512)`) on server startup for high-throughput packet exchanges.
+  - Added `gatts_set_buffer` mock to `MockBLE` in `tests/mocks/micropython_mocks.py`.
+- Optimized WiFi scanning in `firmware/wifi.py` (`#77`):
+  - Limited scan output to the top 10 strongest unique networks (`max_results=10`) and filtered out weak signals (< -85 dBm).
+  - Keeps BLE notification JSON payloads compact (~250 bytes), ensuring reliable delivery over BLE within MTU limits.
+- Improved error telemetry in `tools/web-config/js/ble.js` with raw payload logging upon JSON parse failures (`#77`).
+
 ## [0.25.0] - 2026-09-19
 
 ### Added

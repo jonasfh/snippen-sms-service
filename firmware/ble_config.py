@@ -143,6 +143,14 @@ class BLEConfigServer:
         ((self.handle_config, self.handle_status, self.handle_command),) = (
             ble.gatts_register_services((service,))
         )
+        # Increase characteristic buffer sizes from default 20 bytes to 1024 bytes
+        # to prevent payload truncation on incoming writes and outgoing notifications.
+        for h in (self.handle_config, self.handle_status, self.handle_command):
+            if hasattr(ble, "gatts_set_buffer"):
+                try:
+                    ble.gatts_set_buffer(h, 1024)
+                except Exception:  # noqa: BLE001, S110
+                    pass
         self._services_registered = True
         return True
 
@@ -169,6 +177,12 @@ class BLEConfigServer:
         print("[ble] Starting BLE GATT provisioning server...")
         ble.active(True)
         self._register_services()
+
+        # Increase MTU capacity if supported by BLE stack
+        try:
+            ble.config(mtu=512)
+        except Exception:  # noqa: BLE001, S110
+            pass
 
         # Derive unique device name from MAC address if available
         try:
