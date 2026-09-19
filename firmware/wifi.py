@@ -157,3 +157,36 @@ def connect_wifi(ssid: str, password: str = "", timeout_sec: int = 20) -> bool:
 
     print("[wifi] Failed to connect within timeout.")
     return False
+
+
+def is_connected() -> bool:
+    """Check if WiFi station interface is active and connected."""
+    if network is None:
+        return False
+    try:
+        wlan = network.WLAN(network.STA_IF)
+        return wlan.isconnected()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def start_connect(ssid: str, password: str = "") -> bool:
+    """Initiate WiFi connection in background without blocking."""
+    wlan = get_wlan()
+    if wlan is None or not ssid:
+        return False
+    if wlan.isconnected():
+        return True
+    try:
+        wlan.connect(ssid, password)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[wifi] Non-blocking connect error: {exc}")
+        return False
+
+
+def ensure_connected(ssid: str, password: str = "", timeout_sec: int = 15) -> bool:
+    """Ensure WiFi is connected, connecting synchronously if currently disconnected."""
+    if is_connected():
+        return True
+    return connect_wifi(ssid, password, timeout_sec=timeout_sec)

@@ -398,11 +398,67 @@ class MockBLE:
             self._irq_handler(3, (conn_handle, value_handle))
 
 
+class MockResponse:
+    """Mock HTTP response object matching MicroPython urequests."""
+
+    def __init__(self, status_code: int = 200, json_data: Any = None, text: str = "") -> None:
+        self.status_code = status_code
+        self._json_data = json_data
+        self.text = text
+        self.closed = False
+
+    def json(self) -> Any:
+        return self._json_data
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class MockURequests:
+    """Mock MicroPython urequests HTTP client."""
+
+    def __init__(self) -> None:
+        self.requests_log: list[dict[str, Any]] = []
+        self.get_handler: Any = None
+        self.post_handler: Any = None
+
+    def get(self, url: str, headers: dict | None = None, **kwargs: Any) -> MockResponse:
+        self.requests_log.append(
+            {"method": "GET", "url": url, "headers": headers, "kwargs": kwargs}
+        )
+        if self.get_handler:
+            return self.get_handler(url, headers, **kwargs)
+        return MockResponse(200, json_data={"messages": []})
+
+    def post(
+        self,
+        url: str,
+        headers: dict | None = None,
+        data: Any = None,
+        json: Any = None,
+        **kwargs: Any,
+    ) -> MockResponse:
+        self.requests_log.append(
+            {
+                "method": "POST",
+                "url": url,
+                "headers": headers,
+                "data": data,
+                "json": json,
+                "kwargs": kwargs,
+            }
+        )
+        if self.post_handler:
+            return self.post_handler(url, headers, data=data, json=json, **kwargs)
+        return MockResponse(200, json_data={"success": True})
+
+
 class MicroPythonEnvironment:
     """Context manager / fixture helper to install mock MicroPython modules into sys.modules."""
 
     def __init__(self) -> None:
         self.mock_time = MockTime()
+        self.mock_urequests = MockURequests()
         self.reset_called = False
 
     def install(self) -> None:
@@ -453,12 +509,19 @@ class MicroPythonEnvironment:
         utime_mod.time = self.mock_time.time  # type: ignore[attr-defined]
         sys.modules["utime"] = utime_mod
 
+        # Provide urequests module
+        urequests_mod = types.ModuleType("urequests")
+        urequests_mod.get = self.mock_urequests.get  # type: ignore[attr-defined]
+        urequests_mod.post = self.mock_urequests.post  # type: ignore[attr-defined]
+        sys.modules["urequests"] = urequests_mod
+
     def uninstall(self) -> None:
         sys.modules.pop("machine", None)
         sys.modules.pop("network", None)
         sys.modules.pop("bluetooth", None)
         sys.modules.pop("ubluetooth", None)
         sys.modules.pop("utime", None)
+        sys.modules.pop("urequests", None)
         MockPin.reset_registry()
         MockUART.reset_registry()
         MockWLAN.reset_registry()
