@@ -46,6 +46,7 @@ def test_deploy_firmware_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     (firmware_dir / "boot.py").write_text("# boot", encoding="utf-8")
     (firmware_dir / "main.py").write_text("# main", encoding="utf-8")
     (firmware_dir / "config.py").write_text("# config", encoding="utf-8")
+    (firmware_dir / "modem.py").write_text("# modem", encoding="utf-8")
 
     ret = deploy_firmware.deploy_firmware(
         repo_root=tmp_path,

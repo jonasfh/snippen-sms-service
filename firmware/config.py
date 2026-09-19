@@ -18,6 +18,10 @@ MODEM_BAUDRATE = 115200
 MODEM_UART_TIMEOUT_MS = 2000
 MODEM_PWRKEY_PULSE_MS = 1500
 MODEM_BOOT_WAIT_SEC = 6
+MODEM_CMD_TIMEOUT_MS = 2000
+MODEM_SMS_TIMEOUT_MS = 15000
+MODEM_SIM_PIN = ""
+SMS_AUTO_DELETE = True
 
 # WiFi Settings
 WIFI_SSID = ""
@@ -49,6 +53,10 @@ def get_default_config() -> dict:
         "modem_uart_timeout_ms": MODEM_UART_TIMEOUT_MS,
         "modem_pwrkey_pulse_ms": MODEM_PWRKEY_PULSE_MS,
         "modem_boot_wait_sec": MODEM_BOOT_WAIT_SEC,
+        "modem_cmd_timeout_ms": MODEM_CMD_TIMEOUT_MS,
+        "modem_sms_timeout_ms": MODEM_SMS_TIMEOUT_MS,
+        "modem_sim_pin": MODEM_SIM_PIN,
+        "sms_auto_delete": SMS_AUTO_DELETE,
         "wifi_ssid": WIFI_SSID,
         "wifi_password": WIFI_PASSWORD,
         "wifi_connect_timeout_sec": WIFI_CONNECT_TIMEOUT_SEC,

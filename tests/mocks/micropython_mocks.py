@@ -64,12 +64,24 @@ class MockUART:
         self.extra_kwargs = kwargs
         self.written_data: list[bytes] = []
         self._read_buffer = bytearray()
+        self.responder: Any = None
+        self.auto_responses: dict[str, str | bytes] = {}
         MockUART.instances[uart_id] = self
 
     def write(self, data: bytes | str) -> int:
         if isinstance(data, str):
             data = data.encode("utf-8")
         self.written_data.append(data)
+        if self.responder is not None:
+            res = self.responder(data)
+            if res:
+                self.feed_read(res)
+        elif self.auto_responses:
+            cmd_str = data.decode("utf-8", errors="ignore").strip()
+            for pattern, resp in self.auto_responses.items():
+                if pattern in cmd_str:
+                    self.feed_read(resp)
+                    break
         return len(data)
 
     def read(self, nbytes: int | None = None) -> bytes | None:

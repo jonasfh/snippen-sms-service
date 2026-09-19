@@ -19,11 +19,19 @@ snippen-sms-service/
 │   ├── boot.py               # Hardware init, modem power rail & UART1 configuration
 │   ├── config.py             # Hardware pinouts, timers & API settings
 │   ├── config.example.py     # Local config overrides template
-│   └── main.py               # Main application loop coordinating WiFi, API & SMS
+│   ├── modem.py              # SimCom A7670E modem driver (AT engine, SMS, SIM memory)
+│   ├── main.py               # Main application loop coordinating WiFi, API & SMS
+│   ├── test_api.py           # On-device Snippen API ping test
+│   ├── test_modem.py         # On-device cellular modem and SIM memory diagnostic test
+│   └── test_wifi.py          # On-device WiFi connection test
 ├── scripts/                  # Development & formatting utilities
 │   ├── deploy_firmware.py    # Automated firmware deployment via mpremote
 │   ├── format.py             # Whitespace & file formatting tool
+│   ├── test_api_ping.py      # Host runner for API authentication ping
+│   ├── test_modem_live.py    # Host runner for live modem & SIM diagnostics
+│   ├── test_wifi.py          # Host runner for on-device WiFi testing
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
+
 ├── src/
 │   └── snippen_sms/          # Application package
 │       ├── __init__.py       # Package version & exports
