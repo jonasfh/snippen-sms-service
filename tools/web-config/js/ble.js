@@ -267,17 +267,23 @@ export class SnippenBLEClient extends EventTarget {
   }
 
   _handleStatusNotification(event) {
+    let rawText = '';
     try {
-      const status = decodeJson(event.target.value);
+      const dataView = event.target.value instanceof DataView ? event.target.value : new DataView(event.target.value);
+      rawText = new TextDecoder('utf-8').decode(dataView);
+      const status = JSON.parse(rawText);
       this.dispatchEvent(new CustomEvent('status', { detail: status }));
     } catch (err) {
-      console.warn('[SnippenBLE] Failed to parse status notification:', err);
+      console.warn('[SnippenBLE] Failed to parse status notification:', err, 'Raw length:', rawText.length, 'Text:', rawText);
     }
   }
 
   _handleCommandNotification(event) {
+    let rawText = '';
     try {
-      const res = decodeJson(event.target.value);
+      const dataView = event.target.value instanceof DataView ? event.target.value : new DataView(event.target.value);
+      rawText = new TextDecoder('utf-8').decode(dataView);
+      const res = JSON.parse(rawText);
       const cmdName = res.cmd;
       if (cmdName && this._pendingCommands.has(cmdName)) {
         const { resolve, timeoutId } = this._pendingCommands.get(cmdName);
@@ -286,7 +292,7 @@ export class SnippenBLEClient extends EventTarget {
         resolve(res);
       }
     } catch (err) {
-      console.warn('[SnippenBLE] Failed to parse command response:', err);
+      console.warn('[SnippenBLE] Failed to parse command response:', err, 'Raw length:', rawText.length, 'Text:', rawText);
     }
   }
 

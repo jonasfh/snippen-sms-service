@@ -332,6 +332,9 @@ class MockBLE:
     def gatts_read(self, handle: int) -> bytes:
         return bytes(self._handles.get(handle, b""))
 
+    def gatts_set_buffer(self, handle: int, length: int, append: bool = False) -> None:
+        """Mock gatts_set_buffer."""
+
     def gatts_write(self, handle: int, data: bytes | str) -> None:
         if isinstance(data, str):
             data = data.encode("utf-8")

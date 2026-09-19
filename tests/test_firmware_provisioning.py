@@ -57,6 +57,25 @@ def test_wifi_scan_networks(mpy_env: MicroPythonEnvironment) -> None:
     assert results[1]["rssi"] == -85
 
 
+def test_wifi_scan_networks_max_results_and_filter(mpy_env: MicroPythonEnvironment) -> None:
+    import network
+    import wifi
+
+    wlan = network.WLAN(network.STA_IF)
+    wlan._scan_results = [
+        (f"Net-{i}".encode(), b"\x00" * 6, 1, -40 - i * 4, 3, 0) for i in range(20)
+    ]
+
+    results = wifi.scan_networks(max_results=5)
+    assert len(results) == 5
+    # Strongest first
+    assert results[0]["ssid"] == "Net-0"
+    assert results[0]["rssi"] == -40
+    # No network weaker than -85 dBm if filtered
+    for r in results:
+        assert r["rssi"] >= -85
+
+
 def test_wifi_test_connection_success(mpy_env: MicroPythonEnvironment) -> None:
     import wifi
 
