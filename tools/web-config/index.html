@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="description" content="Bluetooth Low Energy konfigurasjon og diagnostikk for Snippen SMS Gateway (Lilygo ESP32)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="apple-touch-icon" href="assets/icon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/styles.css">
+  <title>Snippen SMS Gateway | Konfigurasjon</title>
+</head>
+<body>
+
+  <main class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-top">
+        <div class="brand">
+          <img src="assets/icon.svg" alt="Snippen Logo" class="brand-icon">
+          <div>
+            <h1 class="brand-title">Snippen Gateway</h1>
+            <div class="brand-subtitle">BLE Provisjonering & Diagnostikk</div>
+          </div>
+        </div>
+
+        <!-- Simulator Mode Toggle -->
+        <div class="mode-toggle-wrapper" title="Veksle mellom ekte Bluetooth og simulator">
+          <span>Simulator</span>
+          <label class="switch" for="simulator-toggle">
+            <input type="checkbox" id="simulator-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="status-pill disconnected" id="connection-pill">
+        <span class="status-dot"></span>
+        <span id="connection-label">Frakoblet</span>
+      </div>
+    </header>
+
+    <!-- Global Feedback Banner -->
+    <div id="feedback-banner" class="feedback-box">
+      <span id="feedback-text">Melding</span>
+    </div>
+
+    <!-- Card 1: Connection -->
+    <section class="card" id="card-connection">
+      <div class="card-header">
+        <h2 class="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 7l10 10-5 5V2l5 5L7 17"></path>
+          </svg>
+          Bluetooth Tilkobling
+        </h2>
+        <span id="device-mac" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+      </div>
+
+      <p style="font-size: 0.85rem; color: var(--text-secondary);">
+        Hold <strong>BOOT-knappen</strong> på Lilygo ESP32 i 3 sekunder til BLE er aktivt, og trykk deretter koble til.
+      </p>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-connect">
+          <span class="spinner" id="spinner-connect"></span>
+          <span id="btn-connect-text">Koble til Gateway</span>
+        </button>
+        <button type="button" class="btn btn-danger" id="btn-disconnect" style="display: none;">
+          Koble fra
+        </button>
+      </div>
+    </section>
+
+    <!-- Card 2: WiFi Settings -->
+    <section class="card" id="card-wifi" style="opacity: 0.5; pointer-events: none;">
+      <div class="card-header">
+        <h2 class="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+          </svg>
+          WiFi Oppsett
+        </h2>
+        <button type="button" class="btn btn-outline" id="btn-scan-wifi" style="height: 34px; padding: 0 0.75rem; font-size: 0.8rem;">
+          <span class="spinner" id="spinner-scan"></span>
+          <span>Skann WiFi</span>
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label for="wifi-ssid-select">Tilgjengelige 2.4 GHz nettverk</label>
+        <select id="wifi-ssid-select">
+          <option value="">-- Trykk Skann WiFi for å søke --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="wifi-ssid-manual">Nettverksnavn (SSID)</label>
+        <input type="text" id="wifi-ssid-manual" placeholder="f.eks. Snippen-Gjest">
+      </div>
+
+      <div class="form-group">
+        <label for="wifi-password">WiFi Passord</label>
+        <div class="input-wrapper">
+          <input type="password" id="wifi-password" placeholder="Passord for trådløst nettverk">
+          <button type="button" class="toggle-password-btn" id="btn-toggle-wifi-pw" title="Vis/skjul passord">
+            👁️
+          </button>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-secondary" id="btn-test-wifi">
+        <span class="spinner" id="spinner-test"></span>
+        <span>Test WiFi-forbindelse</span>
+      </button>
+
+      <div id="wifi-test-feedback" class="feedback-box">
+        <span id="wifi-test-text"></span>
+      </div>
+    </section>
+
+    <!-- Card 3: Gateway & API Settings -->
+    <section class="card" id="card-api" style="opacity: 0.5; pointer-events: none;">
+      <div class="card-header">
+        <h2 class="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          Snippen API Innstillinger
+        </h2>
+      </div>
+
+      <div class="form-group">
+        <label for="api-base-url">Snippen Booking API URL</label>
+        <input type="text" id="api-base-url" placeholder="https://snippen.no/wp-json/snippen/v1">
+      </div>
+
+      <div class="form-group">
+        <label for="api-token">API Bearer Token</label>
+        <div class="input-wrapper">
+          <input type="password" id="api-token" placeholder="Bearer auth token">
+          <button type="button" class="toggle-password-btn" id="btn-toggle-api-token" title="Vis/skjul token">
+            👁️
+          </button>
+        </div>
+        <small style="font-size: 0.72rem; color: var(--text-muted);">
+          Eksisterende token vises maskert fra enheten av sikkerhetshensyn.
+        </small>
+      </div>
+
+      <div class="btn-row">
+        <div class="form-group" style="flex: 1;">
+          <label for="poll-interval">Utdataboks-intervall (s)</label>
+          <input type="number" id="poll-interval" min="2" max="60" value="5">
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label for="inbox-interval">Innboks-intervall (s)</label>
+          <input type="number" id="inbox-interval" min="2" max="60" value="5">
+        </div>
+      </div>
+    </section>
+
+    <!-- Card 4: Telemetry -->
+    <section class="card" id="card-telemetry" style="opacity: 0.5; pointer-events: none;">
+      <div class="card-header">
+        <h2 class="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          Sanntidsstatus & Diagnostikk
+        </h2>
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="metric-card">
+          <span class="metric-label">Tildelt IP-adresse</span>
+          <span class="metric-val highlight" id="tel-ip">--</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">WiFi Signal</span>
+          <span class="metric-val" id="tel-wifi-rssi">--</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">4G Modemsignal</span>
+          <span class="metric-val" id="tel-cellular">--</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Firmware Versjon</span>
+          <span class="metric-val" id="tel-version">--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Action Bar -->
+    <div id="action-bar" style="opacity: 0.5; pointer-events: none; margin-top: 0.5rem;">
+      <button type="button" class="btn btn-primary btn-block" id="btn-apply-exit" style="height: 52px; font-size: 1rem;">
+        <span class="spinner" id="spinner-apply"></span>
+        <span>🚀 Lagre og Start Gateway</span>
+      </button>
+    </div>
+
+    <footer class="app-footer">
+      <p>Snippen SMS Gateway &bull; Lilygo T-Call A7670E ESP32</p>
+      <p style="margin-top: 0.25rem;">
+        <a href="test/test.html" target="_blank">Kjør automatiserte klienttester &rarr;</a>
+      </p>
+    </footer>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

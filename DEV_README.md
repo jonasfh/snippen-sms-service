@@ -39,6 +39,11 @@ snippen-sms-service/
 │   └── validate_pr.py        # PR SemVer & changelog validation tool
 ├── tools/                    # Companion configuration and testing tools
 │   └── web-config/           # Web Bluetooth (PWA) configuration app
+│       ├── index.html        # Mobile-first web configurator interface
+│       ├── manifest.json     # PWA manifest for Android installation
+│       ├── sw.js             # Offline caching service worker
+│       ├── css/styles.css    # Responsive styles and dark theme
+│       ├── js/app.js         # UI application controller
 │       ├── js/ble.js         # Core Web BLE GATT client engine & mock client
 │       └── test/test.html    # Browser-based test suite for BLE client
 
