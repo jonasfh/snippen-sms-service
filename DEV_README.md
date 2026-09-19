@@ -16,6 +16,7 @@ snippen-sms-service/
 │   ├── architecture.md       # High-level architecture, provider abstraction & flows
 │   └── snippen_booking_api_spec.md # WordPress REST API spec & implementation tasks
 ├── firmware/                 # MicroPython standalone gateway firmware
+│   ├── ble_config.py         # Bluetooth Low Energy (BLE) GATT provisioning server
 │   ├── boot.py               # Hardware init, modem power rail & UART1 configuration
 │   ├── button.py             # BOOT button (GPIO 0) debounced input & long-press handler
 │   ├── config.py             # Hardware pinouts, timers & API settings

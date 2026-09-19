@@ -75,7 +75,7 @@ def deploy_firmware(
         print(f"[deploy] ERROR: Firmware directory not found at {firmware_dir}")
         return 1
 
-    files_to_deploy = ["boot.py", "main.py", "config.py", "modem.py", "button.py"]
+    files_to_deploy = ["boot.py", "main.py", "config.py", "modem.py", "button.py", "ble_config.py"]
 
     if include_config:
         local_cfg = firmware_dir / "config_local.py"

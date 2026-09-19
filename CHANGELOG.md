@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-09-19
+
+### Added
+- Implemented MicroPython Bluetooth Low Energy (BLE) GATT provisioning server and advertising engine `firmware/ble_config.py` (`#60`):
+  - Broadcasts BLE advertisement payload with device name `Snippen-SMS-<HEX>` (derived from MAC address) and custom Service UUID (`6e400001-b5a3-f393-e0a9-e50e24dcca9e`).
+  - Config Characteristic (Read / Write): Reads active configuration with secret API tokens masked, and receives updated JSON configuration chunks.
+  - Status Characteristic (Read / Notify): Real-time telemetry reporting connection status and operational state to companion Android apps.
+  - Command Characteristic (Write / Notify): Receives remote commands (`SCAN_WIFI`, `TEST_WIFI`, `APPLY_AND_EXIT`) and streams back notification responses.
+  - Inactivity Timeout: Automatically shuts down BLE advertising after 5 minutes of inactivity when no central is connected to conserve RAM and avoid 2.4 GHz radio coexistence conflicts.
+- Integrated `BLEConfigServer` into `firmware/main.py` (`GatewayApp`) to activate upon entering provisioning mode and cleanly shut down upon exit (`#60`).
+- Added `MockBLE` and `MockUUID` to `tests/mocks/micropython_mocks.py` providing complete host-side BLE simulation (`#60`).
+- Added `ble_config.py` to deployment tool `scripts/deploy_firmware.py` (`#60`).
+- Added comprehensive unit test suite in `tests/test_firmware_ble.py` and expanded `tests/test_firmware_main.py` (`#60`).
+
 ## [0.19.0] - 2026-09-19
 
 ### Added

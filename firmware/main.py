@@ -26,6 +26,11 @@ try:
 except ImportError:
     ButtonHandler = None
 
+try:
+    from ble_config import BLEConfigServer
+except ImportError:
+    BLEConfigServer = None
+
 
 class GatewayApp:
     """MicroPython SMS Gateway coordinator."""
@@ -35,10 +40,12 @@ class GatewayApp:
         config: dict | None = None,
         uart: object | None = None,
         button: object | None = None,
+        ble_server: object | None = None,
     ) -> None:
         self.config = config if config is not None else load_config()
         self.uart = uart
         self.button = button
+        self.ble_server = ble_server
         self.modem = None
         self.is_provisioning_mode = False
         self.provisioning_started_at = 0
@@ -49,19 +56,37 @@ class GatewayApp:
         self.last_outbox_poll = 0
 
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
-        """Switch gateway into BLE provisioning mode (Issue #59)."""
+        """Switch gateway into BLE provisioning mode (Issue #59, #60)."""
         if self.is_provisioning_mode:
             return
         print(f"[main] Entering provisioning mode (reason: {reason})...")
         self.is_provisioning_mode = True
         self.provisioning_started_at = time.time()
+        if self.ble_server is not None and not self.ble_server.is_running:
+            self.ble_server.update_config_characteristic(self.config)
+            self.ble_server.start()
 
     def exit_provisioning_mode(self, reason: str = "manual") -> None:
-        """Exit BLE provisioning mode and resume normal gateway loop (Issue #59)."""
+        """Exit BLE provisioning mode and resume normal gateway loop (Issue #59, #60)."""
         if not self.is_provisioning_mode:
             return
         print(f"[main] Exiting provisioning mode (reason: {reason})...")
         self.is_provisioning_mode = False
+        if self.ble_server is not None and self.ble_server.is_running:
+            self.ble_server.stop()
+
+    def on_ble_config_received(self, new_config: dict) -> None:
+        """Callback when companion app writes new configuration parameters (Issue #60)."""
+        print(f"[main] Configuration received via BLE: {list(new_config.keys())}")
+        self.config.update(new_config)
+
+    def on_ble_command(self, cmd: str, payload: dict) -> dict:
+        """Callback when companion app sends a remote control command (Issue #60)."""
+        print(f"[main] Command received via BLE: {cmd}")
+        if cmd == "APPLY_AND_EXIT":
+            self.exit_provisioning_mode(reason="command")
+            return {"cmd": cmd, "status": "ok", "message": "Exited provisioning mode"}
+        return {"cmd": cmd, "status": "ok"}
 
     def on_boot_long_press(self) -> None:
         """Callback when BOOT button (GPIO 0) is held for >= 3 seconds."""
@@ -89,6 +114,20 @@ class GatewayApp:
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[main] Warning: Failed to initialize BOOT button on GPIO {btn_pin}: {exc}")
+
+        # Initialize BLE provisioning server
+        if self.ble_server is None and BLEConfigServer is not None:
+            timeout_sec = self.config.get("provisioning_timeout_sec", 300)
+            try:
+                self.ble_server = BLEConfigServer(
+                    config=self.config,
+                    timeout_sec=timeout_sec,
+                    on_command=self.on_ble_command,
+                    on_config_received=self.on_ble_config_received,
+                    on_timeout=lambda: self.exit_provisioning_mode(reason="timeout"),
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Warning: Failed to initialize BLE config server: {exc}")
 
         # If UART not provided, try to obtain from boot module
         if self.uart is None:
@@ -167,6 +206,8 @@ class GatewayApp:
 
         # Handle provisioning mode lifecycle
         if self.is_provisioning_mode:
+            if self.ble_server is not None:
+                self.ble_server.poll(now)
             timeout_sec = self.config.get("provisioning_timeout_sec", 300)
             if now - self.provisioning_started_at >= timeout_sec:
                 self.exit_provisioning_mode(reason="timeout")

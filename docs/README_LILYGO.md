@@ -272,6 +272,7 @@ MicroPython-firmwaren ligger i `firmware/` og er adskilt fra vertsbiblioteket `s
 
 ```
 firmware/
+├── ble_config.py      # BLE GATT provisioning-server og annonsering for trådløst oppsett
 ├── boot.py            # Maskinvareinit, modem power rail (GPIO 12), reset (GPIO 5), PWRKEY-puls (GPIO 4), UART1
 ├── button.py          # BOOT-knapp (GPIO 0) inngangshåndtering med debouncing og 3s langt trykk
 ├── config.py          # Systemoppsett, pinouts, tidsavbrudd og API-konfigurasjon
