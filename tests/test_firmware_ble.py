@@ -43,17 +43,29 @@ def test_build_advertising_payload(mpy_env: MicroPythonEnvironment) -> None:
     import bluetooth
 
     service_uuid = bluetooth.UUID(ble_config.SERVICE_UUID_STR)
-    payload = ble_config.build_advertising_payload(
-        name="Test-Device", service_uuid=service_uuid, appearance=0x0080
-    )
 
-    assert isinstance(payload, bytearray)
+    # 1. Payload with flags and name
+    adv_payload = ble_config.build_advertising_payload(
+        name="Test-Device", appearance=0x0080, include_flags=True
+    )
+    assert isinstance(adv_payload, bytearray)
+    assert len(adv_payload) <= 31
     # Check flags: len=2, type=1, flags=0x06
-    assert payload[0:3] == b"\x02\x01\x06"
+    assert adv_payload[0:3] == b"\x02\x01\x06"
     # Check appearance in payload
-    assert b"\x03\x19\x80\x00" in payload
+    assert b"\x03\x19\x80\x00" in adv_payload
     # Check complete local name (len=12 = 0x0c: 11 bytes name + 1 byte type)
-    assert b"\x0c\x09Test-Device" in payload
+    assert b"\x0c\x09Test-Device" in adv_payload
+
+    # 2. Scan response payload with service UUID and no flags
+    resp_payload = ble_config.build_advertising_payload(
+        service_uuid=service_uuid, include_flags=False
+    )
+    assert isinstance(resp_payload, bytearray)
+    assert len(resp_payload) <= 31
+    assert b"\x01\x06" not in resp_payload
+    # 128-bit UUID is 16 bytes + type + len = 18 bytes
+    assert len(resp_payload) == 18
 
 
 def test_ble_server_start_and_stop(mpy_env: MicroPythonEnvironment) -> None:
@@ -76,6 +88,13 @@ def test_ble_server_start_and_stop(mpy_env: MicroPythonEnvironment) -> None:
     assert mock_ble._is_advertising is True
     # MAC suffix is derived from mock MAC b'\x12\x34\x56\x78\x9a\xbc' -> 9ABC
     assert server.device_name == "Snippen-SMS-9ABC"
+
+    # Both advertising and scan response payloads must be within the 31-byte BLE limit
+    assert mock_ble._adv_data is not None
+    assert len(mock_ble._adv_data) <= 31
+    assert b"Snippen-SMS-9ABC" in mock_ble._adv_data
+    assert mock_ble._resp_data is not None
+    assert len(mock_ble._resp_data) <= 31
 
     # Verify initial config characteristic value has masked token
     config_bytes = mock_ble.gatts_read(server.handle_config)

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1] - 2026-09-19
+
+### Fixed
+- Removed `from __future__ import annotations` across MicroPython firmware files (`firmware/ble_config.py`, `firmware/wifi.py`, `firmware/test_ble_provisioning.py`) resolving `ImportError: no module named '__future__'` on device boot (`#65`).
+- Split BLE legacy advertising into `adv_data` (Flags + Complete Local Name) and `resp_data` (128-bit Service UUID) in `firmware/ble_config.py`, staying strictly within the 31-byte BLE limit and resolving `BLE_HS_EMSGSIZE` (-18) error (`#65`).
+- Added 31-byte advertising payload limit validation to `MockBLE.gap_advertise` in `tests/mocks/micropython_mocks.py` to prevent regressions (`#65`).
+- Added `test_ble_provisioning.py` to deployment tool `scripts/deploy_firmware.py` (`#65`).
+- Clarified hardware LED functions (PMU, Modem VCC, NETLIGHT) and status logging in `docs/BLE_MANUAL_TESTING.md` (`#65`).
+
 ## [0.21.0] - 2026-09-19
 
 ### Added

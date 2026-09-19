@@ -7,8 +7,6 @@ Run on device via:
     python scripts/deploy_firmware.py run firmware/test_ble_provisioning.py
 """
 
-from __future__ import annotations
-
 try:
     import utime as time  # type: ignore[import-not-found]
 except ImportError:

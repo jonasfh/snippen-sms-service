@@ -357,6 +357,10 @@ class MockBLE:
             self._adv_data = None
             self._resp_data = None
         else:
+            if adv_data is not None and len(adv_data) > 31:
+                raise ValueError("buffer too long")
+            if resp_data is not None and len(resp_data) > 31:
+                raise ValueError("buffer too long")
             self._is_advertising = True
             self._adv_interval_us = interval_us
             self._adv_data = adv_data

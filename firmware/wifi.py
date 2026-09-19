@@ -3,8 +3,6 @@
 Handles WiFi scanning, connection verification, and network management.
 """
 
-from __future__ import annotations
-
 try:
     import network  # type: ignore[import-not-found]
 except ImportError:
