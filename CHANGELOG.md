@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-09-19
+
+### Added
+- Automated MicroPython bytecode compilation and syntax validation test suite `tests/test_firmware_micropython_syntax.py` (`#69`):
+  - Validates that every `.py` file in `firmware/` compiles cleanly to `.mpy` bytecode using the official MicroPython `mpy-cross` compiler.
+  - Verifies AST across all firmware files to ensure no forbidden imports (`__future__`) are present.
+  - Tests negative scenarios ensuring unsupported syntax (e.g. PEP 448 `{**dict}` unpacking) is caught automatically before merge.
+- Added `mpy-cross>=1.20.0` as a standard development dependency in `pyproject.toml` (`#69`).
+
 ## [0.21.2] - 2026-09-19
 
 ### Fixed

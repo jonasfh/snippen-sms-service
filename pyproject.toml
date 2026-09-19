@@ -27,6 +27,7 @@ dev = [
     "esptool>=5.0.0",
     "mpremote>=1.20.0",
     "pyserial>=3.5",
+    "mpy-cross>=1.20.0",
 ]
 
 [tool.setuptools.dynamic]
