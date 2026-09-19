@@ -9,6 +9,11 @@ try:
 except ImportError:
     import time
 
+try:
+    import sms_encoding
+except ImportError:
+    sms_encoding = None
+
 
 def _ticks_ms() -> int:
     """Return current millisecond tick counter."""
@@ -81,6 +86,8 @@ def parse_cmgl_header(line: str) -> dict | None:
 
     status = tokens[0]
     sender = tokens[1]
+    if sms_encoding is not None:
+        sender = sms_encoding.decode_inbound_text(sender)
     timestamp = tokens[-1] if len(tokens) >= 3 else ""
 
     return {
@@ -230,49 +237,66 @@ class ModemDriver:
         except ValueError as err:
             return False, f"Invalid phone number: {err}"
 
-        self.flush_input()
+        use_ucs2 = False
+        if sms_encoding is not None and not sms_encoding.is_gsm7(text):
+            use_ucs2 = True
 
-        # Initiate SMS command
-        self.write_raw(f'AT+CMGS="{target_number}"\r\n')
+        if use_ucs2:
+            self.send_cmd('AT+CSCS="UCS2"', timeout_ms=1000)
+            encoded_number = sms_encoding.encode_ucs2_hex(target_number)
+            cmgs_cmd = f'AT+CMGS="{encoded_number}"\r\n'
+            body_payload = sms_encoding.encode_ucs2_hex(text) + "\x1a"
+        else:
+            cmgs_cmd = f'AT+CMGS="{target_number}"\r\n'
+            body_payload = text + "\x1a"
 
-        # Wait for '>' prompt
-        prompt_found = False
-        start = _ticks_ms()
-        while _ticks_diff(_ticks_ms(), start) < 3000:
-            chunk = self.uart.read(getattr(self.uart, "any", lambda: 1)() or 1)
-            if chunk:
-                if b">" in chunk:
-                    prompt_found = True
+        try:
+            self.flush_input()
+
+            # Initiate SMS command
+            self.write_raw(cmgs_cmd)
+
+            # Wait for '>' prompt
+            prompt_found = False
+            start = _ticks_ms()
+            while _ticks_diff(_ticks_ms(), start) < 3000:
+                chunk = self.uart.read(getattr(self.uart, "any", lambda: 1)() or 1)
+                if chunk:
+                    if b">" in chunk:
+                        prompt_found = True
+                        break
+                    if b"ERROR" in chunk:
+                        return False, "Modem rejected AT+CMGS command"
+                time.sleep_ms(50)
+
+            if not prompt_found:
+                return False, "Timeout waiting for '>' prompt"
+
+            # Transmit message body terminated by Ctrl+Z (\x1A)
+            self.write_raw(body_payload)
+
+            # Wait for delivery confirmation (+CMGS: <id> and OK)
+            success, lines = self._read_response(
+                timeout_ms=timeout_ms,
+                stop_tokens=("OK", "ERROR", "+CMS ERROR", "+CME ERROR"),
+            )
+
+            msg_ref = None
+            for line in lines:
+                if "+CMGS:" in line:
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        msg_ref = parts[1].strip()
                     break
-                if b"ERROR" in chunk:
-                    return False, "Modem rejected AT+CMGS command"
-            time.sleep_ms(50)
 
-        if not prompt_found:
-            return False, "Timeout waiting for '>' prompt"
+            if success or msg_ref is not None:
+                return True, msg_ref if msg_ref else "OK"
 
-        # Transmit message body terminated by Ctrl+Z (\x1A)
-        self.write_raw(text + "\x1a")
-
-        # Wait for delivery confirmation (+CMGS: <id> and OK)
-        success, lines = self._read_response(
-            timeout_ms=timeout_ms,
-            stop_tokens=("OK", "ERROR", "+CMS ERROR", "+CME ERROR"),
-        )
-
-        msg_ref = None
-        for line in lines:
-            if "+CMGS:" in line:
-                parts = line.split(":", 1)
-                if len(parts) > 1:
-                    msg_ref = parts[1].strip()
-                break
-
-        if success or msg_ref is not None:
-            return True, msg_ref if msg_ref else "OK"
-
-        error_line = next((line for line in lines if "ERROR" in line), "Unknown send failure")
-        return False, error_line
+            error_line = next((line for line in lines if "ERROR" in line), "Unknown send failure")
+            return False, error_line
+        finally:
+            if use_ucs2:
+                self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
 
     def read_inbound_sms(self, delete_after_read: bool = True) -> list[dict]:
         """Read unread/received SMS messages from SIM card storage.
@@ -298,7 +322,10 @@ class ModemDriver:
             stripped = line.strip()
             if stripped.startswith("+CMGL:"):
                 if current_msg is not None:
-                    current_msg["body"] = "\n".join(body_lines).strip()
+                    raw_body = "\n".join(body_lines).strip()
+                    if sms_encoding is not None:
+                        raw_body = sms_encoding.decode_inbound_text(raw_body)
+                    current_msg["body"] = raw_body
                     messages.append(current_msg)
                     body_lines = []
 
@@ -309,7 +336,10 @@ class ModemDriver:
                 body_lines.append(line.rstrip("\r\n"))
 
         if current_msg is not None:
-            current_msg["body"] = "\n".join(body_lines).strip()
+            raw_body = "\n".join(body_lines).strip()
+            if sms_encoding is not None:
+                raw_body = sms_encoding.decode_inbound_text(raw_body)
+            current_msg["body"] = raw_body
             messages.append(current_msg)
 
         # Delete read messages from SIM memory to avoid overflow
