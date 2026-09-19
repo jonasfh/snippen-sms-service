@@ -239,3 +239,28 @@ def test_gateway_app_suspends_polling_during_provisioning(
     app.tick()
     assert inbox_polled is True
     assert outbox_polled is True
+
+
+def test_gateway_app_ble_server_lifecycle_and_commands(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import main
+
+    app = main.GatewayApp(config={"wifi_ssid": "OldSSID", "snippen_api_token": "old_token"})
+    app.setup()
+    assert app.ble_server is not None
+    assert app.ble_server.is_running is False
+
+    # Enter provisioning mode -> BLE server starts
+    app.enter_provisioning_mode()
+    assert app.ble_server.is_running is True
+
+    # Simulate BLE config write callback
+    app.on_ble_config_received({"wifi_ssid": "UpdatedSSID"})
+    assert app.config["wifi_ssid"] == "UpdatedSSID"
+
+    # Simulate BLE command APPLY_AND_EXIT
+    res = app.on_ble_command("APPLY_AND_EXIT", {})
+    assert res["status"] == "ok"
+    assert app.is_provisioning_mode is False
+    assert app.ble_server.is_running is False

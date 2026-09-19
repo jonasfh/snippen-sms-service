@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 
 class MockPin:
@@ -202,6 +202,170 @@ class MockWLAN:
         return 3 if self._is_connected else 0
 
 
+class MockUUID:
+    """Mock MicroPython bluetooth.UUID object."""
+
+    def __init__(self, value: int | str | bytes) -> None:
+        if isinstance(value, int):
+            self.value = value
+            self._bytes = bytes([value & 0xFF, (value >> 8) & 0xFF])
+            self._str = f"{value:04x}"
+        elif isinstance(value, str):
+            clean = value.lower().replace("-", "")
+            self.value = clean
+            raw = bytes.fromhex(clean)
+            self._bytes = raw[::-1]
+            self._str = value.lower()
+        elif isinstance(value, (bytes, bytearray)):
+            self.value = bytes(value)
+            self._bytes = bytes(value)
+            self._str = bytes(value).hex()
+        else:
+            self.value = str(value)
+            self._bytes = str(value).encode("utf-8")
+            self._str = str(value)
+
+    def __bytes__(self) -> bytes:
+        return self._bytes
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, MockUUID):
+            return self._str == other._str or self.value == other.value
+        if isinstance(other, (str, int, bytes)):
+            return self == MockUUID(other)
+        return False
+
+    def __repr__(self) -> str:
+        return f"UUID('{self._str}')"
+
+
+class MockBLE:
+    """Mock MicroPython bluetooth.BLE interface."""
+
+    _instance: ClassVar[MockBLE | None] = None
+
+    def __new__(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._init_mock()
+        return cls._instance
+
+    def _init_mock(self) -> None:
+        self._is_active = False
+        self._irq_handler: Any = None
+        self._services: list[Any] = []
+        self._handles: dict[int, bytearray] = {}
+        self._next_handle = 1
+        self._is_advertising = False
+        self._adv_interval_us: int | None = None
+        self._adv_data: bytes | None = None
+        self._resp_data: bytes | None = None
+        self._mac = (0, b"\x12\x34\x56\x78\x9a\xbc")
+        self._gap_name = "MockBLE"
+        self._connected_centrals: set[int] = set()
+        self._notifications: list[tuple[int, int, bytes]] = []
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        if cls._instance is not None:
+            cls._instance._init_mock()
+
+    def active(self, value: bool | None = None) -> bool:
+        if value is not None:
+            self._is_active = bool(value)
+            if not self._is_active:
+                self._is_advertising = False
+                self._connected_centrals.clear()
+        return self._is_active
+
+    def config(self, param: str | None = None, **kwargs: Any) -> Any:
+        if "gap_name" in kwargs:
+            self._gap_name = kwargs["gap_name"]
+        if param == "mac":
+            return self._mac
+        if param == "gap_name":
+            return self._gap_name
+        return None
+
+    def irq(self, handler: Any) -> None:
+        self._irq_handler = handler
+
+    def gatts_register_services(self, services: tuple[Any, ...]) -> tuple[tuple[int, ...], ...]:
+        result = []
+        for service in services:
+            _service_uuid, chars = service
+            char_handles = []
+            for _char_def in chars:
+                handle = self._next_handle
+                self._next_handle += 1
+                self._handles[handle] = bytearray()
+                char_handles.append(handle)
+            result.append(tuple(char_handles))
+        self._services.extend(services)
+        return tuple(result)
+
+    def gatts_read(self, handle: int) -> bytes:
+        return bytes(self._handles.get(handle, b""))
+
+    def gatts_write(self, handle: int, data: bytes | str) -> None:
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        self._handles[handle] = bytearray(data)
+
+    def gatts_notify(self, conn_handle: int, handle: int, data: bytes | str | None = None) -> None:
+        if data is not None:
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+            self.gatts_write(handle, data)
+        payload = self.gatts_read(handle)
+        self._notifications.append((conn_handle, handle, payload))
+
+    def gap_advertise(
+        self,
+        interval_us: int | None,
+        adv_data: bytes | None = None,
+        resp_data: bytes | None = None,
+        connectable: bool = True,
+    ) -> None:
+        if interval_us is None:
+            self._is_advertising = False
+            self._adv_data = None
+            self._resp_data = None
+        else:
+            self._is_advertising = True
+            self._adv_interval_us = interval_us
+            self._adv_data = adv_data
+            self._resp_data = resp_data
+
+    # Helper methods for simulation in unit tests
+    def simulate_connect(
+        self,
+        conn_handle: int = 1,
+        addr_type: int = 0,
+        addr: bytes = b"\xaa\xbb\xcc\xdd\xee\xff",
+    ) -> None:
+        self._connected_centrals.add(conn_handle)
+        if self._irq_handler:
+            self._irq_handler(1, (conn_handle, addr_type, addr))
+
+    def simulate_disconnect(
+        self,
+        conn_handle: int = 1,
+        addr_type: int = 0,
+        addr: bytes = b"\xaa\xbb\xcc\xdd\xee\xff",
+    ) -> None:
+        self._connected_centrals.discard(conn_handle)
+        if self._irq_handler:
+            self._irq_handler(2, (conn_handle, addr_type, addr))
+
+    def simulate_write(self, value_handle: int, data: bytes | str, conn_handle: int = 1) -> None:
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        self.gatts_write(value_handle, data)
+        if self._irq_handler:
+            self._irq_handler(3, (conn_handle, value_handle))
+
+
 class MicroPythonEnvironment:
     """Context manager / fixture helper to install mock MicroPython modules into sys.modules."""
 
@@ -212,6 +376,7 @@ class MicroPythonEnvironment:
     def install(self) -> None:
         MockPin.reset_registry()
         MockUART.reset_registry()
+        MockBLE.reset_instance()
         self.mock_time.reset()
         self.reset_called = False
 
@@ -234,6 +399,16 @@ class MicroPythonEnvironment:
         network_mod.WLAN = MockWLAN  # type: ignore[attr-defined]
         sys.modules["network"] = network_mod
 
+        # Build bluetooth / ubluetooth module
+        bt_mod = types.ModuleType("bluetooth")
+        bt_mod.BLE = MockBLE  # type: ignore[attr-defined]
+        bt_mod.UUID = MockUUID  # type: ignore[attr-defined]
+        bt_mod.FLAG_READ = 0x0002  # type: ignore[attr-defined]
+        bt_mod.FLAG_WRITE = 0x0008  # type: ignore[attr-defined]
+        bt_mod.FLAG_NOTIFY = 0x0010  # type: ignore[attr-defined]
+        sys.modules["bluetooth"] = bt_mod
+        sys.modules["ubluetooth"] = bt_mod
+
         # Patch or provide utime / time
         utime_mod = types.ModuleType("utime")
         utime_mod.sleep = self.mock_time.sleep  # type: ignore[attr-defined]
@@ -248,6 +423,9 @@ class MicroPythonEnvironment:
     def uninstall(self) -> None:
         sys.modules.pop("machine", None)
         sys.modules.pop("network", None)
+        sys.modules.pop("bluetooth", None)
+        sys.modules.pop("ubluetooth", None)
         sys.modules.pop("utime", None)
         MockPin.reset_registry()
         MockUART.reset_registry()
+        MockBLE.reset_instance()
