@@ -319,7 +319,13 @@ class GatewayApp:
                     print(f"[main] Reached max cycles ({max_cycles}). Stopping loop.")
                     break
 
-                time.sleep(1)
+                # Sleep in 50ms slices while polling button for instant response
+                for _ in range(20):
+                    if not self.running:
+                        break
+                    if self.button is not None:
+                        self.button.poll()
+                    time.sleep(0.05)
         except KeyboardInterrupt:
             print("\n[main] Keyboard interrupt received. Stopping event loop.")
         except Exception as exc:  # noqa: BLE001

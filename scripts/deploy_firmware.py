@@ -15,7 +15,13 @@ import argparse
 import glob
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+# Ensure devcontainer venv site-packages are accessible even if run via system python
+for venv_site in Path("/home/vscode/.venv/lib").glob("python*/site-packages"):
+    if venv_site.is_dir() and str(venv_site) not in sys.path:
+        sys.path.insert(0, str(venv_site))
 
 
 def find_default_port() -> str | None:
@@ -67,6 +73,7 @@ def deploy_firmware(
     port: str | None,
     include_config: bool = False,
     do_reset: bool = True,
+    follow: bool = False,
     dry_run: bool = False,
 ) -> int:
     """Deploy firmware files to target ESP32 flash root."""
@@ -84,32 +91,40 @@ def deploy_firmware(
         "ble_config.py",
         "wifi.py",
         "test_ble_provisioning.py",
+        "test_button.py",
     ]
 
     if include_config:
         local_cfg = firmware_dir / "config_local.py"
-        dot_cfg = firmware_dir / "config.local.py"
-        json_cfg = firmware_dir / "config.json"
         if local_cfg.exists():
             files_to_deploy.append("config_local.py")
-        elif dot_cfg.exists():
-            files_to_deploy.append("config.local.py")
-        elif json_cfg.exists():
+        config_json = firmware_dir / "config.json"
+        if config_json.exists():
             files_to_deploy.append("config.json")
+
+    base_cmd = build_mpremote_base_cmd(port)
 
     print(f"[deploy] Preparing to deploy firmware files from {firmware_dir}: {files_to_deploy}")
 
-    for filename in files_to_deploy:
+    for idx, filename in enumerate(files_to_deploy):
         local_path = firmware_dir / filename
         if not local_path.exists():
-            print(f"[deploy] Warning: {filename} does not exist in {firmware_dir}, skipping.")
+            print(f"[deploy] Warning: Skipping missing file {local_path}")
             continue
 
-        base_cmd = build_mpremote_base_cmd(port)
-        cp_cmd = [*base_cmd, "cp", str(local_path), f":{filename}"]
+        remote_dest = f":{filename}"
+        cp_cmd = [*base_cmd, "cp", str(local_path), remote_dest]
+
         ret = run_mpremote_command(cp_cmd, dry_run=dry_run)
+        if ret != 0 and idx == 0 and not dry_run and port:
+            print(
+                "[deploy] Device unresponsive to raw REPL handshake. Attempting hardware reset recovery..."
+            )
+            hardware_reset_device(port)
+            time.sleep(1.0)
+            ret = run_mpremote_command(cp_cmd, dry_run=dry_run)
         if ret != 0:
-            print(f"[deploy] Failed to copy {filename} to device.")
+            print(f"[deploy] ERROR: Failed to copy {filename}")
             return ret
 
     print("[deploy] All firmware files copied successfully.")
@@ -117,9 +132,80 @@ def deploy_firmware(
     if do_reset:
         print("[deploy] Performing soft reset on device...")
         reset_cmd = [*build_mpremote_base_cmd(port), "soft-reset"]
-        return run_mpremote_command(reset_cmd, dry_run=dry_run)
+        ret = run_mpremote_command(reset_cmd, dry_run=dry_run)
+        if ret != 0:
+            return ret
+
+        if follow:
+            return monitor_device(port=port, dry_run=dry_run)
 
     return 0
+
+
+def hardware_reset_device(port: str | None) -> int:
+    """Perform physical hardware reset of ESP32 via RTS line pulse."""
+    if not port:
+        print("[reset] Error: No serial port specified or detected.")
+        return 1
+    try:
+        import serial
+    except ImportError:
+        print("[reset] Error: pyserial is required for hardware reset. Run: pip install pyserial")
+        return 1
+
+    try:
+        print(f"[reset] Triggering physical hardware reset via RTS line on {port}...")
+        with serial.Serial(port, 115200) as ser:
+            ser.setDTR(False)
+            ser.setRTS(True)
+            time.sleep(0.1)
+            ser.setRTS(False)
+            time.sleep(0.2)
+        print("[reset] Hardware reset pulse completed.")
+        return 0
+    except (serial.SerialException, OSError) as exc:
+        print(f"[reset] Error during hardware reset: {exc}")
+        return 1
+
+
+def monitor_device(port: str | None, baudrate: int = 115200, dry_run: bool = False) -> int:
+    """Stream live serial stdout from device like 'tail -f' without interrupting MicroPython execution."""
+    if dry_run:
+        print(f"[dry-run] Would monitor serial port {port} at {baudrate} baud.")
+        return 0
+
+    if not port:
+        print("[monitor] Error: No serial port specified or detected.")
+        return 1
+
+    try:
+        import serial
+    except ImportError:
+        print(
+            "[monitor] Error: pyserial is required for serial monitoring. Run: pip install pyserial"
+        )
+        return 1
+
+    print(f"[monitor] Listening to serial output on {port} ({baudrate} baud)...")
+    print("[monitor] Device is running in background. Press Ctrl+C to exit monitor.")
+
+    try:
+        with serial.Serial(port, baudrate=baudrate, timeout=0.1) as ser:
+            while True:
+                line = ser.readline()
+                if line:
+                    try:
+                        text = line.decode("utf-8", errors="replace")
+                        sys.stdout.write(text)
+                        sys.stdout.flush()
+                    except (UnicodeDecodeError, OSError):
+                        pass
+    except KeyboardInterrupt:
+        print("\n[monitor] Monitoring stopped. (Device continues running).")
+        return 0
+    except (serial.SerialException, OSError) as exc:
+        print(f"\n[monitor] Serial error: {exc}")
+        return 1
 
 
 def list_device_files(port: str | None, dry_run: bool = False) -> int:
@@ -136,7 +222,12 @@ def open_repl(port: str | None, dry_run: bool = False) -> int:
 
 def reset_device(port: str | None, hard: bool = False, dry_run: bool = False) -> int:
     """Reset device."""
-    action = "reset" if hard else "soft-reset"
+    if hard:
+        if dry_run:
+            print(f"[dry-run] Would trigger physical hardware reset via RTS on {port}")
+            return 0
+        return hardware_reset_device(port)
+    action = "soft-reset"
     cmd = [*build_mpremote_base_cmd(port), action]
     return run_mpremote_command(cmd, dry_run=dry_run)
 
@@ -159,6 +250,13 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Print actions without communicating with hardware.",
+        default=argparse.SUPPRESS,
+    )
+    common_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose output logging",
         default=argparse.SUPPRESS,
     )
 
@@ -185,6 +283,27 @@ def main() -> int:
         "--no-reset",
         action="store_true",
         help="Do not reset device after uploading",
+    )
+    deploy_parser.add_argument(
+        "--follow",
+        "-f",
+        action="store_true",
+        dest="follow",
+        help="Follow live output from device (like 'tail -f') after deploy and reset",
+    )
+
+    # Subcommand: monitor
+    monitor_parser = subparsers.add_parser(
+        "monitor",
+        parents=[common_parser],
+        help="Stream live stdout output from device (like 'tail -f') without interrupting execution",
+    )
+    monitor_parser.add_argument(
+        "--baudrate",
+        "-b",
+        type=int,
+        default=115200,
+        help="Serial baud rate",
     )
 
     # Subcommand: ls
@@ -233,8 +352,11 @@ def main() -> int:
             port=port,
             include_config=args.include_config,
             do_reset=not args.no_reset,
+            follow=args.follow,
             dry_run=dry_run,
         )
+    elif args.command == "monitor":
+        return monitor_device(port=port, baudrate=args.baudrate, dry_run=dry_run)
     elif args.command == "ls":
         return list_device_files(port=port, dry_run=dry_run)
     elif args.command == "repl":

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-09-19
+
+### Added
+- Added passive serial monitor (`deploy -f` / `monitor`) and physical hardware reset in `scripts/deploy_firmware.py` (`#79`):
+  - Stream live serial stdout (`tail -f`) after reset via `deploy -f` / `deploy --follow` without interrupting MicroPython execution.
+  - Added standalone `monitor` subcommand (`python scripts/deploy_firmware.py monitor`) for viewing logs anytime.
+  - Separated `-v` (`--verbose`) for verbose logging and `-f` (`--follow`) for log streaming.
+  - Added physical hardware reset (`reset --hard`) by pulsing the ESP32 `EN` pin via serial RTS line.
+  - Added self-healing recovery to `deploy`: automatically triggers RTS reset pulse and retries if the initial raw REPL handshake fails.
+  - Added automatic Dev Container virtualenv site-packages inclusion for resilient execution.
+- Added button diagnostic tools (`#79`):
+  - Created on-device test `firmware/test_button.py` for physical press, short press, and 3s long press verification.
+  - Created host diagnostic runner `scripts/test_button_live.py`.
+
+### Changed
+- Improved button responsiveness in `firmware/main.py`: replaced 1-second blocking sleep in main loop with 50ms sliced polling (`#79`).
+
 ## [0.26.0] - 2026-09-19
 
 ### Fixed
