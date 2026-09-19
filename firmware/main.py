@@ -103,7 +103,9 @@ class GatewayApp:
             password = payload.get("wifi_password") or self.config.get("wifi_password", "")
             if wifi is not None:
                 res = wifi.test_connection(ssid, password)
-                return {"cmd": "TEST_WIFI", **res}
+                resp = {"cmd": "TEST_WIFI"}
+                resp.update(res)
+                return resp
             return {"cmd": "TEST_WIFI", "status": "error", "message": "WiFi module unavailable"}
 
         if cmd in ("APPLY_AND_EXIT", "SAVE_CONFIG"):

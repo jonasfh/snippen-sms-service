@@ -51,7 +51,9 @@ def run_manual_ble_test() -> None:
             print(f"[BLE-CMD] Testing WiFi connection to '{ssid}'...")
             res = wifi.test_connection(ssid, password)
             print(f"[BLE-CMD] Result: {res.get('status')} (IP: {res.get('ip', 'none')})")
-            return {"cmd": "TEST_WIFI", **res}
+            resp = {"cmd": "TEST_WIFI"}
+            resp.update(res)
+            return resp
 
         if cmd in ("APPLY_AND_EXIT", "SAVE_CONFIG"):
             print("[BLE-CMD] Saving configuration to config.json...")
