@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-09-21
+
+### Changed
+- Simplified BOOT button handling and improved BLE provisioning activation responsiveness (`#83`):
+  - Removed 3-second long-press requirement in `firmware/button.py` (`ButtonHandler`), allowing any debounced button press (50 ms) to trigger activation immediately.
+  - Removed obsolete long-press timer variables (`_press_start_ms`, `_long_press_triggered`) and threshold checks.
+  - Ensured single activation per physical press by debouncing input transitions and preventing repeated event triggers while the button is continuously held down.
+  - Added `on_press` callback in `ButtonHandler` while retaining `on_short_press` and `on_long_press` as backward-compatible aliases.
+  - Updated `firmware/main.py` (`GatewayApp`) to connect `on_boot_button_press` on button press.
+  - Enhanced main event loop in `firmware/main.py` to immediately interrupt the 50ms sliced sleep loop upon provisioning mode state change, eliminating latency when entering or exiting BLE mode.
+  - Updated on-device interactive button test `firmware/test_button.py` and `firmware/test_ble_provisioning.py` for single-press activation.
+  - Updated documentation in `docs/README_LILYGO.md` and Web Bluetooth onboarding in `tools/web-config/index.html`.
+  - Expanded unit test suite in `tests/test_firmware_button.py` and `tests/test_firmware_main.py`.
+
 ## [0.29.0] - 2026-09-21
 
 ### Added

@@ -1,4 +1,4 @@
-"""Unit tests for firmware/button.py MicroPython button handler."""
+"""Unit tests for firmware/button.py MicroPython button handler (Issue #59, #83)."""
 
 from __future__ import annotations
 
@@ -63,15 +63,16 @@ def test_button_debounce_ignores_glitches(mpy_env: MicroPythonEnvironment) -> No
     import button
 
     mock_pin = MockPin(pin_id=0, value=1)
-    short_calls = 0
-    long_calls = 0
+    press_calls = 0
+
+    def on_press() -> None:
+        nonlocal press_calls
+        press_calls += 1
 
     handler = button.ButtonHandler(
         pin=mock_pin,
-        long_press_ms=1000,
         debounce_ms=50,
-        on_short_press=lambda: None,
-        on_long_press=lambda: None,
+        on_press=on_press,
     )
 
     # Initial state
@@ -86,100 +87,136 @@ def test_button_debounce_ignores_glitches(mpy_env: MicroPythonEnvironment) -> No
     assert handler.poll(now_ms=1030) is None
     assert handler.poll(now_ms=1100) is None
 
-    assert short_calls == 0
-    assert long_calls == 0
+    assert press_calls == 0
 
 
-def test_button_short_press(mpy_env: MicroPythonEnvironment) -> None:
+def test_button_single_press_triggers_immediately(mpy_env: MicroPythonEnvironment) -> None:
     import button
 
     mock_pin = MockPin(pin_id=0, value=1)
-    short_pressed = False
+    press_count = 0
 
-    def on_short() -> None:
-        nonlocal short_pressed
-        short_pressed = True
+    def on_press() -> None:
+        nonlocal press_count
+        press_count += 1
 
     handler = button.ButtonHandler(
         pin=mock_pin,
-        long_press_ms=1000,
         debounce_ms=50,
-        on_short_press=on_short,
+        on_press=on_press,
     )
 
-    # Start at t=1000, button released
+    # Button pressed down at t=1000
+    mock_pin.value(0)
     handler.poll(now_ms=1000)
 
-    # Button pressed down at t=1010
-    mock_pin.value(0)
-    handler.poll(now_ms=1010)
+    # Before debounce completes: no event
+    assert handler.poll(now_ms=1040) is None
+    assert press_count == 0
 
-    # Debounce period passes at t=1070
-    handler.poll(now_ms=1070)
+    # At t=1050 (debounce_ms=50 elapsed): immediate press event!
+    evt = handler.poll(now_ms=1050)
+    assert evt == "press"
+    assert press_count == 1
     assert handler._is_pressed is True
 
-    # Button released at t=1200 (held for 130ms, less than long_press 1000ms)
-    mock_pin.value(1)
-    handler.poll(now_ms=1200)
 
-    # Debounce release period passes at t=1260
-    evt = handler.poll(now_ms=1260)
-    assert evt == "short_press"
-    assert short_pressed is True
-
-
-def test_button_long_press_detection(mpy_env: MicroPythonEnvironment) -> None:
+def test_button_no_repeated_activations_while_held(mpy_env: MicroPythonEnvironment) -> None:
     import button
 
     mock_pin = MockPin(pin_id=0, value=1)
-    long_pressed = False
-    short_pressed = False
+    press_count = 0
 
-    def on_long() -> None:
-        nonlocal long_pressed
-        long_pressed = True
+    def on_press() -> None:
+        nonlocal press_count
+        press_count += 1
+
+    handler = button.ButtonHandler(
+        pin=mock_pin,
+        debounce_ms=50,
+        on_press=on_press,
+    )
+
+    # Press and debounce
+    mock_pin.value(0)
+    handler.poll(now_ms=1000)
+    assert handler.poll(now_ms=1060) == "press"
+    assert press_count == 1
+
+    # Keep holding the button for seconds: no additional events or callbacks
+    for t in (1100, 1500, 2000, 3000, 4000, 5000):
+        assert handler.poll(now_ms=t) is None
+        assert press_count == 1
+
+
+def test_button_resets_after_release(mpy_env: MicroPythonEnvironment) -> None:
+    import button
+
+    mock_pin = MockPin(pin_id=0, value=1)
+    press_count = 0
+
+    def on_press() -> None:
+        nonlocal press_count
+        press_count += 1
+
+    handler = button.ButtonHandler(
+        pin=mock_pin,
+        debounce_ms=50,
+        on_press=on_press,
+    )
+
+    # First press
+    mock_pin.value(0)
+    handler.poll(now_ms=1000)
+    handler.poll(now_ms=1060)
+    assert press_count == 1
+    assert handler._is_pressed is True
+
+    # Released at t=1200
+    mock_pin.value(1)
+    handler.poll(now_ms=1200)
+
+    # Debounce release passes at t=1260
+    handler.poll(now_ms=1260)
+    assert handler._is_pressed is False
+
+    # Second press at t=2000
+    mock_pin.value(0)
+    handler.poll(now_ms=2000)
+    evt = handler.poll(now_ms=2060)
+    assert evt == "press"
+    assert press_count == 2
+
+
+def test_button_backward_compatibility_callbacks(mpy_env: MicroPythonEnvironment) -> None:
+    import button
+
+    mock_pin = MockPin(pin_id=0, value=1)
+    short_calls = 0
+    long_calls = 0
 
     def on_short() -> None:
-        nonlocal short_pressed
-        short_pressed = True
+        nonlocal short_calls
+        short_calls += 1
+
+    def on_long() -> None:
+        nonlocal long_calls
+        long_calls += 1
 
     handler = button.ButtonHandler(
         pin=mock_pin,
         long_press_ms=3000,
         debounce_ms=50,
-        on_long_press=on_long,
         on_short_press=on_short,
+        on_long_press=on_long,
     )
 
-    # t=1000: button down
     mock_pin.value(0)
     handler.poll(now_ms=1000)
-
-    # t=1060: debounced press confirmed
-    handler.poll(now_ms=1060)
-    assert handler._is_pressed is True
-
-    # t=3000: held for 1940 ms (< 3000 ms) -> no event yet
-    evt = handler.poll(now_ms=3000)
-    assert evt is None
-    assert long_pressed is False
-
-    # t=4070: held for 3010 ms (>= 3000 ms) -> long_press event!
-    evt = handler.poll(now_ms=4070)
-    assert evt == "long_press"
-    assert long_pressed is True
-
-    # Subsequent poll while still held down does not re-trigger
-    assert handler.poll(now_ms=4500) is None
-
-    # Released at t=5000
-    mock_pin.value(1)
-    handler.poll(now_ms=5000)
-
-    # Debounce release passes at t=5060 -> should NOT trigger short press
-    evt = handler.poll(now_ms=5060)
-    assert evt is None
-    assert short_pressed is False
+    evt = handler.poll(now_ms=1060)
+    assert evt == "press"
+    assert short_calls == 1
+    assert long_calls == 1
 
 
 def test_button_no_pin_handled_gracefully(mpy_env: MicroPythonEnvironment) -> None:

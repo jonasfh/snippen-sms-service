@@ -160,7 +160,7 @@ def test_gateway_app_enters_provisioning_when_button_held_at_boot(
     assert app.is_provisioning_mode is True
 
 
-def test_gateway_app_button_long_press_toggles_provisioning(
+def test_gateway_app_button_press_toggles_provisioning(
     mpy_env: MicroPythonEnvironment,
 ) -> None:
     import main
@@ -169,11 +169,28 @@ def test_gateway_app_button_long_press_toggles_provisioning(
     app.setup()
     assert app.is_provisioning_mode is False
 
-    # First long press activates provisioning mode
+    # First short press activates provisioning mode (Issue #83)
+    app.on_boot_button_press()
+    assert app.is_provisioning_mode is True
+
+    # Second press deactivates provisioning mode
+    app.on_boot_button_press()
+    assert app.is_provisioning_mode is False
+
+
+def test_gateway_app_button_long_press_backward_compat(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    import main
+
+    app = main.GatewayApp(config={"wifi_ssid": "SnippenGuest", "snippen_api_token": "secret-tok"})
+    app.setup()
+    assert app.is_provisioning_mode is False
+
+    # on_boot_long_press alias still activates and toggles
     app.on_boot_long_press()
     assert app.is_provisioning_mode is True
 
-    # Second long press deactivates provisioning mode
     app.on_boot_long_press()
     assert app.is_provisioning_mode is False
 
