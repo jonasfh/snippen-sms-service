@@ -22,6 +22,8 @@ MODEM_CMD_TIMEOUT_MS = 2000
 MODEM_SMS_TIMEOUT_MS = 15000
 MODEM_SIM_PIN = ""
 SMS_AUTO_DELETE = True
+SMS_CHUNK_DELAY_MS = 500
+SMS_MULTIPART_TIMEOUT_SEC = 30
 
 # WiFi Settings
 WIFI_SSID = ""
@@ -63,6 +65,8 @@ def get_default_config() -> dict:
         "modem_sms_timeout_ms": MODEM_SMS_TIMEOUT_MS,
         "modem_sim_pin": MODEM_SIM_PIN,
         "sms_auto_delete": SMS_AUTO_DELETE,
+        "sms_chunk_delay_ms": SMS_CHUNK_DELAY_MS,
+        "sms_multipart_timeout_sec": SMS_MULTIPART_TIMEOUT_SEC,
         "wifi_ssid": WIFI_SSID,
         "wifi_password": WIFI_PASSWORD,
         "wifi_connect_timeout_sec": WIFI_CONNECT_TIMEOUT_SEC,
