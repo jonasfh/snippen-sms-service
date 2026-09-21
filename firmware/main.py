@@ -188,13 +188,17 @@ class GatewayApp:
 
         return status
 
-    def on_boot_long_press(self) -> None:
-        """Callback when BOOT button (GPIO 0) is held for >= 3 seconds."""
-        print("[main] BOOT button long-press detected.")
+    def on_boot_button_press(self) -> None:
+        """Callback when BOOT button (GPIO 0) is pressed (Issue #83)."""
+        print("[main] BOOT button press detected.")
         if self.is_provisioning_mode:
             self.exit_provisioning_mode(reason="button_toggle")
         else:
-            self.enter_provisioning_mode(reason="button_long_press")
+            self.enter_provisioning_mode(reason="button_press")
+
+    def on_boot_long_press(self) -> None:
+        """Backward-compatible alias for on_boot_button_press."""
+        self.on_boot_button_press()
 
     def setup(self) -> bool:
         """Verify hardware state and setup subsystem connections."""
@@ -203,14 +207,12 @@ class GatewayApp:
         # Initialize physical BOOT button handler
         if self.button is None and ButtonHandler is not None:
             btn_pin = self.config.get("pin_boot_button", 0)
-            long_press_ms = self.config.get("button_long_press_ms", 3000)
             debounce_ms = self.config.get("button_debounce_ms", 50)
             try:
                 self.button = ButtonHandler(
                     pin_id=btn_pin,
-                    long_press_ms=long_press_ms,
                     debounce_ms=debounce_ms,
-                    on_long_press=self.on_boot_long_press,
+                    on_press=self.on_boot_button_press,
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[main] Warning: Failed to initialize BOOT button on GPIO {btn_pin}: {exc}")
@@ -478,11 +480,14 @@ class GatewayApp:
                     break
 
                 # Sleep in 50ms slices while polling button for instant response
+                prev_mode = self.is_provisioning_mode
                 for _ in range(20):
                     if not self.running:
                         break
                     if self.button is not None:
                         self.button.poll()
+                    if self.is_provisioning_mode != prev_mode:
+                        break
                     time.sleep(0.05)
         except KeyboardInterrupt:
             print("\n[main] Keyboard interrupt received. Stopping event loop.")

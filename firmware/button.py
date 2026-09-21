@@ -1,4 +1,4 @@
-"""Button input handler with debouncing and long-press detection for MicroPython (Issue #59)."""
+"""Button input handler with debouncing for MicroPython (Issue #59, #83)."""
 
 try:
     import utime as time
@@ -26,14 +26,15 @@ def _ticks_diff(t1: int, t2: int) -> int:
 
 
 class ButtonHandler:
-    """Monitors a digital input pin for debounced short and long presses."""
+    """Monitors a digital input pin for debounced button presses (Issue #83)."""
 
     def __init__(
         self,
         pin_id: int = 0,
-        long_press_ms: int = 3000,
+        long_press_ms: int = 3000,  # Deprecated (Issue #83), retained for compatibility
         debounce_ms: int = 50,
         active_low: bool = True,
+        on_press: object | None = None,
         on_long_press: object | None = None,
         on_short_press: object | None = None,
         pin: object | None = None,
@@ -42,6 +43,7 @@ class ButtonHandler:
         self.long_press_ms = long_press_ms
         self.debounce_ms = debounce_ms
         self.active_low = active_low
+        self.on_press = on_press
         self.on_long_press = on_long_press
         self.on_short_press = on_short_press
 
@@ -54,8 +56,6 @@ class ButtonHandler:
             self.pin = None
 
         self._is_pressed = False
-        self._press_start_ms = 0
-        self._long_press_triggered = False
         self._last_raw_val = None
         self._last_raw_change_ms = 0
 
@@ -67,12 +67,11 @@ class ButtonHandler:
         return val == 0 if self.active_low else val == 1
 
     def poll(self, now_ms: int | None = None) -> str | None:
-        """Poll button state, perform debouncing, and trigger callbacks if events occur.
+        """Poll button state, perform debouncing, and trigger callbacks on press (Issue #83).
 
         Returns:
-            'long_press' when held >= long_press_ms,
-            'short_press' when released before long_press_ms,
-            or None if no state transition event completed.
+            'press' when a valid debounced press transition occurs,
+            or None if no state transition completed.
         """
         if self.pin is None:
             return None
@@ -88,32 +87,21 @@ class ButtonHandler:
             self._last_raw_val = raw_val
             self._last_raw_change_ms = now_ms
 
-        # Only process state change after debounce_ms has passed steadily
         event: str | None = None
+        # Only process state change after debounce_ms has passed steadily
         if _ticks_diff(now_ms, self._last_raw_change_ms) >= self.debounce_ms:
             if raw_pressed and not self._is_pressed:
                 # Button transitioned to pressed (debounced)
                 self._is_pressed = True
-                self._press_start_ms = now_ms
-                self._long_press_triggered = False
+                event = "press"
+                if callable(self.on_press):
+                    self.on_press()
+                if callable(self.on_short_press):
+                    self.on_short_press()
+                if callable(self.on_long_press):
+                    self.on_long_press()
             elif not raw_pressed and self._is_pressed:
                 # Button transitioned to released (debounced)
                 self._is_pressed = False
-                if not self._long_press_triggered:
-                    duration = _ticks_diff(now_ms, self._press_start_ms)
-                    if duration >= self.debounce_ms:
-                        if callable(self.on_short_press):
-                            self.on_short_press()
-                        event = "short_press"
-                self._long_press_triggered = False
-
-        # If currently held down, check for long press threshold
-        if self._is_pressed and not self._long_press_triggered:
-            held_duration = _ticks_diff(now_ms, self._press_start_ms)
-            if held_duration >= self.long_press_ms:
-                self._long_press_triggered = True
-                if callable(self.on_long_press):
-                    self.on_long_press()
-                return "long_press"
 
         return event

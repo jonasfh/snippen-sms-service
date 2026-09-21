@@ -82,8 +82,7 @@ def run_manual_ble_test() -> None:
     # Button handler
     btn = ButtonHandler(
         pin_id=cfg.get("pin_boot_button", 0),
-        on_long_press=lambda: print("\n[BUTTON] BOOT button long-press detected!"),
-        on_short_press=lambda: print("\n[BUTTON] BOOT button short click detected!"),
+        on_press=lambda: print("\n[BUTTON] BOOT button press detected!"),
     )
 
     print("\n✅ BLE Provisioning Server kjører!")

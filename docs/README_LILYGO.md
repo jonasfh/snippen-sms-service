@@ -274,7 +274,7 @@ MicroPython-firmwaren ligger i `firmware/` og er adskilt fra vertsbiblioteket `s
 firmware/
 ├── ble_config.py      # BLE GATT provisioning-server og annonsering for trådløst oppsett
 ├── boot.py            # Maskinvareinit, modem power rail (GPIO 12), reset (GPIO 5), PWRKEY-puls (GPIO 4), UART1
-├── button.py          # BOOT-knapp (GPIO 0) inngangshåndtering med debouncing og 3s langt trykk
+├── button.py          # BOOT-knapp (GPIO 0) inngangshåndtering med debouncing og enkelt trykk for BLE
 ├── config.py          # Systemoppsett, pinouts, tidsavbrudd og API-konfigurasjon
 ├── config.example.py  # Mal for lokale overstyringer (WiFi-passord og API-nøkkel)
 ├── modem.py           # SimCom A7670E modemdriver: AT-motor, SMS sending/mottak, signal (CSQ), CREG og SIM-minne
