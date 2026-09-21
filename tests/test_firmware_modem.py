@@ -441,3 +441,221 @@ def test_read_inbound_sms_ucs2_decoding(mpy_env: MicroPythonEnvironment) -> None
     assert messages[0]["index"] == 1
     assert messages[0]["sender"] == sender_raw
     assert messages[0]["body"] == body_plain
+
+
+def test_send_sms_multipart_gsm7_success(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    cmgs_payloads: list[str] = []
+    msg_counter = 50
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal msg_counter
+        data_str = data.decode("utf-8", errors="ignore")
+        if "AT+CMGS=" in data_str:
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            cmgs_payloads.append(data_str)
+            resp = f"\r\n+CMGS: {msg_counter}\r\n\r\nOK\r\n".encode()
+            msg_counter += 1
+            return resp
+        return None
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 10})
+
+    # Message exceeding 160 characters
+    long_msg = (
+        "Hei! Dette er en lang bookingbekreftelse fra Snippen grendehus for det kommende arrangementet. "
+        "Dørkoden din er 9876 og gjelder fra fredag kl 15:00 til søndag kl 18:00. "
+        "Ta vare på koden! Velkommen skal dere være!"
+    )
+    assert len(long_msg) > 160
+
+    success, ref = driver.send_sms("+4799999999", long_msg)
+
+    assert success is True
+    assert ref == "50,51"
+    assert len(cmgs_payloads) == 2
+    assert "(1/2) " in cmgs_payloads[0]
+    assert "(2/2) " in cmgs_payloads[1]
+
+
+def test_send_sms_multipart_ucs2_with_emojis(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    cmgs_calls = 0
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal cmgs_calls
+        data_str = data.decode("utf-8", errors="ignore")
+        if 'AT+CSCS="UCS2"' in data_str or 'AT+CSCS="GSM"' in data_str:
+            return b"OK\r\n"
+        if "AT+CMGS=" in data_str:
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            cmgs_calls += 1
+            return f"\r\n+CMGS: {80 + cmgs_calls}\r\n\r\nOK\r\n".encode()
+        return None
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 10})
+
+    # Long UCS-2 message with emojis exceeding 70 code units
+    long_emoji_msg = (
+        "Velkommen til Snippen! 🤖 Vi gleder oss til å ha dere på besøk. "
+        "Husk at grendehuset skal være ryddet og vasket før utsjekk 🎉👍"
+    )
+
+    success, ref = driver.send_sms("+4799999999", long_emoji_msg)
+    assert success is True
+    assert cmgs_calls == 2
+    assert ref == "81,82"
+
+
+def test_send_sms_multipart_failure_aborts_cleanly(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    call_count = 0
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal call_count
+        if b"AT+CMGS=" in data:
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            call_count += 1
+            if call_count == 1:
+                return b"\r\n+CMGS: 10\r\n\r\nOK\r\n"
+            return b"\r\n+CMS ERROR: 500\r\n"
+        return None
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 10})
+
+    msg = "A" * 200
+    success, err = driver.send_sms("+4799999999", msg)
+
+    assert success is False
+    assert "Chunk 2/2 failed" in err
+    assert "+CMS ERROR: 500" in err
+
+
+def test_read_inbound_sms_multipart_reassembly(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    deleted_indices: list[int] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == 'AT+CMGL="ALL"':
+            return (
+                '+CMGL: 10,"REC UNREAD","+4791234567",,"26/09/21,14:00:00+08"\r\n'
+                "(1/2) Hei Snippen! Vi har et sporsmal angående "
+                "\r\n"
+                '+CMGL: 11,"REC UNREAD","+4791234567",,"26/09/21,14:00:05+08"\r\n'
+                "(2/2) bord og stoler i lokalet.\r\n"
+                "OK\r\n"
+            ).encode()
+        if cmd.startswith("AT+CMGD="):
+            idx = int(cmd.split("=")[1].strip())
+            deleted_indices.append(idx)
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    messages = driver.read_inbound_sms(delete_after_read=True)
+
+    # Reassembled into 1 unified message
+    assert len(messages) == 1
+    assert messages[0]["sender"] == "+4791234567"
+    assert (
+        messages[0]["body"] == "Hei Snippen! Vi har et sporsmal angående bord og stoler i lokalet."
+    )
+    assert messages[0]["parts_count"] == 2
+
+    # Both parts deleted from SIM memory
+    assert 10 in deleted_indices
+    assert 11 in deleted_indices
+
+
+def test_read_inbound_sms_multipart_across_polling_cycles(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    cycle = 1
+    deleted_indices: list[int] = []
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal cycle
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == 'AT+CMGL="ALL"':
+            if cycle == 1:
+                return (
+                    b'+CMGL: 1,"REC UNREAD","+4799990000",,"26/09/21,15:00:00+08"\r\n'
+                    b"(1/2) Forste del av melding som kommer forst "
+                    b"\r\nOK\r\n"
+                )
+            if cycle == 2:
+                return (
+                    b'+CMGL: 2,"REC UNREAD","+4799990000",,"26/09/21,15:00:10+08"\r\n'
+                    b"(2/2)og her kommer andre del!\r\n"
+                    b"OK\r\n"
+                )
+            return b"OK\r\n"
+        if cmd.startswith("AT+CMGD="):
+            idx = int(cmd.split("=")[1].strip())
+            deleted_indices.append(idx)
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+
+    # Cycle 1: Part 1 arrives on SIM
+    msgs_cycle1 = driver.read_inbound_sms(delete_after_read=True)
+    assert msgs_cycle1 == []  # Not complete yet
+    assert 1 in deleted_indices  # Deleted from SIM to prevent memory leak
+
+    # Cycle 2: Part 2 arrives on SIM
+    cycle = 2
+    msgs_cycle2 = driver.read_inbound_sms(delete_after_read=True)
+    assert len(msgs_cycle2) == 1
+    assert msgs_cycle2[0]["sender"] == "+4799990000"
+    assert (
+        msgs_cycle2[0]["body"] == "Forste del av melding som kommer forst og her kommer andre del!"
+    )
+    assert 2 in deleted_indices
+
+
+def test_read_inbound_sms_multipart_timeout_release(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == 'AT+CMGL="ALL"':
+            return (
+                b'+CMGL: 3,"REC UNREAD","+4799991111",,"26/09/21,16:00:00+08"\r\n'
+                b"(1/3) Kun forste del av tre deler mottatt\r\n"
+                b"OK\r\n"
+            )
+        if cmd.startswith("AT+CMGD="):
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    # 0 second timeout so partial messages expire immediately
+    driver = ModemDriver(uart=uart, config={"sms_multipart_timeout_sec": 0})
+
+    messages = driver.read_inbound_sms(delete_after_read=True)
+    # Part 1 was partial and timed out, so it was released rather than lost
+    assert len(messages) == 1
+    assert messages[0]["sender"] == "+4799991111"
+    assert messages[0]["body"] == "Kun forste del av tre deler mottatt"
+    assert messages[0].get("partial") is True

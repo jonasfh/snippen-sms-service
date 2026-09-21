@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-09-21
+
+### Added
+- Outbound SMS chunking and inbound SMS reassembly for long messages (`#82`):
+  - Added character count functions `gsm7_length` and `ucs2_length` in `firmware/sms_encoding.py`.
+  - Added `split_sms_body` in `firmware/sms_encoding.py` to segment messages exceeding single SMS limits (160 characters for GSM-7 or 70 characters for UCS-2) into ordered chunks, respecting word/whitespace boundaries, surrogate pair boundaries, and prepending part indicators `(i/N) `.
+  - Integrated automatic chunking in `ModemDriver.send_sms` (`firmware/modem.py`), transmitting parts sequentially with configurable inter-part delay (`sms_chunk_delay_ms`, default 500ms) and combining message references upon completion.
+  - Added concatenated SMS detection supporting both GSM User Data Headers (8-bit and 16-bit UDH via `parse_udh`) and text-mode indicators (`parse_text_indicator` and `parse_multipart_info`).
+  - Added `InboundReassembler` in `firmware/sms_encoding.py` to buffer and reassemble multipart incoming messages per sender, with configurable timeout handling (`sms_multipart_timeout_sec`, default 30s) to safely release partial segments without dropping data or leaking memory.
+  - Updated `ModemDriver.read_inbound_sms` (`firmware/modem.py`) to delete raw segments from SIM storage immediately with `AT+CMGD` to prevent SIM overflow (`+CMS ERROR: 322`), passing messages through `InboundReassembler` before returning unified messages.
+
 ## [0.28.0] - 2026-09-19
 
 ### Added

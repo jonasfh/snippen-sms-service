@@ -179,11 +179,14 @@ curl -X DELETE "http://127.0.0.1:3000/messages"
 
 The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP32 board located in `firmware/`:
 
-- **Character Encoding (`firmware/sms_encoding.py`)**:
+- **Character Encoding & Multipart SMS (`firmware/sms_encoding.py`)**:
   - Automatically identifies whether an outbound message fits in the GSM 03.38 7-bit character set.
   - Plain GSM-7 / ASCII messages are transmitted in standard text mode up to 160 characters.
   - Messages containing emojis (e.g. 🤖) or unsupported unicode characters are dynamically encoded in UCS-2 (UTF-16BE hex with surrogate pairs), switching the modem to `AT+CSCS="UCS2"` and preventing `CMS ERROR`.
   - Inbound SMS bodies and sender numbers received in UCS-2 hex are transparently decoded into UTF-8 strings preserving emojis and Norwegian letters (æ, ø, å).
+  - **Outbound Chunking (`split_sms_body`)**: Messages exceeding single SMS limits (160 chars for GSM-7, 70 code units for UCS-2) are segmented into ordered chunks respecting word boundaries and surrogate pair safety, formatted with `(i/N) ` indicators and dispatched sequentially with configurable delay (`sms_chunk_delay_ms`).
+  - **Inbound Reassembly (`InboundReassembler`)**: Detects concatenated parts via GSM User Data Headers (UDH) or text indicators, buffers parts per sender in memory, reassembles complete messages in proper order, deletes raw segments immediately from SIM storage with `AT+CMGD` to prevent SIM overflow, and releases timed-out partial segments (`sms_multipart_timeout_sec`) safely.
+
 
 - **REST API Synchronization (`firmware/snippen_api.py`)**:
   - Connects securely to the Snippen Booking WordPress REST endpoints (`https://vestreholmensameie.no/wp-json/snippen/v1/sms`) using Bearer token authentication (`Authorization: Bearer <token>` and `X-API-Key: <token>`).

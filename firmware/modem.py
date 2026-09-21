@@ -114,6 +114,14 @@ class ModemDriver:
             except Exception as exc:  # noqa: BLE001
                 print(f"[modem] Warning: Unable to acquire UART from boot module: {exc}")
 
+        self.chunk_delay_ms = self.config.get("sms_chunk_delay_ms", 500)
+        self.multipart_timeout_sec = self.config.get("sms_multipart_timeout_sec", 30)
+        self.reassembler = (
+            sms_encoding.InboundReassembler(timeout_sec=self.multipart_timeout_sec)
+            if (sms_encoding is not None and hasattr(sms_encoding, "InboundReassembler"))
+            else None
+        )
+
     def flush_input(self) -> None:
         """Clear any buffered unread incoming bytes from the UART interface."""
         if self.uart is None:
@@ -222,21 +230,10 @@ class ModemDriver:
 
         return True
 
-    def send_sms(
-        self, phone_number: str, text: str, timeout_ms: int = 15000
+    def _send_single_sms(
+        self, target_number: str, text: str, timeout_ms: int = 15000
     ) -> tuple[bool, str | None]:
-        """Send outbound SMS over cellular modem.
-
-        Returns (True, message_reference) on success, or (False, error_reason) on failure.
-        """
-        if self.uart is None:
-            return False, "UART not initialized"
-
-        try:
-            target_number = normalize_phone_number(phone_number)
-        except ValueError as err:
-            return False, f"Invalid phone number: {err}"
-
+        """Transmit a single SMS payload over UART."""
         use_ucs2 = False
         if sms_encoding is not None and not sms_encoding.is_gsm7(text):
             use_ucs2 = True
@@ -298,11 +295,47 @@ class ModemDriver:
             if use_ucs2:
                 self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
 
+    def send_sms(
+        self, phone_number: str, text: str, timeout_ms: int = 15000
+    ) -> tuple[bool, str | None]:
+        """Send outbound SMS over cellular modem, automatically chunking long messages.
+
+        Returns (True, message_reference) on success, or (False, error_reason) on failure.
+        """
+        if self.uart is None:
+            return False, "UART not initialized"
+
+        try:
+            target_number = normalize_phone_number(phone_number)
+        except ValueError as err:
+            return False, f"Invalid phone number: {err}"
+
+        # Segment long messages into chunks if necessary
+        if sms_encoding is not None and hasattr(sms_encoding, "split_sms_body"):
+            chunks = sms_encoding.split_sms_body(text)
+        else:
+            chunks = [text]
+
+        refs: list[str] = []
+        for idx, chunk in enumerate(chunks):
+            if idx > 0 and self.chunk_delay_ms > 0:
+                time.sleep_ms(self.chunk_delay_ms)
+
+            ok, ref_or_err = self._send_single_sms(target_number, chunk, timeout_ms=timeout_ms)
+            if not ok:
+                if len(chunks) > 1:
+                    return False, f"Chunk {idx + 1}/{len(chunks)} failed: {ref_or_err}"
+                return False, ref_or_err
+            refs.append(ref_or_err if ref_or_err else "OK")
+
+        return True, ",".join(refs)
+
     def read_inbound_sms(self, delete_after_read: bool = True) -> list[dict]:
         """Read unread/received SMS messages from SIM card storage.
 
-        When delete_after_read is True, messages are deleted immediately with
-        AT+CMGD to prevent SIM memory overflow.
+        Reassembles inbound multipart messages into unified messages.
+        When delete_after_read is True, raw message segments are deleted immediately
+        with AT+CMGD to prevent SIM memory overflow.
         """
         if self.uart is None:
             return []
@@ -314,7 +347,7 @@ class ModemDriver:
         # Read all stored messages
         _, lines = self.send_cmd('AT+CMGL="ALL"', timeout_ms=4000)
 
-        messages: list[dict] = []
+        raw_messages: list[dict] = []
         current_msg: dict | None = None
         body_lines: list[str] = []
 
@@ -322,11 +355,11 @@ class ModemDriver:
             stripped = line.strip()
             if stripped.startswith("+CMGL:"):
                 if current_msg is not None:
-                    raw_body = "\n".join(body_lines).strip()
+                    raw_body = "\n".join(body_lines).strip("\r\n")
                     if sms_encoding is not None:
                         raw_body = sms_encoding.decode_inbound_text(raw_body)
                     current_msg["body"] = raw_body
-                    messages.append(current_msg)
+                    raw_messages.append(current_msg)
                     body_lines = []
 
                 current_msg = parse_cmgl_header(stripped)
@@ -336,18 +369,32 @@ class ModemDriver:
                 body_lines.append(line.rstrip("\r\n"))
 
         if current_msg is not None:
-            raw_body = "\n".join(body_lines).strip()
+            raw_body = "\n".join(body_lines).strip("\r\n")
             if sms_encoding is not None:
                 raw_body = sms_encoding.decode_inbound_text(raw_body)
             current_msg["body"] = raw_body
-            messages.append(current_msg)
+            raw_messages.append(current_msg)
 
-        # Delete read messages from SIM memory to avoid overflow
+        # Delete read raw messages from SIM memory to avoid overflow
         if delete_after_read:
-            for msg in messages:
+            for msg in raw_messages:
                 self.delete_sms(msg["index"])
 
-        return messages
+        if self.reassembler is None:
+            return raw_messages
+
+        assembled: list[dict] = []
+        for msg in raw_messages:
+            res = self.reassembler.add_message(msg)
+            if res is not None:
+                assembled.append(res)
+
+        # Check for any timed-out partial messages
+        timed_out = self.reassembler.check_timeouts(self.multipart_timeout_sec)
+        if timed_out:
+            assembled.extend(timed_out)
+
+        return assembled
 
     def delete_sms(self, index: int) -> bool:
         """Delete an SMS message from SIM memory at specified storage index."""
