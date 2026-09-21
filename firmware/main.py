@@ -89,15 +89,27 @@ class GatewayApp:
         self.consecutive_modem_failures = 0
 
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
-        """Switch gateway into BLE provisioning mode (Issue #59, #60)."""
+        """Switch gateway into BLE provisioning mode (Issue #59, #60, #87)."""
         if self.is_provisioning_mode:
             return
         print(f"[main] Entering provisioning mode (reason: {reason})...")
         self.is_provisioning_mode = True
         self.provisioning_started_at = time.time()
+        # Abort any background WiFi connecting attempt to free the radio for BLE & scanning
+        if wifi is not None and not wifi.is_connected():
+            try:
+                wlan = wifi.get_wlan()
+                if wlan is not None and hasattr(wlan, "disconnect"):
+                    wlan.disconnect()
+            except Exception:  # noqa: BLE001, S110
+                pass
+
         if self.ble_server is not None and not self.ble_server.is_running:
-            self.ble_server.update_config_characteristic(self.config)
-            self.ble_server.start()
+            try:
+                self.ble_server.update_config_characteristic(self.config)
+                self.ble_server.start()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Warning: Failed to start BLE server: {exc}")
 
     def exit_provisioning_mode(self, reason: str = "manual") -> None:
         """Exit BLE provisioning mode and resume normal gateway loop (Issue #59, #60)."""
@@ -119,7 +131,9 @@ class GatewayApp:
         print(f"[main] Command received via BLE: {cmd}")
         if cmd == "SCAN_WIFI":
             if wifi is not None:
+                print("[main] Initiating WiFi scan on request from companion app...")
                 networks = wifi.scan_networks()
+                print(f"[main] Returning {len(networks)} WiFi networks over BLE")
                 return {"cmd": "SCAN_WIFI", "status": "ok", "networks": networks}
             return {"cmd": "SCAN_WIFI", "status": "error", "message": "WiFi module unavailable"}
 

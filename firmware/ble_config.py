@@ -175,7 +175,12 @@ class BLEConfigServer:
             return True
 
         print("[ble] Starting BLE GATT provisioning server...")
-        ble.active(True)
+        try:
+            if hasattr(ble, "active") and not ble.active():
+                ble.active(True)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
         self._register_services()
 
         # Increase MTU capacity if supported by BLE stack
@@ -194,8 +199,15 @@ class BLEConfigServer:
         except Exception:  # noqa: BLE001
             self.device_name = "Snippen-SMS"
 
-        ble.config(gap_name=self.device_name)
-        ble.irq(self._irq_handler)
+        try:
+            ble.config(gap_name=self.device_name)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+        try:
+            ble.irq(self._irq_handler)
+        except Exception:  # noqa: BLE001, S110
+            pass
 
         # Set initial characteristic values
         self.update_config_characteristic(self.config)
@@ -209,8 +221,8 @@ class BLEConfigServer:
         print(f"[ble] Advertising as '{self.device_name}' on UUID {SERVICE_UUID_STR}")
         return True
 
-    def stop(self) -> None:
-        """Stop advertising and deactivate BLE stack."""
+    def stop(self, deactivate: bool = False) -> None:
+        """Stop advertising and disconnect centrals without resetting BLE stack (Issue #87)."""
         ble = self._get_ble()
         if ble is None or not self.is_running:
             return
@@ -221,13 +233,21 @@ class BLEConfigServer:
         except Exception:  # noqa: BLE001, S110
             pass
 
+        if self.conn_handle is not None and hasattr(ble, "gap_disconnect"):
+            try:
+                ble.gap_disconnect(self.conn_handle)
+            except Exception:  # noqa: BLE001, S110
+                pass
+
         self.is_running = False
         self.conn_handle = None
 
-        try:
-            ble.active(False)
-        except Exception:  # noqa: BLE001, S110
-            pass
+        if deactivate:
+            try:
+                ble.active(False)
+                self._services_registered = False
+            except Exception:  # noqa: BLE001, S110
+                pass
         print("[ble] BLE server stopped.")
 
     def _irq_handler(self, event: int, data: tuple) -> None:

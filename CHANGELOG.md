@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.1] - 2026-09-21
+
+### Fixed
+- Fixed WiFi scanning blockage and BLE restart `ENODEV` error (`#87`):
+  - In `firmware/wifi.py` (`scan_networks`): Disconnect background connection attempt (`wlan.disconnect()`) and allow radio settling time before scanning, preventing ESP-IDF `Wifi Internal State Error` when STA is in connecting state.
+  - Added debug logging in `firmware/wifi.py` and `firmware/main.py` displaying channels scanned, access points discovered, and network counts returned over BLE.
+  - In `firmware/main.py` (`enter_provisioning_mode`): Automatically abort background WiFi connection attempts when switching into BLE provisioning mode.
+  - In `firmware/ble_config.py` (`stop`): Ceased calling `ble.active(False)` upon stopping advertising, preventing `[Errno 19] ENODEV` controller errors and invalid GATT service handles when re-entering provisioning mode.
+
 ## [0.30.0] - 2026-09-21
 
 ### Changed

@@ -105,6 +105,15 @@ def test_ble_server_start_and_stop(mpy_env: MicroPythonEnvironment) -> None:
 
     server.stop()
     assert server.is_running is False
+    assert mock_ble._is_advertising is False
+
+    # Server can be safely restarted without recreating or re-registering
+    assert server.start() is True
+    assert mock_ble._is_advertising is True
+
+    # Full deactivation if requested
+    server.stop(deactivate=True)
+    assert server.is_running is False
     assert mock_ble.active() is False
     assert mock_ble._is_advertising is False
 
