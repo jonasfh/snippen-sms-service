@@ -40,8 +40,21 @@ def scan_networks(max_results: int = 10, min_rssi: int = -85) -> list[dict]:
         print("[wifi] Warning: network.WLAN interface unavailable.")
         return []
 
+    # If STA is currently in a connecting state, disconnect first so radio can scan all channels
+    if hasattr(wlan, "isconnected") and not wlan.isconnected():
+        try:
+            wlan.disconnect()
+            if hasattr(time, "sleep_ms"):
+                time.sleep_ms(150)
+            else:
+                time.sleep(0.15)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    print("[wifi] Scanning 2.4 GHz WiFi channels (1-13)...")
     try:
         raw_results = wlan.scan()
+        print(f"[wifi] Scan completed: found {len(raw_results)} access points")
     except Exception as exc:  # noqa: BLE001
         print(f"[wifi] Error during network scan: {exc}")
         return []
