@@ -84,9 +84,8 @@ def deploy_firmware(
 
     files_to_deploy = [
         "boot.py",
-        "main.py",
-        "config.py",
         "logger.py",
+        "config.py",
         "modem.py",
         "sms_encoding.py",
         "snippen_api.py",
@@ -98,6 +97,7 @@ def deploy_firmware(
         "test_modem.py",
         "test_api.py",
         "test_wifi.py",
+        "main.py",
     ]
 
     if include_config:

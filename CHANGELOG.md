@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.4] - 2026-09-23
+
+### Fixed
+- Fixed hardware watchdog timeout during firmware deployment of large files (`#97`):
+  - In `firmware/boot.py`: Implemented `_start_wdt_feed_timer()` using a periodic hardware timer (`machine.Timer(-1)`) running every 1000ms to continuously feed `machine.WDT()` across raw REPL, multi-second file transfers (`mpremote cp`), and idle states.
+  - In `scripts/deploy_firmware.py`: Reordered `files_to_deploy` so essential boot and logging components (`boot.py`, `logger.py`, `config.py`) are transferred before the large `main.py` application file.
+  - In `tests/mocks/micropython_mocks.py`: Added `MockTimer` to support virtual hardware timer simulation and added corresponding unit tests in `tests/test_firmware_boot.py`.
+
 ## [0.31.3] - 2026-09-23
 
 ### Fixed
