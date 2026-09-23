@@ -1,8 +1,8 @@
 /**
- * Snippen Gateway Configurator - Offline Service Worker
+ * Snippen Gateway Configurator - Network-First Offline Service Worker (Issue #99)
  */
 
-const CACHE_NAME = 'snippen-config-v1';
+const CACHE_NAME = 'snippen-config-v0.31.5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -27,6 +27,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', key);
             return caches.delete(key);
           }
         })
@@ -35,15 +36,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Network-First with cache fallback strategy
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (
           networkResponse &&
           networkResponse.status === 200 &&
@@ -53,10 +52,12 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return networkResponse;
-      });
-    }).catch(() => {
-      // Offline fallback
-      return caches.match('./index.html');
-    })
+      })
+      .catch(() => {
+        // Offline fallback
+        return caches.match(event.request).then((cached) => {
+          return cached || caches.match('./index.html');
+        });
+      })
   );
 });
