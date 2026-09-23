@@ -37,6 +37,9 @@ pin_rst = None
 pin_pwrkey = None
 
 
+wdt_feed_timer = None
+
+
 def _feed_wdt_if_active() -> None:
     """Feed machine.WDT if it was previously armed (e.g. across soft-resets)."""
     try:
@@ -44,6 +47,24 @@ def _feed_wdt_if_active() -> None:
 
         if hasattr(machine, "WDT"):
             machine.WDT().feed()
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+
+def _start_wdt_feed_timer() -> None:
+    """Start periodic background timer to keep hardware watchdog fed during REPL / deployment."""
+    global wdt_feed_timer
+    try:
+        import machine  # type: ignore[import-not-found]
+
+        if hasattr(machine, "Timer"):
+            if wdt_feed_timer is None:
+                wdt_feed_timer = machine.Timer(-1)
+            wdt_feed_timer.init(
+                period=1000,
+                mode=machine.Timer.PERIODIC,
+                callback=lambda _t: _feed_wdt_if_active(),
+            )
     except Exception:  # noqa: BLE001, S110
         pass
 
@@ -185,6 +206,7 @@ def is_modem_online(cfg: dict | None = None) -> bool:
 
 def boot() -> bool:
     """Run hardware boot sequence."""
+    _start_wdt_feed_timer()
     print("[boot] Lilygo T-Call A7670E starting boot sequence...")
     try:
         config = load_config()

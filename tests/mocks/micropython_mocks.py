@@ -146,6 +146,31 @@ class MockWDT:
         cls._instance = None
 
 
+class MockTimer:
+    ONE_SHOT = 0
+    PERIODIC = 1
+    instances: ClassVar[list[MockTimer]] = []
+
+    def __init__(self, id: int = -1) -> None:
+        self.id = id
+        self.period = 0
+        self.mode = MockTimer.PERIODIC
+        self.callback: Any = None
+        MockTimer.instances.append(self)
+
+    def init(self, period: int = 1000, mode: int = 1, callback: Any = None) -> None:
+        self.period = period
+        self.mode = mode
+        self.callback = callback
+
+    def deinit(self) -> None:
+        pass
+
+    @classmethod
+    def reset_registry(cls) -> None:
+        cls.instances.clear()
+
+
 class MockTime:
     def __init__(self) -> None:
         self.current_ms = 1_000_000
@@ -480,6 +505,7 @@ class MicroPythonEnvironment:
         MockWLAN.reset_registry()
         MockBLE.reset_instance()
         MockWDT.reset_registry()
+        MockTimer.reset_registry()
         self.mock_time.reset()
         self.reset_called = False
 
@@ -488,6 +514,7 @@ class MicroPythonEnvironment:
         machine_mod.Pin = MockPin  # type: ignore[attr-defined]
         machine_mod.UART = MockUART  # type: ignore[attr-defined]
         machine_mod.WDT = MockWDT  # type: ignore[attr-defined]
+        machine_mod.Timer = MockTimer  # type: ignore[attr-defined]
 
         def _reset() -> None:
             self.reset_called = True

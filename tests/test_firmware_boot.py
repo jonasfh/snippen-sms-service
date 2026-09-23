@@ -131,3 +131,18 @@ def test_boot_sequence_fast_boot(
     assert res is True
     # power_on_modem should be skipped on fast boot
     assert power_on_called is False
+
+
+def test_start_wdt_feed_timer(mpy_env: MicroPythonEnvironment) -> None:
+    import boot
+    import machine
+
+    boot._start_wdt_feed_timer()
+    assert boot.wdt_feed_timer is not None
+    assert boot.wdt_feed_timer.period == 1000
+
+    wdt = machine.WDT()
+    initial_feeds = wdt.feed_count
+    assert boot.wdt_feed_timer.callback is not None
+    boot.wdt_feed_timer.callback(boot.wdt_feed_timer)
+    assert wdt.feed_count == initial_feeds + 1
