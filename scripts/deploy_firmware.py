@@ -86,6 +86,7 @@ def deploy_firmware(
         "boot.py",
         "main.py",
         "config.py",
+        "logger.py",
         "modem.py",
         "sms_encoding.py",
         "snippen_api.py",
@@ -109,28 +110,46 @@ def deploy_firmware(
 
     base_cmd = build_mpremote_base_cmd(port)
 
-    print(f"[deploy] Preparing to deploy firmware files from {firmware_dir}: {files_to_deploy}")
-
-    for idx, filename in enumerate(files_to_deploy):
+    existing_files: list[Path] = []
+    for filename in files_to_deploy:
         local_path = firmware_dir / filename
-        if not local_path.exists():
+        if local_path.exists():
+            existing_files.append(local_path)
+        else:
             print(f"[deploy] Warning: Skipping missing file {local_path}")
-            continue
 
-        remote_dest = f":{filename}"
-        cp_cmd = [*base_cmd, "cp", str(local_path), remote_dest]
+    print(
+        f"[deploy] Preparing to deploy {len(existing_files)} firmware files from {firmware_dir}: {[f.name for f in existing_files]}"
+    )
 
-        ret = run_mpremote_command(cp_cmd, dry_run=dry_run)
-        if ret != 0 and idx == 0 and not dry_run and port:
-            print(
-                "[deploy] Device unresponsive to raw REPL handshake. Attempting hardware reset recovery..."
-            )
-            hardware_reset_device(port)
-            time.sleep(1.0)
+    if not existing_files:
+        print("[deploy] No firmware files found to deploy.")
+        return 0
+
+    batch_cp_cmd = [*base_cmd, "cp", *[str(p) for p in existing_files], ":"]
+    ret = run_mpremote_command(batch_cp_cmd, dry_run=dry_run)
+    if ret != 0 and not dry_run and port:
+        print(
+            "[deploy] Device unresponsive to raw REPL handshake. Attempting hardware reset recovery..."
+        )
+        hardware_reset_device(port)
+        time.sleep(1.0)
+        ret = run_mpremote_command(batch_cp_cmd, dry_run=dry_run)
+
+    if ret != 0:
+        print(
+            "[deploy] Warning: Batch transfer failed, falling back to sequential file deployment..."
+        )
+        for filename in files_to_deploy:
+            local_path = firmware_dir / filename
+            if not local_path.exists():
+                continue
+            remote_dest = f":{filename}"
+            cp_cmd = [*base_cmd, "cp", str(local_path), remote_dest]
             ret = run_mpremote_command(cp_cmd, dry_run=dry_run)
-        if ret != 0:
-            print(f"[deploy] ERROR: Failed to copy {filename}")
-            return ret
+            if ret != 0:
+                print(f"[deploy] ERROR: Failed to copy {filename}")
+                return ret
 
     print("[deploy] All firmware files copied successfully.")
 

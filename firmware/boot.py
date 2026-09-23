@@ -37,6 +37,27 @@ pin_rst = None
 pin_pwrkey = None
 
 
+def _feed_wdt_if_active() -> None:
+    """Feed machine.WDT if it was previously armed (e.g. across soft-resets)."""
+    try:
+        import machine  # type: ignore[import-not-found]
+
+        if hasattr(machine, "WDT"):
+            machine.WDT().feed()
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+
+def sleep_ms_feeding_wdt(duration_ms: int) -> None:
+    """Sleep for duration_ms while periodically feeding the hardware watchdog."""
+    remaining = duration_ms
+    while remaining > 0:
+        chunk = min(remaining, 250)
+        time.sleep_ms(chunk)
+        _feed_wdt_if_active()
+        remaining -= chunk
+
+
 def power_on_modem(cfg: dict | None = None) -> tuple[Pin, Pin, Pin]:
     """Power on SimCom A7670E modem via GPIO power rails and PWRKEY pulse.
 
@@ -65,16 +86,16 @@ def power_on_modem(cfg: dict | None = None) -> tuple[Pin, Pin, Pin]:
     # Deassert reset & apply power rail
     pin_rst.value(1)
     pin_pwr.value(1)
-    time.sleep_ms(100)
+    sleep_ms_feeding_wdt(100)
 
     # Pulse PWRKEY to boot modem
     print(f"[boot] Pulsing PWRKEY for {pulse_ms} ms...")
     pin_pwrkey.value(1)
-    time.sleep_ms(pulse_ms)
+    sleep_ms_feeding_wdt(pulse_ms)
     pin_pwrkey.value(0)
 
     print(f"[boot] Waiting {boot_wait_sec}s for modem radio to initialize...")
-    time.sleep(boot_wait_sec)
+    sleep_ms_feeding_wdt(int(boot_wait_sec * 1000))
     print("[boot] Modem power sequence completed.")
 
     return pin_pwr, pin_rst, pin_pwrkey
@@ -126,7 +147,7 @@ def power_off_modem(cfg: dict | None = None) -> None:
     pin_pwrkey.value(0)
     pin_rst.value(0)
     pin_pwr.value(0)
-    time.sleep_ms(500)
+    sleep_ms_feeding_wdt(500)
 
 
 def power_cycle_modem(cfg: dict | None = None) -> UART:
@@ -135,7 +156,7 @@ def power_cycle_modem(cfg: dict | None = None) -> UART:
         cfg = load_config()
     print("[boot] Initiating modem hardware power-cycle recovery...")
     power_off_modem(cfg)
-    time.sleep_ms(1000)
+    sleep_ms_feeding_wdt(1000)
     power_on_modem(cfg)
     return init_uart(cfg)
 
