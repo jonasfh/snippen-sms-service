@@ -340,14 +340,15 @@ def parse_text_indicator(text: str) -> tuple[str, int, int, str] | None:
                         total = int(parts[1])
                         if total > 1 and 1 <= part <= total:
                             rem = s[close_idx + 1 :]
-                            rem = rem.removeprefix(" ")
+                            if rem.startswith(" "):
+                                rem = rem[1:]
                             ref_id = f"txt_{total}"
                             return ref_id, total, part, rem
 
     # Prefix with colon or space: 1/2: or 1/2
     first_space = s.find(" ")
     first_token = s[:first_space] if first_space != -1 else s
-    token_check = first_token.removesuffix(":")
+    token_check = first_token[:-1] if first_token.endswith(":") else first_token
     if "/" in token_check:
         parts = token_check.split("/", 1)
         if parts[0].isdigit() and parts[1].isdigit():
@@ -355,7 +356,8 @@ def parse_text_indicator(text: str) -> tuple[str, int, int, str] | None:
             total = int(parts[1])
             if total > 1 and 1 <= part <= total:
                 rem = s[len(first_token) :]
-                rem = rem.removeprefix(" ")
+                if rem.startswith(" "):
+                    rem = rem[1:]
                 ref_id = f"txt_{total}"
                 return ref_id, total, part, rem
 
@@ -373,7 +375,8 @@ def parse_text_indicator(text: str) -> tuple[str, int, int, str] | None:
                         total = int(parts[1])
                         if total > 1 and 1 <= part <= total:
                             rem = s_strip[:open_idx]
-                            rem = rem.removesuffix(" ")
+                            if rem.endswith(" "):
+                                rem = rem[:-1]
                             ref_id = f"txt_{total}"
                             return ref_id, total, part, rem
 

@@ -287,8 +287,17 @@ def test_parse_text_indicator() -> None:
     assert res4[2] == 2
     assert res4[3] == "Siste del av melding"
 
-    # Plain text
+    # Prefix 1/2 without colon
+    res5 = parse_text_indicator("1/2 Fjerde del")
+    assert res5 is not None
+    assert res5[1] == 2
+    assert res5[2] == 1
+    assert res5[3] == "Fjerde del"
+
+    # Plain text and edge cases
     assert parse_text_indicator("En vanlig melding") is None
+    assert parse_text_indicator("hei") is None
+    assert parse_text_indicator("Enkeltord") is None
     assert parse_text_indicator("") is None
 
 
