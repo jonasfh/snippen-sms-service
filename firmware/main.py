@@ -79,7 +79,14 @@ class GatewayApp:
         self.uart = uart
         self.button = button
         self.ble_server = ble_server
-        self.logger = setup_logger(max_lines=100) if setup_logger is not None else None
+        if setup_logger is not None:
+            try:
+                self.logger = setup_logger(max_lines=100)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Warning: Failed to setup logger: {exc}")
+                self.logger = None
+        else:
+            self.logger = None
         if (
             self.logger is not None
             and self.ble_server is not None

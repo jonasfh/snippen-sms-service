@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.3] - 2026-09-23
+
+### Fixed
+- Fixed MicroPython bare-metal `AttributeError: module sys has no attribute stdout` in `firmware/logger.py` (`#95`):
+  - Used safe `getattr(sys, "stdout", None)` and added MicroPython `uos.dupterm()` integration with `readinto()` implementation.
+  - Allowed `write()` to accept both `bytes`/`bytearray` and `str` chunks.
+  - Wrapped `setup_logger()` inside `GatewayApp.__init__` in `firmware/main.py` with exception handling to prevent application boot aborts.
+
 ## [0.31.2] - 2026-09-23
 
 ### Fixed

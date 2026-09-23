@@ -15,42 +15,97 @@ class LogStreamRedirector:
         self.on_line_callback = on_line_callback
         self.lines: list[str] = []
         self._partial_line = ""
-        self.original_stdout = sys.stdout
-        self.original_stderr = sys.stderr
+        self.original_stdout = getattr(sys, "stdout", None)
+        self.original_stderr = getattr(sys, "stderr", None)
         self.installed = False
+        self._using_dupterm = False
 
     def install(self) -> None:
-        """Redirect sys.stdout and sys.stderr through this redirector."""
-        if not self.installed:
-            self.original_stdout = sys.stdout
-            self.original_stderr = sys.stderr
-            sys.stdout = self
-            sys.stderr = self
-            self.installed = True
+        """Redirect stdout/stderr through this redirector using uos.dupterm or sys.stdout."""
+        if self.installed:
+            return
+
+        # 1. MicroPython bare-metal / ESP32 port: uos.dupterm
+        try:
+            import uos  # type: ignore[import-not-found]
+
+            if hasattr(uos, "dupterm"):
+                uos.dupterm(self)
+                self.installed = True
+                self._using_dupterm = True
+                return
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+        # 2. CPython / Unix MicroPython port: sys.stdout
+        if hasattr(sys, "stdout"):
+            try:
+                self.original_stdout = sys.stdout
+                self.original_stderr = getattr(sys, "stderr", None)
+                sys.stdout = self
+                sys.stderr = self
+                self.installed = True
+            except Exception:  # noqa: BLE001, S110
+                pass
 
     def uninstall(self) -> None:
-        """Restore original sys.stdout and sys.stderr streams."""
-        if self.installed:
-            sys.stdout = self.original_stdout
-            sys.stderr = self.original_stderr
-            self.installed = False
+        """Restore original sys.stdout and sys.stderr streams or unregister dupterm."""
+        if not self.installed:
+            return
+
+        if self._using_dupterm:
+            try:
+                import uos  # type: ignore[import-not-found]
+
+                if hasattr(uos, "dupterm"):
+                    uos.dupterm(None)
+            except Exception:  # noqa: BLE001, S110
+                pass
+            self._using_dupterm = False
+
+        if hasattr(sys, "stdout") and self.original_stdout is not None:
+            try:
+                sys.stdout = self.original_stdout
+                if self.original_stderr is not None:
+                    sys.stderr = self.original_stderr
+            except Exception:  # noqa: BLE001, S110
+                pass
+
+        self.installed = False
+
+    def readinto(self, buf: bytearray) -> int | None:
+        """Stream input method for uos.dupterm (output-only stream)."""
+        return None
 
     def set_callback(self, callback: object | None) -> None:
         """Update or register the line notification callback."""
         self.on_line_callback = callback
 
-    def write(self, text: str) -> int:
+    def write(self, text: bytes | str) -> int:
         """Write string chunk to original stdout and buffer complete lines."""
-        if self.original_stdout is not None:
+        if isinstance(text, (bytes, bytearray)):
             try:
-                self.original_stdout.write(text)
+                str_text = text.decode("utf-8")
+            except Exception:  # noqa: BLE001
+                str_text = str(text)
+        else:
+            str_text = str(text)
+
+        # In sys.stdout mode, forward to original stdout
+        if (
+            not self._using_dupterm
+            and self.original_stdout is not None
+            and self.original_stdout is not self
+        ):
+            try:
+                self.original_stdout.write(str_text)
             except Exception:  # noqa: BLE001, S110
                 pass
 
-        if not text:
-            return 0
+        if not str_text:
+            return len(text)
 
-        self._partial_line += text
+        self._partial_line += str_text
         while "\n" in self._partial_line:
             line, self._partial_line = self._partial_line.split("\n", 1)
             line = line.rstrip("\r")
