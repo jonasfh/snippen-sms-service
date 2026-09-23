@@ -266,3 +266,71 @@ def test_ble_server_connected_does_not_timeout(mpy_env: MicroPythonEnvironment) 
     server.poll(now=server.last_activity_time + 600)
     assert server.is_running is True
     assert timed_out is False
+
+
+def test_ble_server_notify_log(mpy_env: MicroPythonEnvironment) -> None:
+    import ble_config
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    server.start()
+
+    # Nothing notified if no central connected
+    server.notify_log("[main] Booting up")
+    assert mock_ble.gatts_read(server.handle_logs) == b""
+
+    # Connect central
+    mock_ble.simulate_connect(conn_handle=3)
+    server.notify_log("[main] Hello over BLE")
+    assert mock_ble.gatts_read(server.handle_logs) == b"[main] Hello over BLE"
+
+
+def test_gateway_app_ble_live_operations_and_logs(mpy_env: MicroPythonEnvironment) -> None:
+    import ble_config
+    import main
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    app = main.GatewayApp(config={"wifi_ssid": "TestSSID"}, ble_server=server)
+    app.setup()
+
+    # Enter provisioning mode
+    app.enter_provisioning_mode(reason="test")
+    assert app.is_provisioning_mode is True
+    assert app.live_operations_active is False
+
+    # Check telemetry
+    telemetry = app.get_telemetry_status()
+    assert telemetry["status"] == "provisioning"
+    assert telemetry["live_operations"] is False
+
+    # Start live operations command
+    res_start = app.on_ble_command("START_OPERATIONS", {})
+    assert res_start["status"] == "ok"
+    assert res_start["live_operations"] is True
+    assert app.live_operations_active is True
+
+    # Log some messages
+    print("[modem] Testing AT command")
+    print("[api] Polled outbox")
+
+    # Fetch logs via command
+    res_logs = app.on_ble_command("GET_LOGS", {"count": 10})
+    assert res_logs["status"] == "ok"
+    assert any("[modem] Testing AT command" in line for line in res_logs["lines"])
+    assert any("[api] Polled outbox" in line for line in res_logs["lines"])
+
+    # Pause operations command
+    res_pause = app.on_ble_command("STOP_OPERATIONS", {})
+    assert res_pause["status"] == "ok"
+    assert res_pause["live_operations"] is False
+    assert app.live_operations_active is False
+
+    # Clear logs command
+    res_clear = app.on_ble_command("CLEAR_LOGS", {})
+    assert res_clear["status"] == "ok"
+    res_logs_after = app.on_ble_command("GET_LOGS", {})
+    # Only the print from executing GET_LOGS command itself should be present
+    assert len(res_logs_after["lines"]) <= 1
+    if res_logs_after["lines"]:
+        assert "GET_LOGS" in res_logs_after["lines"][0]

@@ -57,6 +57,7 @@
       CHAR_CONFIG_UUID,
       CHAR_STATUS_UUID,
       CHAR_COMMAND_UUID,
+      CHAR_LOGS_UUID,
       DEVICE_NAME_PREFIX,
       maskToken,
       encodeJson,
@@ -100,6 +101,7 @@
         assert(CHAR_CONFIG_UUID === '6e400002-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_CONFIG_UUID');
         assert(CHAR_STATUS_UUID === '6e400003-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_STATUS_UUID');
         assert(CHAR_COMMAND_UUID === '6e400004-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_COMMAND_UUID');
+        assert(CHAR_LOGS_UUID === '6e400005-b5a3-f393-e0a9-e50e24dcca9e', 'Invalid CHAR_LOGS_UUID');
         assert(DEVICE_NAME_PREFIX === 'Snippen-SMS', 'Invalid DEVICE_NAME_PREFIX');
       });
 
@@ -186,6 +188,34 @@
           assert(err.message.includes('Not connected'), 'Error message mismatch');
         }
         assert(threw, 'Should have thrown Not connected error');
+      });
+
+      await runTest('MockSnippenBLEClient supports live operations and log events', async () => {
+        const client = new MockSnippenBLEClient();
+        const logsReceived = [];
+        client.addEventListener('log', (e) => {
+          logsReceived.push(e.detail.line);
+        });
+
+        await client.connect();
+        await new Promise((r) => setTimeout(r, 150));
+        assert(logsReceived.length > 0, 'Should have received initial mock logs upon connect');
+
+        const opRes = await client.startOperations();
+        assert(opRes.status === 'ok', 'startOperations status should be ok');
+        assert(opRes.live_operations === true, 'live_operations should be true');
+
+        const logs = await client.getLogs(10);
+        assert(Array.isArray(logs) && logs.length > 0, 'getLogs should return non-empty array');
+
+        const stopRes = await client.stopOperations();
+        assert(stopRes.status === 'ok', 'stopOperations status should be ok');
+        assert(stopRes.live_operations === false, 'live_operations should be false');
+
+        await client.clearLogs();
+        const emptyLogs = await client.getLogs();
+        assert(emptyLogs.length === 0, 'Logs should be empty after clearLogs');
+        await client.disconnect();
       });
 
       summaryEl.textContent = `All tests completed: ${passed} passed, ${failed} failed.`;

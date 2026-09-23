@@ -205,11 +205,70 @@
       </div>
     </section>
 
+    <!-- Card 5: Live Console & Logs -->
+    <section class="card" id="card-console" style="opacity: 0.5; pointer-events: none;">
+      <div class="card-header">
+        <h2 class="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          Lilygo Konsoll & Sanntidslogg
+        </h2>
+        <div class="console-status-pill" id="operations-status-pill">
+          <span class="status-dot"></span>
+          <span id="operations-status-label">Pauset</span>
+        </div>
+      </div>
+
+      <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
+        Følg <code>stdout</code> og <code>stderr</code> i sanntid over BLE. Start normal drift for å observere SMS- og HTTP-aktivitet live.
+      </p>
+
+      <!-- Console Control Toolbar -->
+      <div class="console-toolbar">
+        <div class="btn-group-sm">
+          <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-operations" title="Start eller pause full gateway-drift i bakgrunnen">
+            <span id="btn-operations-icon">▶</span>
+            <span id="btn-operations-text">Start drift (Live)</span>
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-clear-logs" title="Tøm konsollvindu">
+            🗑️ Tøm
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-copy-logs" title="Kopier logg til utklippstavle">
+            📋 Kopier
+          </button>
+        </div>
+
+        <div class="console-toggle-wrapper">
+          <label class="switch switch-sm" for="autoscroll-toggle" title="Automatisk rulling til bunnen ved nye logglinjer">
+            <input type="checkbox" id="autoscroll-toggle" checked>
+            <span class="slider round"></span>
+          </label>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Autoscroll</span>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="console-filter-wrapper">
+        <input type="text" id="log-filter-input" class="console-filter-input" placeholder="🔍 Filtrer logg (f.eks. modem, api, error)...">
+      </div>
+
+      <!-- Terminal window -->
+      <div class="terminal-box" id="terminal-container">
+        <pre class="terminal-content" id="terminal-log-output"><span class="log-line log-dim">[ble] Venter på tilkobling og logger...</span></pre>
+      </div>
+      <div class="terminal-footer">
+        <span id="log-counter" style="font-size: 0.72rem; color: var(--text-muted);">0 linjer</span>
+        <span id="log-last-activity" style="font-size: 0.72rem; color: var(--text-muted);">Ingen aktivitet</span>
+      </div>
+    </section>
+
     <!-- Action Bar -->
     <div id="action-bar" style="opacity: 0.5; pointer-events: none; margin-top: 0.5rem;">
       <button type="button" class="btn btn-primary btn-block" id="btn-apply-exit" style="height: 52px; font-size: 1rem;">
         <span class="spinner" id="spinner-apply"></span>
-        <span>🚀 Lagre og Start Gateway</span>
+        <span>🚀 Lagre og Koble fra</span>
       </button>
     </div>
 

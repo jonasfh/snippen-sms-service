@@ -10,6 +10,7 @@ export const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 export const CHAR_CONFIG_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 export const CHAR_STATUS_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 export const CHAR_COMMAND_UUID = '6e400004-b5a3-f393-e0a9-e50e24dcca9e';
+export const CHAR_LOGS_UUID = '6e400005-b5a3-f393-e0a9-e50e24dcca9e';
 export const DEVICE_NAME_PREFIX = 'Snippen-SMS';
 
 /**
@@ -70,12 +71,14 @@ export class SnippenBLEClient extends EventTarget {
     this.charConfig = null;
     this.charStatus = null;
     this.charCommand = null;
+    this.charLogs = null;
     this.isConnected = false;
     this._pendingCommands = new Map(); // cmdName -> { resolve, reject, timeoutId }
 
     this._onDisconnectedBound = this._handleDisconnected.bind(this);
     this._onStatusNotificationBound = this._handleStatusNotification.bind(this);
     this._onCommandNotificationBound = this._handleCommandNotification.bind(this);
+    this._onLogNotificationBound = this._handleLogNotification.bind(this);
   }
 
   /**
@@ -114,6 +117,11 @@ export class SnippenBLEClient extends EventTarget {
       this.charConfig = await this.service.getCharacteristic(CHAR_CONFIG_UUID);
       this.charStatus = await this.service.getCharacteristic(CHAR_STATUS_UUID);
       this.charCommand = await this.service.getCharacteristic(CHAR_COMMAND_UUID);
+      try {
+        this.charLogs = await this.service.getCharacteristic(CHAR_LOGS_UUID);
+      } catch {
+        this.charLogs = null;
+      }
 
       // Subscribe to status notifications
       await this.charStatus.startNotifications();
@@ -122,6 +130,12 @@ export class SnippenBLEClient extends EventTarget {
       // Subscribe to command notifications
       await this.charCommand.startNotifications();
       this.charCommand.addEventListener('characteristicvaluechanged', this._onCommandNotificationBound);
+
+      // Subscribe to log notifications if available
+      if (this.charLogs) {
+        await this.charLogs.startNotifications();
+        this.charLogs.addEventListener('characteristicvaluechanged', this._onLogNotificationBound);
+      }
 
       this.isConnected = true;
 
@@ -266,6 +280,44 @@ export class SnippenBLEClient extends EventTarget {
     return res;
   }
 
+  /**
+   * Start normal gateway operations while keeping BLE connected for live logging.
+   * @param {number} [timeoutMs=10000]
+   * @returns {Promise<object>}
+   */
+  async startOperations(timeoutMs = 10000) {
+    return await this.sendCommand({ cmd: 'START_OPERATIONS' }, timeoutMs);
+  }
+
+  /**
+   * Pause normal gateway operations while keeping BLE connected for configuration.
+   * @param {number} [timeoutMs=10000]
+   * @returns {Promise<object>}
+   */
+  async stopOperations(timeoutMs = 10000) {
+    return await this.sendCommand({ cmd: 'STOP_OPERATIONS' }, timeoutMs);
+  }
+
+  /**
+   * Fetch historical log lines from gateway in-memory buffer.
+   * @param {number} [count=50]
+   * @param {number} [timeoutMs=10000]
+   * @returns {Promise<string[]>}
+   */
+  async getLogs(count = 50, timeoutMs = 10000) {
+    const res = await this.sendCommand({ cmd: 'GET_LOGS', count }, timeoutMs);
+    return res.lines || [];
+  }
+
+  /**
+   * Clear historical log lines on gateway in-memory buffer.
+   * @param {number} [timeoutMs=5000]
+   * @returns {Promise<object>}
+   */
+  async clearLogs(timeoutMs = 5000) {
+    return await this.sendCommand({ cmd: 'CLEAR_LOGS' }, timeoutMs);
+  }
+
   _handleStatusNotification(event) {
     let rawText = '';
     try {
@@ -296,6 +348,16 @@ export class SnippenBLEClient extends EventTarget {
     }
   }
 
+  _handleLogNotification(event) {
+    try {
+      const dataView = event.target.value instanceof DataView ? event.target.value : new DataView(event.target.value);
+      const line = new TextDecoder('utf-8').decode(dataView);
+      this.dispatchEvent(new CustomEvent('log', { detail: { line, timestamp: Date.now() } }));
+    } catch (err) {
+      console.warn('[SnippenBLE] Failed to parse log notification:', err);
+    }
+  }
+
   _handleDisconnected() {
     const deviceName = this.device ? this.device.name : 'Unknown';
     this._cleanup();
@@ -322,6 +384,9 @@ export class SnippenBLEClient extends EventTarget {
     if (this.charCommand) {
       this.charCommand.removeEventListener('characteristicvaluechanged', this._onCommandNotificationBound);
     }
+    if (this.charLogs) {
+      this.charLogs.removeEventListener('characteristicvaluechanged', this._onLogNotificationBound);
+    }
     if (this.device) {
       this.device.removeEventListener('gattserverdisconnected', this._onDisconnectedBound);
     }
@@ -331,6 +396,7 @@ export class SnippenBLEClient extends EventTarget {
     this.charConfig = null;
     this.charStatus = null;
     this.charCommand = null;
+    this.charLogs = null;
   }
 }
 
@@ -354,6 +420,24 @@ export class MockSnippenBLEClient extends EventTarget {
       { ssid: 'Neighbor-WiFi', rssi: -82, auth: 4 },
     ];
     this.statusInterval = null;
+    this.liveInterval = null;
+    this.mockLogs = [
+      '[main] Initializing Snippen SMS Gateway application...',
+      '[boot] Configuring UART1 at 115200 baud (TX: Pin 26, RX: Pin 25)...',
+      '[main] Modem UART connection verified.',
+      '[modem] SIM7670E online, signal CSQ: 22 (-69 dBm)',
+      '[wifi] Connected to Snippen-Local (IP: 192.168.1.142)',
+      '[ble] Advertising as \'Snippen-SMS-BA5E\' on UUID 6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+      '[ble] Central connected (handle: 1)',
+    ];
+  }
+
+  _emitMockLog(line) {
+    this.mockLogs.push(line);
+    if (this.mockLogs.length > 100) {
+      this.mockLogs.shift();
+    }
+    this.dispatchEvent(new CustomEvent('log', { detail: { line, timestamp: Date.now() } }));
   }
 
   async connect() {
@@ -369,6 +453,7 @@ export class MockSnippenBLEClient extends EventTarget {
           status: 'ready',
           device: 'Snippen-SMS-BA5E',
           wifi_connected: true,
+          live_operations: false,
           ip: '192.168.1.142',
           wifi_rssi: -58,
           cellular_csq: 22,
@@ -378,11 +463,19 @@ export class MockSnippenBLEClient extends EventTarget {
       })
     );
 
+    // Emit startup logs to listener
+    setTimeout(() => {
+      this.mockLogs.forEach((line) => {
+        this.dispatchEvent(new CustomEvent('log', { detail: { line, timestamp: Date.now() } }));
+      });
+    }, 100);
+
     return details;
   }
 
   async disconnect() {
     if (this.statusInterval) clearInterval(this.statusInterval);
+    if (this.liveInterval) clearInterval(this.liveInterval);
     this.isConnected = false;
     this.dispatchEvent(new CustomEvent('disconnected', { detail: { deviceName: 'Snippen-SMS-BA5E (Mock)' } }));
   }
@@ -407,7 +500,7 @@ export class MockSnippenBLEClient extends EventTarget {
 
   async sendCommand(cmdPayload) {
     if (!this.isConnected) throw new Error('Not connected');
-    await new Promise((r) => setTimeout(r, 350));
+    await new Promise((r) => setTimeout(r, 250));
     const cmd = cmdPayload.cmd;
 
     if (cmd === 'SCAN_WIFI') {
@@ -421,6 +514,43 @@ export class MockSnippenBLEClient extends EventTarget {
         ssid: cmdPayload.wifi_ssid,
         ip: '192.168.1.142',
       };
+    }
+    if (cmd === 'START_OPERATIONS') {
+      if (this.liveInterval) clearInterval(this.liveInterval);
+      this._emitMockLog('[main] Live gateway operations started over BLE.');
+      let tick = 0;
+      this.liveInterval = setInterval(() => {
+        tick++;
+        const samples = [
+          '[api] Polling outbox from https://snippen.example.com/api/sms/outbox',
+          '[api] Outbox check complete: 0 pending messages',
+          '[modem] Checking SMS inbox (AT+CMGL="REC UNREAD")...',
+          '[modem] Inbox check complete: 0 unread messages',
+          '[heartbeat] Gateway healthy (WiFi RSSI: -54 dBm, 4G: CSQ 22)',
+          tick % 3 === 0
+            ? '[sms] Outbound SMS delivered to recipient +4791234567 (ref #142)'
+            : '[main] Gateway tick cycle complete (heap 145KB free)',
+        ];
+        const line = samples[Math.floor(Math.random() * samples.length)];
+        this._emitMockLog(line);
+      }, 2500);
+      return { cmd: 'START_OPERATIONS', status: 'ok', live_operations: true };
+    }
+    if (cmd === 'STOP_OPERATIONS') {
+      if (this.liveInterval) {
+        clearInterval(this.liveInterval);
+        this.liveInterval = null;
+      }
+      this._emitMockLog('[main] Live gateway operations paused over BLE.');
+      return { cmd: 'STOP_OPERATIONS', status: 'ok', live_operations: false };
+    }
+    if (cmd === 'GET_LOGS') {
+      const count = cmdPayload.count || 50;
+      return { cmd: 'GET_LOGS', status: 'ok', lines: this.mockLogs.slice(-count) };
+    }
+    if (cmd === 'CLEAR_LOGS') {
+      this.mockLogs = [];
+      return { cmd: 'CLEAR_LOGS', status: 'ok' };
     }
     if (cmd === 'APPLY_AND_EXIT') {
       setTimeout(() => this.disconnect(), 100);
@@ -440,5 +570,22 @@ export class MockSnippenBLEClient extends EventTarget {
 
   async applyAndExit() {
     return await this.sendCommand({ cmd: 'APPLY_AND_EXIT' });
+  }
+
+  async startOperations() {
+    return await this.sendCommand({ cmd: 'START_OPERATIONS' });
+  }
+
+  async stopOperations() {
+    return await this.sendCommand({ cmd: 'STOP_OPERATIONS' });
+  }
+
+  async getLogs(count = 50) {
+    const res = await this.sendCommand({ cmd: 'GET_LOGS', count });
+    return res.lines || [];
+  }
+
+  async clearLogs() {
+    return await this.sendCommand({ cmd: 'CLEAR_LOGS' });
   }
 }

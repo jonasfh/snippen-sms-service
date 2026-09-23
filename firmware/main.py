@@ -59,6 +59,11 @@ try:
 except ImportError:
     SnippenApiClient = None
 
+try:
+    from logger import setup_logger
+except ImportError:
+    setup_logger = None
+
 
 class GatewayApp:
     """MicroPython SMS Gateway coordinator."""
@@ -74,10 +79,18 @@ class GatewayApp:
         self.uart = uart
         self.button = button
         self.ble_server = ble_server
+        self.logger = setup_logger(max_lines=100) if setup_logger is not None else None
+        if (
+            self.logger is not None
+            and self.ble_server is not None
+            and hasattr(self.ble_server, "notify_log")
+        ):
+            self.logger.set_callback(self.ble_server.notify_log)
         self.modem = None
         self.api_client = None
         self.wdt = None
         self.is_provisioning_mode = False
+        self.live_operations_active = True
         self.provisioning_started_at = 0
         self.running = False
         self.cycle_count = 0
@@ -94,6 +107,7 @@ class GatewayApp:
             return
         print(f"[main] Entering provisioning mode (reason: {reason})...")
         self.is_provisioning_mode = True
+        self.live_operations_active = False
         self.provisioning_started_at = time.time()
         # Abort any background WiFi connecting attempt to free the radio for BLE & scanning
         if wifi is not None and not wifi.is_connected():
@@ -117,6 +131,7 @@ class GatewayApp:
             return
         print(f"[main] Exiting provisioning mode (reason: {reason})...")
         self.is_provisioning_mode = False
+        self.live_operations_active = True
         if self.ble_server is not None and self.ble_server.is_running:
             self.ble_server.stop()
 
@@ -161,12 +176,52 @@ class GatewayApp:
         if cmd == "GET_STATUS":
             return {"cmd": cmd, "status": "ok", "telemetry": self.get_telemetry_status()}
 
+        if cmd in ("START_OPERATIONS", "RESUME_OPERATIONS"):
+            self.live_operations_active = True
+            print("[main] Live gateway operations started over BLE.")
+            return {
+                "cmd": cmd,
+                "status": "ok",
+                "live_operations": True,
+                "message": "Gateway operations active with live BLE monitoring",
+            }
+
+        if cmd in ("STOP_OPERATIONS", "PAUSE_OPERATIONS"):
+            self.live_operations_active = False
+            print("[main] Live gateway operations paused over BLE.")
+            return {
+                "cmd": cmd,
+                "status": "ok",
+                "live_operations": False,
+                "message": "Gateway operations paused for provisioning",
+            }
+
+        if cmd == "GET_LOGS":
+            count = 50
+            if isinstance(payload, dict) and "count" in payload:
+                try:
+                    count = int(payload["count"])
+                except (ValueError, TypeError):
+                    pass
+            lines = self.logger.get_lines(count) if self.logger is not None else []
+            return {
+                "cmd": "GET_LOGS",
+                "status": "ok",
+                "lines": lines,
+            }
+
+        if cmd == "CLEAR_LOGS":
+            if self.logger is not None:
+                self.logger.clear()
+            return {"cmd": "CLEAR_LOGS", "status": "ok"}
+
         return {"cmd": cmd, "status": "ok"}
 
     def get_telemetry_status(self) -> dict:
         """Compile real-time operational status for BLE telemetry reporting (Issue #61)."""
         status: dict = {
             "status": "provisioning" if self.is_provisioning_mode else "running",
+            "live_operations": self.live_operations_active,
             "cycle_count": self.cycle_count,
             "wifi_ssid": self.config.get("wifi_ssid", ""),
         }
@@ -244,6 +299,13 @@ class GatewayApp:
                 )
             except Exception as exc:  # noqa: BLE001
                 print(f"[main] Warning: Failed to initialize BLE config server: {exc}")
+
+        if (
+            self.logger is not None
+            and self.ble_server is not None
+            and hasattr(self.ble_server, "notify_log")
+        ):
+            self.logger.set_callback(self.ble_server.notify_log)
 
         # If UART not provided, try to obtain from boot module
         if self.uart is None:
@@ -441,10 +503,15 @@ class GatewayApp:
                 self.ble_server.poll(now)
                 if self.ble_server.conn_handle is not None and (self.cycle_count % 5 == 0):
                     self.ble_server.notify_status(self.get_telemetry_status())
-            timeout_sec = self.config.get("provisioning_timeout_sec", 300)
-            if now - self.provisioning_started_at >= timeout_sec:
-                self.exit_provisioning_mode(reason="timeout")
-            return
+            if not self.live_operations_active:
+                timeout_sec = self.config.get("provisioning_timeout_sec", 300)
+                if self.ble_server is not None and self.ble_server.conn_handle is not None:
+                    self.provisioning_started_at = now
+                elif now - self.provisioning_started_at >= timeout_sec:
+                    self.exit_provisioning_mode(reason="timeout")
+                return
+            if self.ble_server is not None and self.ble_server.conn_handle is not None:
+                self.provisioning_started_at = now
 
         # Non-blocking WiFi reconnect check (Issue #52, #53)
         if wifi is not None and not wifi.is_connected():

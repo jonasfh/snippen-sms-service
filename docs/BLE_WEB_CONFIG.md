@@ -57,10 +57,18 @@ Web Bluetooth er en W3C-standard som støttes direkte i Chromium-baserte nettles
 2. Oppgi API Bearer Token (dersom tokenet allerede er lagret, vises det maskert av sikkerhetshensyn, f.eks. `se****99`).
 3. Juster polle-intervall for utdataboks og innboks ved behov (standard: 5 sekunder).
 
-### Steg 5: Lagre og start gatewayen
-1. Trykk på den store blå knappen nederst: **«🚀 Lagre og Start Gateway»**.
-2. De nye innstillingene skrives atomisk over BLE og lagres permanent til `config.json` på ESP32-ens flashminne.
-3. Lilygo-kortet slår av Bluetooth-radioen (`APPLY_AND_EXIT`) og starter normal bakgrunnsdrift for SMS-provisjonering.
+### Steg 5: Sanntidslogger og live overvåking av gateway-drift
+1. I seksjonen **Lilygo Konsoll & Sanntidslogg** vises oppstartslogger og hendelser fra enheten over Bluetooth.
+2. For å verifisere normal drift (SMS in/out og HTTP-kall mot Snippen API) mens du fortsatt er tilkoblet:
+   - Trykk på **«▶ Start drift (Live)»**.
+   - Gatewayen starter den vanlige hendelseløkken i bakgrunnen uten å koble fra Bluetooth.
+   - Hver eneste utgående og innkommende SMS, samt periodiske HTTP-kall, strømmes live til konsollvinduet.
+   - Du kan pause drift når som helst med **«⏸ Pause drift»**, filtrere logglinjene med søkefeltet, eller trykke **«📋 Kopier»** for å dele loggen.
+
+### Steg 6: Lagre og koble fra
+1. Når konfigurasjonen er bekreftet og testet, trykk på knappen nederst: **«🚀 Lagre og Koble fra»**.
+2. De nye innstillingene lagres permanent til `config.json` på ESP32-ens flashminne.
+3. Lilygo-kortet slår av BLE-annonseringen og fortsetter normal autonom bakgrunnsdrift.
 4. Nettsiden bekrefter lagringen og kobler fra.
 
 ---
