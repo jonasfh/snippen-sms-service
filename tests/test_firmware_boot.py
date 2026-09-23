@@ -99,3 +99,35 @@ def test_boot_sequence_failure(
 
     res = boot.boot()
     assert res is False
+
+
+def test_is_modem_online(mpy_env: MicroPythonEnvironment) -> None:
+    import boot
+
+    # Initially read buffer is empty and no auto-response -> offline
+    assert boot.is_modem_online() is False
+
+    # Configure auto-response to AT command -> online
+    uart = boot.init_uart()
+    uart.auto_responses = {"AT": b"\r\nOK\r\n"}
+    assert boot.is_modem_online() is True
+
+
+def test_boot_sequence_fast_boot(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import boot
+
+    monkeypatch.setattr(boot, "is_modem_online", lambda cfg=None: True)
+    power_on_called = False
+
+    def fake_power_on(*args: object, **kwargs: object) -> None:
+        nonlocal power_on_called
+        power_on_called = True
+
+    monkeypatch.setattr(boot, "power_on_modem", fake_power_on)
+
+    res = boot.boot()
+    assert res is True
+    # power_on_modem should be skipped on fast boot
+    assert power_on_called is False

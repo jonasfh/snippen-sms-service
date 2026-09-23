@@ -104,6 +104,9 @@ def power_on_modem(cfg: dict | None = None) -> tuple[Pin, Pin, Pin]:
 def init_uart(cfg: dict | None = None) -> UART:
     """Initialize hardware UART communication with SimCom A7670E."""
     global modem_uart
+    if modem_uart is not None:
+        return modem_uart
+
     if cfg is None:
         cfg = load_config()
 
@@ -152,6 +155,8 @@ def power_off_modem(cfg: dict | None = None) -> None:
 
 def power_cycle_modem(cfg: dict | None = None) -> UART:
     """Perform full hardware power-cycle recovery and re-initialize UART."""
+    global modem_uart
+    modem_uart = None
     if cfg is None:
         cfg = load_config()
     print("[boot] Initiating modem hardware power-cycle recovery...")
@@ -161,11 +166,32 @@ def power_cycle_modem(cfg: dict | None = None) -> UART:
     return init_uart(cfg)
 
 
+def is_modem_online(cfg: dict | None = None) -> bool:
+    """Check if modem is already powered on and responding to AT commands."""
+    try:
+        uart = init_uart(cfg)
+        if hasattr(uart, "any"):
+            while uart.any():
+                uart.read()
+        uart.write(b"AT\r\n")
+        sleep_ms_feeding_wdt(150)
+        resp = uart.read()
+        if resp and (b"OK" in resp or b"AT" in resp):
+            return True
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return False
+
+
 def boot() -> bool:
-    """Run full hardware boot sequence."""
-    print("[boot] Lilygo T-Call A7670E starting cold boot sequence...")
+    """Run hardware boot sequence."""
+    print("[boot] Lilygo T-Call A7670E starting boot sequence...")
     try:
         config = load_config()
+        if is_modem_online(config):
+            print("[boot] Modem already online and responding. Fast boot complete.")
+            return True
+
         power_on_modem(config)
         init_uart(config)
         print("[boot] Hardware initialization successful.")
