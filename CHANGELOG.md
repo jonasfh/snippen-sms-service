@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.6] - 2026-09-23
+
+### Fixed
+- Fixed MicroPython bare-metal `AttributeError: 'str' object has no attribute 'removesuffix'` when processing inbox messages (`#101`):
+  - In `firmware/sms_encoding.py`: Replaced Python 3.9+ `str.removeprefix()` and `str.removesuffix()` in `parse_text_indicator` with MicroPython-compatible slicing (`rem[1:] if rem.startswith(...)` and `rem[:-1] if rem.endswith(...)`).
+  - In `pyproject.toml`: Added `[tool.ruff.lint.per-file-ignores]` rule for `"firmware/*" = ["FURB188"]` so the linter does not enforce `str.removeprefix`/`str.removesuffix` on MicroPython firmware files.
+  - In `tests/test_firmware_sms_encoding.py`: Added explicit test cases for plain text, single-word SMS, and indicators without colons.
+
 ## [0.31.5] - 2026-09-23
 
 ### Fixed
