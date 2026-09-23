@@ -10,6 +10,7 @@ from pathlib import Path
 from firmware.ble_config import (
     CHAR_COMMAND_UUID_STR,
     CHAR_CONFIG_UUID_STR,
+    CHAR_LOGS_UUID_STR,
     CHAR_STATUS_UUID_STR,
     SERVICE_UUID_STR,
     mask_token,
@@ -38,18 +39,28 @@ def test_ble_uuid_constants_synchronized() -> None:
     js_char_config = _extract_js_constant(js_content, "CHAR_CONFIG_UUID")
     js_char_status = _extract_js_constant(js_content, "CHAR_STATUS_UUID")
     js_char_command = _extract_js_constant(js_content, "CHAR_COMMAND_UUID")
+    js_char_logs = _extract_js_constant(js_content, "CHAR_LOGS_UUID")
 
     assert js_service_uuid == SERVICE_UUID_STR
     assert js_char_config == CHAR_CONFIG_UUID_STR
     assert js_char_status == CHAR_STATUS_UUID_STR
     assert js_char_command == CHAR_COMMAND_UUID_STR
+    assert js_char_logs == CHAR_LOGS_UUID_STR
 
 
 def test_ble_commands_synchronized() -> None:
     """Verify that all commands handled by firmware are present in ble.js."""
     js_content = Path("tools/web-config/js/ble.js").read_text(encoding="utf-8")
 
-    expected_commands = ["SCAN_WIFI", "TEST_WIFI", "APPLY_AND_EXIT"]
+    expected_commands = [
+        "SCAN_WIFI",
+        "TEST_WIFI",
+        "APPLY_AND_EXIT",
+        "START_OPERATIONS",
+        "STOP_OPERATIONS",
+        "GET_LOGS",
+        "CLEAR_LOGS",
+    ]
     for cmd in expected_commands:
         assert f"'{cmd}'" in js_content or f'"{cmd}"' in js_content, (
             f"Command {cmd} missing from tools/web-config/js/ble.js"

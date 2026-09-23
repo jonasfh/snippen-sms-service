@@ -23,6 +23,7 @@ snippen-sms-service/
 │   ├── button.py             # BOOT button (GPIO 0) debounced input & long-press handler
 │   ├── config.py             # Hardware pinouts, timers & API settings
 │   ├── config.example.py     # Local config overrides template
+│   ├── logger.py             # In-memory circular log buffer & stdout/stderr stream redirector
 │   ├── modem.py              # SimCom A7670E modem driver (AT engine, SMS, SIM memory)
 │   ├── main.py               # Main application loop coordinating WiFi, API & SMS
 │   ├── wifi.py               # WiFi scanning, connection verification & STA manager

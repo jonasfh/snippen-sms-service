@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] - 2026-09-23
+
+### Added
+- Real-time logging and live operational monitoring over Bluetooth Low Energy (Web BLE) (`#89`):
+  - Created `firmware/logger.py` (`LogStreamRedirector`) implementing a non-blocking in-memory circular ring buffer for MicroPython `sys.stdout` and `sys.stderr` while preserving hardware USB UART console monitoring.
+  - Added new BLE GATT characteristic `CHAR_LOGS_UUID` (`6e400005-b5a3-f393-e0a9-e50e24dcca9e`) in `firmware/ble_config.py` with `READ` and `NOTIFY` support.
+  - Added live gateway operations mode during BLE connections in `firmware/main.py`: commands `START_OPERATIONS` / `RESUME_OPERATIONS` and `STOP_OPERATIONS` / `PAUSE_OPERATIONS` allow running full background SMS transmission/reception and HTTP API polling while maintaining active BLE connectivity.
+  - Added historical log retrieval (`GET_LOGS`) and buffer reset (`CLEAR_LOGS`) commands.
+  - Implemented `CHAR_LOGS_UUID` subscription, event dispatching, and mock streaming in `tools/web-config/js/ble.js`.
+  - Added **Lilygo Konsoll & Sanntidslogg** card in `tools/web-config/index.html` with monospace terminal display, live status badges, filter search, autoscroll toggle, clipboard copying, and live operations start/pause controls.
+
 ## [0.30.1] - 2026-09-21
 
 ### Fixed

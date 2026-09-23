@@ -32,6 +32,7 @@ SERVICE_UUID_STR = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 CHAR_CONFIG_UUID_STR = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 CHAR_STATUS_UUID_STR = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 CHAR_COMMAND_UUID_STR = "6e400004-b5a3-f393-e0a9-e50e24dcca9e"
+CHAR_LOGS_UUID_STR = "6e400005-b5a3-f393-e0a9-e50e24dcca9e"
 
 
 def mask_token(token: str) -> str:
@@ -108,6 +109,7 @@ class BLEConfigServer:
         self.handle_config: int | None = None
         self.handle_status: int | None = None
         self.handle_command: int | None = None
+        self.handle_logs: int | None = None
         self._services_registered = False
 
     def _get_ble(self) -> object | None:
@@ -138,14 +140,18 @@ class BLEConfigServer:
             bluetooth.UUID(CHAR_COMMAND_UUID_STR),
             bluetooth.FLAG_WRITE | bluetooth.FLAG_NOTIFY,
         )
+        char_logs = (
+            bluetooth.UUID(CHAR_LOGS_UUID_STR),
+            bluetooth.FLAG_READ | bluetooth.FLAG_NOTIFY,
+        )
 
-        service = (service_uuid, (char_config, char_status, char_command))
-        ((self.handle_config, self.handle_status, self.handle_command),) = (
+        service = (service_uuid, (char_config, char_status, char_command, char_logs))
+        ((self.handle_config, self.handle_status, self.handle_command, self.handle_logs),) = (
             ble.gatts_register_services((service,))
         )
         # Increase characteristic buffer sizes from default 20 bytes to 1024 bytes
         # to prevent payload truncation on incoming writes and outgoing notifications.
-        for h in (self.handle_config, self.handle_status, self.handle_command):
+        for h in (self.handle_config, self.handle_status, self.handle_command, self.handle_logs):
             if hasattr(ble, "gatts_set_buffer"):
                 try:
                     ble.gatts_set_buffer(h, 1024)
@@ -370,6 +376,20 @@ class BLEConfigServer:
                 ble.gatts_notify(self.conn_handle, self.handle_command, payload_str)
             except Exception as exc:  # noqa: BLE001
                 print(f"[ble] Failed to notify command response: {exc}")
+
+    def notify_log(self, line: str) -> None:
+        """Send a log line notification to connected central without recursion."""
+        ble = self._get_ble()
+        if ble is None or self.handle_logs is None or self.conn_handle is None:
+            return
+
+        payload_str = line[:500] if len(line) > 500 else line
+        try:
+            ble.gatts_write(self.handle_logs, payload_str)
+            ble.gatts_notify(self.conn_handle, self.handle_logs, payload_str)
+        except Exception:  # noqa: BLE001, S110
+            # Do NOT print here to prevent recursion
+            pass
 
     def poll(self, now: float | None = None) -> None:
         """Poll server lifecycle and check inactivity timeout."""
