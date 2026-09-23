@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIRMWARE_DIR = REPO_ROOT / "firmware"
 if str(FIRMWARE_DIR) not in sys.path:
@@ -109,3 +111,31 @@ def test_get_logger_and_setup_logger_singleton() -> None:
     finally:
         l1.uninstall()
         assert sys.stdout is orig_stdout
+
+
+def test_logger_bytes_write_and_readinto() -> None:
+    """Verify that bytes/bytearray are handled and readinto returns None."""
+    logger = LogStreamRedirector(max_lines=5)
+    written = logger.write(b"Bytes log line\n")
+    assert written == len(b"Bytes log line\n")
+    assert logger.get_lines() == ["Bytes log line"]
+    assert logger.readinto(bytearray(10)) is None
+
+
+def test_logger_uos_dupterm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify uos.dupterm integration when available."""
+    import types
+
+    dupterm_calls: list[object] = []
+    fake_uos = types.ModuleType("uos")
+    fake_uos.dupterm = lambda stream: dupterm_calls.append(stream)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "uos", fake_uos)
+
+    logger = LogStreamRedirector(max_lines=5)
+    logger.install()
+    assert logger._using_dupterm is True
+    assert dupterm_calls == [logger]
+
+    logger.uninstall()
+    assert logger._using_dupterm is False
+    assert dupterm_calls == [logger, None]
