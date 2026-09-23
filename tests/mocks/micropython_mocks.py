@@ -124,13 +124,26 @@ class MockUART:
 
 
 class MockWDT:
+    _instance: MockWDT | None = None
+
+    def __new__(cls, *args: object, **kwargs: object) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.id = 0
+            cls._instance.timeout = 5000
+            cls._instance.feed_count = 0
+        return cls._instance
+
     def __init__(self, id: int = 0, timeout: int = 5000) -> None:
         self.id = id
         self.timeout = timeout
-        self.feed_count = 0
 
     def feed(self) -> None:
         self.feed_count += 1
+
+    @classmethod
+    def reset_registry(cls) -> None:
+        cls._instance = None
 
 
 class MockTime:
@@ -466,6 +479,7 @@ class MicroPythonEnvironment:
         MockUART.reset_registry()
         MockWLAN.reset_registry()
         MockBLE.reset_instance()
+        MockWDT.reset_registry()
         self.mock_time.reset()
         self.reset_called = False
 

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.1] - 2026-09-23
+
+### Fixed
+- Fixed task watchdog (`mpy_machine_wdt`) crash during firmware deployment and batched file transfer (`#91`):
+  - In `firmware/boot.py`: Implemented `sleep_ms_feeding_wdt()` and `_feed_wdt_if_active()` to feed the ESP32 hardware/task watchdog timer (`machine.WDT`) every 250ms during PWRKEY pulsing and modem boot initialization, preventing `task_wdt` timeouts across soft resets.
+  - In `scripts/deploy_firmware.py`: Batched all firmware files into a single `mpremote cp <file1> <file2> ... :` invocation, avoiding repeated soft reset boot cycles and reducing deployment time from ~2 minutes to ~3 seconds.
+  - Added `firmware/logger.py` to `files_to_deploy` in `scripts/deploy_firmware.py`.
+
 ## [0.31.0] - 2026-09-23
 
 ### Added

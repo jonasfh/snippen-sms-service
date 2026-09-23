@@ -47,11 +47,24 @@ def test_power_on_modem(mpy_env: MicroPythonEnvironment) -> None:
     assert 1 in pwrkey.value_history
     assert pwrkey.value_history[-1] == 0
 
-    # Sleep history verification: 100ms pause, 1500ms pulse, 6s boot wait
+    # Sleep history verification: 100ms pause, 1500ms pulse, 6s boot wait (7600ms total, fed in <=250ms chunks)
     sleeps = mpy_env.mock_time.sleep_history
+    total_ms = sum(arg if kind == "sleep_ms" else int(arg * 1000) for kind, arg in sleeps)
+    assert total_ms == 7600
     assert ("sleep_ms", 100) in sleeps
-    assert ("sleep_ms", 1500) in sleeps
-    assert ("sleep", 6) in sleeps
+    assert ("sleep_ms", 250) in sleeps
+
+
+def test_sleep_ms_feeding_wdt(mpy_env: MicroPythonEnvironment) -> None:
+    import boot
+    import machine
+
+    wdt = machine.WDT()
+    assert wdt.feed_count == 0
+
+    boot.sleep_ms_feeding_wdt(1000)
+    # 1000ms / 250ms = 4 chunks = 4 feeds
+    assert wdt.feed_count == 4
 
 
 def test_init_uart(mpy_env: MicroPythonEnvironment) -> None:
