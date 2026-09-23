@@ -7,7 +7,9 @@ import { SnippenBLEClient, MockSnippenBLEClient, isWebBluetoothSupported } from 
 // Register Service Worker for PWA support
 if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => {
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      reg.update();
+    }).catch((err) => {
       console.warn('[PWA] Service worker registration failed:', err);
     });
   });

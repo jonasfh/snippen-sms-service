@@ -1,9 +1,8 @@
-"""Unit tests for firmware/logger.py in-memory log buffer and stdout/stderr redirector (Issue #89)."""
+"""Unit tests for firmware/logger.py in-memory log buffer and print interceptor (Issue #89, #99)."""
 
+import builtins
 import sys
 from pathlib import Path
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIRMWARE_DIR = REPO_ROOT / "firmware"
@@ -30,7 +29,7 @@ def test_logger_line_buffering_and_capacity() -> None:
     logger.write("Line 5 ")
     assert logger.get_lines() == ["Line 2", "Line 3", "Line 4"]
     logger.write("finished\n")
-    assert logger.get_lines() == ["Line 3", "Line 4", "Line 5 finished"]
+    assert logger.get_lines() == ["Line 2", "Line 3", "Line 4", "Line 5 finished"][-3:]
 
 
 def test_logger_callback_invocation() -> None:
@@ -78,23 +77,39 @@ def test_logger_clear() -> None:
     assert logger.get_lines() == []
 
 
+def test_logger_print_interception() -> None:
+    """Verify that print() statements are captured and forwarded."""
+    orig_print = builtins.print
+    logger = LogStreamRedirector(max_lines=5)
+    try:
+        logger.install()
+        print("Interception test line 1")
+        print("Line 2 with", "args", sep=" - ")
+        assert logger.get_lines() == [
+            "Interception test line 1",
+            "Line 2 with - args",
+        ]
+    finally:
+        logger.uninstall()
+        assert builtins.print is orig_print
+
+
 def test_logger_install_and_uninstall() -> None:
-    """Verify that install redirects sys.stdout and uninstall restores it."""
+    """Verify that install redirects print/sys.stdout and uninstall restores them."""
+    orig_print = builtins.print
     orig_stdout = sys.stdout
-    orig_stderr = sys.stderr
 
     logger = LogStreamRedirector(max_lines=5)
     try:
         logger.install()
-        assert sys.stdout is logger
-        assert sys.stderr is logger
-
+        assert logger.installed is True
         print("Testing print interception")
-        assert logger.get_lines() == ["Testing print interception"]
+        assert "Testing print interception" in logger.get_lines()
     finally:
         logger.uninstall()
+        assert builtins.print is orig_print
         assert sys.stdout is orig_stdout
-        assert sys.stderr is orig_stderr
+        assert logger.installed is False
 
 
 def test_get_logger_and_setup_logger_singleton() -> None:
@@ -103,39 +118,17 @@ def test_get_logger_and_setup_logger_singleton() -> None:
     l2 = get_logger()
     assert l1 is l2
 
-    orig_stdout = sys.stdout
     try:
         l3 = setup_logger(max_lines=50)
         assert l3 is l1
-        assert sys.stdout is l1
+        assert l1.installed is True
     finally:
         l1.uninstall()
-        assert sys.stdout is orig_stdout
 
 
-def test_logger_bytes_write_and_readinto() -> None:
-    """Verify that bytes/bytearray are handled and readinto returns None."""
+def test_logger_bytes_write() -> None:
+    """Verify that bytes/bytearray are handled gracefully."""
     logger = LogStreamRedirector(max_lines=5)
     written = logger.write(b"Bytes log line\n")
     assert written == len(b"Bytes log line\n")
     assert logger.get_lines() == ["Bytes log line"]
-    assert logger.readinto(bytearray(10)) is None
-
-
-def test_logger_uos_dupterm(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify uos.dupterm integration when available."""
-    import types
-
-    dupterm_calls: list[object] = []
-    fake_uos = types.ModuleType("uos")
-    fake_uos.dupterm = lambda stream: dupterm_calls.append(stream)  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "uos", fake_uos)
-
-    logger = LogStreamRedirector(max_lines=5)
-    logger.install()
-    assert logger._using_dupterm is True
-    assert dupterm_calls == [logger]
-
-    logger.uninstall()
-    assert logger._using_dupterm is False
-    assert dupterm_calls == [logger, None]

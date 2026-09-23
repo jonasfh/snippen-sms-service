@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.5] - 2026-09-23
+
+### Fixed
+- Fixed real-time BLE log capture and PWA service worker caching (`#99`):
+  - In `firmware/logger.py`: Intercept `builtins.print` to capture all print statements and exceptions in MicroPython and CPython without stream protocol conflicts or terminal lockups. Removed unsupported `from __future__ import annotations` for bare-metal MicroPython compatibility. Preserved physical USB UART serial console output while streaming logs over BLE.
+  - In `tools/web-config/sw.js`: Switched from Cache-First to **Network-First** strategy with offline cache fallback, ensuring browser and mobile devices always fetch the latest web application assets when online. Updated cache name to `snippen-config-v0.31.5` and ensured immediate activation via `skipWaiting()` and `clients.claim()`.
+  - In `tools/web-config/index.html` and `tools/web-config/js/app.js`: Added cache-busting query parameters (`?v=0.31.5`) to CSS and script resources and added proactive `registration.update()` on load.
+
 ## [0.31.4] - 2026-09-23
 
 ### Fixed

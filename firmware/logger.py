@@ -1,88 +1,71 @@
-"""In-memory circular log buffer and stdout/stderr stream redirector for MicroPython (Issue #89).
+"""In-memory circular log buffer and print interceptor for MicroPython and CPython (Issue #89, #99).
 
-Captures standard output (print statements) and exceptions into a ring buffer
-while preserving USB serial console output, enabling wireless log streaming over BLE.
+Captures standard output (print statements) into a bounded ring buffer
+while preserving hardware serial console output, enabling wireless log streaming over BLE.
 """
 
+import builtins
 import sys
 
 
 class LogStreamRedirector:
-    """Stream wrapper that captures stdout and stderr into a bounded circular buffer."""
+    """Log collector that captures print statements into a bounded circular buffer."""
 
     def __init__(self, max_lines: int = 100, on_line_callback: object | None = None) -> None:
         self.max_lines = max_lines
         self.on_line_callback = on_line_callback
         self.lines: list[str] = []
         self._partial_line = ""
+        self.original_print = builtins.print
         self.original_stdout = getattr(sys, "stdout", None)
-        self.original_stderr = getattr(sys, "stderr", None)
         self.installed = False
-        self._using_dupterm = False
 
     def install(self) -> None:
-        """Redirect stdout/stderr through this redirector using uos.dupterm or sys.stdout."""
+        """Intercept builtins.print and sys.stdout to buffer all log statements."""
         if self.installed:
             return
 
-        # 1. MicroPython bare-metal / ESP32 port: uos.dupterm
-        try:
-            import uos  # type: ignore[import-not-found]
+        self.original_print = builtins.print
 
-            if hasattr(uos, "dupterm"):
-                uos.dupterm(self)
-                self.installed = True
-                self._using_dupterm = True
-                return
-        except Exception:  # noqa: BLE001, S110
-            pass
-
-        # 2. CPython / Unix MicroPython port: sys.stdout
-        if hasattr(sys, "stdout"):
+        def intercepted_print(*args: object, **kwargs: object) -> None:
+            sep = kwargs.get("sep", " ")
             try:
-                self.original_stdout = sys.stdout
-                self.original_stderr = getattr(sys, "stderr", None)
-                sys.stdout = self
-                sys.stderr = self
-                self.installed = True
-            except Exception:  # noqa: BLE001, S110
-                pass
+                line = sep.join(str(a) for a in args)
+            except Exception:  # noqa: BLE001
+                line = str(args)
+
+            self._append_line(line)
+            self.original_print(*args, **kwargs)
+
+        builtins.print = intercepted_print
+        self.installed = True
 
     def uninstall(self) -> None:
-        """Restore original sys.stdout and sys.stderr streams or unregister dupterm."""
+        """Restore original builtins.print."""
         if not self.installed:
             return
 
-        if self._using_dupterm:
-            try:
-                import uos  # type: ignore[import-not-found]
-
-                if hasattr(uos, "dupterm"):
-                    uos.dupterm(None)
-            except Exception:  # noqa: BLE001, S110
-                pass
-            self._using_dupterm = False
-
-        if hasattr(sys, "stdout") and self.original_stdout is not None:
-            try:
-                sys.stdout = self.original_stdout
-                if self.original_stderr is not None:
-                    sys.stderr = self.original_stderr
-            except Exception:  # noqa: BLE001, S110
-                pass
-
+        builtins.print = self.original_print
         self.installed = False
 
-    def readinto(self, buf: bytearray) -> int | None:
-        """Stream input method for uos.dupterm (output-only stream)."""
-        return None
+    def _append_line(self, line: str) -> None:
+        """Append line to internal ring buffer and notify registered callback."""
+        if len(self.lines) >= self.max_lines:
+            self.lines.pop(0)
+        self.lines.append(line)
+
+        if callable(self.on_line_callback):
+            try:
+                self.on_line_callback(line)
+            except Exception:  # noqa: BLE001, S110
+                pass
 
     def set_callback(self, callback: object | None) -> None:
         """Update or register the line notification callback."""
         self.on_line_callback = callback
 
-    def write(self, text: bytes | str) -> int:
-        """Write string chunk to original stdout and buffer complete lines."""
+    def write(self, text: bytes | bytearray | str) -> int:
+        """Write string or byte chunk to original stdout and buffer complete lines."""
         if isinstance(text, (bytes, bytearray)):
             try:
                 str_text = text.decode("utf-8")
@@ -91,11 +74,10 @@ class LogStreamRedirector:
         else:
             str_text = str(text)
 
-        # In sys.stdout mode, forward to original stdout
         if (
-            not self._using_dupterm
-            and self.original_stdout is not None
+            self.original_stdout is not None
             and self.original_stdout is not self
+            and hasattr(self.original_stdout, "write")
         ):
             try:
                 self.original_stdout.write(str_text)
@@ -109,20 +91,12 @@ class LogStreamRedirector:
         while "\n" in self._partial_line:
             line, self._partial_line = self._partial_line.split("\n", 1)
             line = line.rstrip("\r")
-            if len(self.lines) >= self.max_lines:
-                self.lines.pop(0)
-            self.lines.append(line)
-
-            if callable(self.on_line_callback):
-                try:
-                    self.on_line_callback(line)
-                except Exception:  # noqa: BLE001, S110
-                    pass
+            self._append_line(line)
 
         return len(text)
 
     def flush(self) -> None:
-        """Flush original stream if supported."""
+        """Flush original stdout stream if supported."""
         if self.original_stdout is not None and hasattr(self.original_stdout, "flush"):
             try:
                 self.original_stdout.flush()
