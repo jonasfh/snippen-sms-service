@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.2] - 2026-09-23
+
+### Fixed
+- Added fast-boot modem online check in `firmware/boot.py` to eliminate soft-reset raw REPL timeouts (`#93`):
+  - Implemented `is_modem_online()` in `firmware/boot.py` which probes UART with `AT` before performing the 7.6-second power-on sequence.
+  - Skips redundant PWRKEY pulsing and 6-second radio delays when the modem is already running (e.g. across soft resets or mpremote connections), reducing boot time to <150ms.
+  - Preserved full cold-boot initialization when modem is unpowered or unresponsive.
+
 ## [0.31.1] - 2026-09-23
 
 ### Fixed
