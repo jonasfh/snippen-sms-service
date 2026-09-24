@@ -251,7 +251,7 @@ def split_sms_body(
     # Re-evaluate up to 3 times to stabilize part count formatting (e.g. 9 -> 10 parts)
     for _ in range(3):
         indicator_len = len(f"({total_parts}/{total_parts}) ") if add_indicators else 0
-        max_payload = single_limit - indicator_len
+        max_payload = (default_mp_limit if not add_indicators else single_limit) - indicator_len
 
         chunks = []
         idx = 0

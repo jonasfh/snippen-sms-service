@@ -121,6 +121,7 @@ class ModemDriver:
 
         self.chunk_delay_ms = self.config.get("sms_chunk_delay_ms", 500)
         self.multipart_timeout_sec = self.config.get("sms_multipart_timeout_sec", 30)
+        self._outbound_msg_ref: int = 1
         self.reassembler = (
             sms_encoding.InboundReassembler(timeout_sec=self.multipart_timeout_sec)
             if (sms_encoding is not None and hasattr(sms_encoding, "InboundReassembler"))
@@ -236,23 +237,37 @@ class ModemDriver:
         return True
 
     def _send_single_sms(
-        self, target_number: str, text: str, timeout_ms: int = 15000
+        self,
+        target_number: str,
+        text: str,
+        timeout_ms: int = 15000,
+        msg_ref: int | None = None,
+        part_num: int = 1,
+        total_parts: int = 1,
     ) -> tuple[bool, str | None]:
-        """Transmit a single SMS payload over UART."""
-        # Ensure SMS text mode (AT+CMGF=1) for AT+CMGS
+        """Transmit a single SMS payload over UART, using AT+CMGSEX for multipart or AT+CMGS for single."""
+        # Ensure SMS text mode (AT+CMGF=1) for AT+CMGS / AT+CMGSEX
         self.send_cmd("AT+CMGF=1", timeout_ms=1000)
 
         use_ucs2 = False
         if sms_encoding is not None and not sms_encoding.is_gsm7(text):
             use_ucs2 = True
 
+        is_multipart = total_parts > 1 and msg_ref is not None
+
         if use_ucs2:
             self.send_cmd('AT+CSCS="UCS2"', timeout_ms=1000)
             encoded_number = sms_encoding.encode_ucs2_hex(target_number)
-            cmgs_cmd = f'AT+CMGS="{encoded_number}"\r\n'
+            if is_multipart:
+                cmgs_cmd = f'AT+CMGSEX="{encoded_number}",{msg_ref},{part_num},{total_parts}\r\n'
+            else:
+                cmgs_cmd = f'AT+CMGS="{encoded_number}"\r\n'
             body_payload = sms_encoding.encode_ucs2_hex(text) + "\x1a"
         else:
-            cmgs_cmd = f'AT+CMGS="{target_number}"\r\n'
+            if is_multipart:
+                cmgs_cmd = f'AT+CMGSEX="{target_number}",{msg_ref},{part_num},{total_parts}\r\n'
+            else:
+                cmgs_cmd = f'AT+CMGS="{target_number}"\r\n'
             body_payload = text + "\x1a"
 
         try:
@@ -263,6 +278,7 @@ class ModemDriver:
 
             # Wait for '>' prompt
             prompt_found = False
+            rejected = False
             start = _ticks_ms()
             while _ticks_diff(_ticks_ms(), start) < 3000:
                 chunk = self.uart.read(getattr(self.uart, "any", lambda: 1)() or 1)
@@ -271,8 +287,31 @@ class ModemDriver:
                         prompt_found = True
                         break
                     if b"ERROR" in chunk:
-                        return False, "Modem rejected AT+CMGS command"
+                        rejected = True
+                        break
                 time.sleep_ms(50)
+
+            # Fallback: if AT+CMGSEX was rejected or timed out, attempt standard AT+CMGS
+            if (not prompt_found or rejected) and is_multipart:
+                self.write_raw(b"\x1b")
+                time.sleep_ms(100)
+                self.flush_input()
+                if use_ucs2:
+                    fallback_cmd = f'AT+CMGS="{encoded_number}"\r\n'
+                else:
+                    fallback_cmd = f'AT+CMGS="{target_number}"\r\n'
+                self.write_raw(fallback_cmd)
+                start = _ticks_ms()
+                prompt_found = False
+                while _ticks_diff(_ticks_ms(), start) < 3000:
+                    chunk = self.uart.read(getattr(self.uart, "any", lambda: 1)() or 1)
+                    if chunk:
+                        if b">" in chunk:
+                            prompt_found = True
+                            break
+                        if b"ERROR" in chunk:
+                            return False, "Modem rejected AT+CMGS command"
+                    time.sleep_ms(50)
 
             if not prompt_found:
                 return False, "Timeout waiting for '>' prompt"
@@ -280,22 +319,22 @@ class ModemDriver:
             # Transmit message body terminated by Ctrl+Z (\x1A)
             self.write_raw(body_payload)
 
-            # Wait for delivery confirmation (+CMGS: <id> and OK)
+            # Wait for delivery confirmation (+CMGS: <id> / +CMGSEX: <id> and OK)
             success, lines = self._read_response(
                 timeout_ms=timeout_ms,
                 stop_tokens=("OK", "ERROR", "+CMS ERROR", "+CME ERROR"),
             )
 
-            msg_ref = None
+            msg_ref_out = None
             for line in lines:
-                if "+CMGS:" in line:
+                if "+CMGS:" in line or "+CMGSEX:" in line:
                     parts = line.split(":", 1)
                     if len(parts) > 1:
-                        msg_ref = parts[1].strip()
+                        msg_ref_out = parts[1].strip()
                     break
 
-            if success or msg_ref is not None:
-                return True, msg_ref if msg_ref else "OK"
+            if success or msg_ref_out is not None:
+                return True, msg_ref_out if msg_ref_out else "OK"
 
             error_line = next((line for line in lines if "ERROR" in line), "Unknown send failure")
             return False, error_line
@@ -308,6 +347,8 @@ class ModemDriver:
     ) -> tuple[bool, str | None]:
         """Send outbound SMS over cellular modem, automatically chunking long messages.
 
+        Uses AT+CMGSEX for concatenated multi-part SMS so parts are reassembled
+        into a single unified message on the recipient handset.
         Returns (True, message_reference) on success, or (False, error_reason) on failure.
         """
         if self.uart is None:
@@ -318,21 +359,34 @@ class ModemDriver:
         except ValueError as err:
             return False, f"Invalid phone number: {err}"
 
-        # Segment long messages into chunks if necessary
+        # Segment long messages into chunks if necessary (without indicators, for UDH / CMGSEX concatenation)
         if sms_encoding is not None and hasattr(sms_encoding, "split_sms_body"):
-            chunks = sms_encoding.split_sms_body(text)
+            chunks = sms_encoding.split_sms_body(text, add_indicators=False)
         else:
             chunks = [text]
+
+        total_parts = len(chunks)
+        msg_ref = None
+        if total_parts > 1:
+            msg_ref = self._outbound_msg_ref
+            self._outbound_msg_ref = (self._outbound_msg_ref % 255) + 1
 
         refs: list[str] = []
         for idx, chunk in enumerate(chunks):
             if idx > 0 and self.chunk_delay_ms > 0:
                 time.sleep_ms(self.chunk_delay_ms)
 
-            ok, ref_or_err = self._send_single_sms(target_number, chunk, timeout_ms=timeout_ms)
+            ok, ref_or_err = self._send_single_sms(
+                target_number,
+                chunk,
+                timeout_ms=timeout_ms,
+                msg_ref=msg_ref,
+                part_num=idx + 1,
+                total_parts=total_parts,
+            )
             if not ok:
-                if len(chunks) > 1:
-                    return False, f"Chunk {idx + 1}/{len(chunks)} failed: {ref_or_err}"
+                if total_parts > 1:
+                    return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"
                 return False, ref_or_err
             refs.append(ref_or_err if ref_or_err else "OK")
 

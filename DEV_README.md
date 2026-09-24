@@ -185,7 +185,10 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
   - Plain GSM-7 / ASCII messages are transmitted in standard text mode up to 160 characters.
   - Messages containing emojis (e.g. 🤖) or unsupported unicode characters are dynamically encoded in UCS-2 (UTF-16BE hex with surrogate pairs), switching the modem to `AT+CSCS="UCS2"` and preventing `CMS ERROR`.
   - Inbound SMS bodies and sender numbers received in UCS-2 hex are transparently decoded into UTF-8 strings preserving emojis and Norwegian letters (æ, ø, å).
-  - **Outbound Chunking (`split_sms_body`)**: Messages exceeding single SMS limits (160 chars for GSM-7, 70 code units for UCS-2) are segmented into ordered chunks respecting word boundaries and surrogate pair safety, formatted with `(i/N) ` indicators and dispatched sequentially with configurable delay (`sms_chunk_delay_ms`).
+  - **Outbound Concatenation & Chunking (`ModemDriver.send_sms` & `split_sms_body`)**:
+    - Messages exceeding single SMS limits (160 chars for GSM-7, 70 code units for UCS-2) are segmented into ordered chunks (153 chars for GSM-7, 67 code units for UCS-2) respecting word boundaries and surrogate pair safety.
+    - Multipart messages are dispatched via `AT+CMGSEX="<recipient>",<ref>,<part>,<total>` with a shared revolving message reference, allowing receiving handsets (iOS / Android) to automatically concatenate all parts into a single seamless message.
+    - If `AT+CMGSEX` is rejected by the modem, it automatically falls back to standard sequential `AT+CMGS` with configurable delay (`sms_chunk_delay_ms`).
   - **Inbound Reassembly (`InboundReassembler` & PDU mode)**:
     - Firmware reads inbound SMS using 3GPP PDU mode (`AT+CMGF=0`, `AT+CMGL=4`), extracting User Data Headers (UDH, 8-bit & 16-bit reference) and unpacking GSM 7-bit septets with fill bits. This ensures 100% accurate concatenation and preserves Norwegian characters (æ, ø, å).
     - Falls back to text mode (`AT+CMGF=1`) and text indicator detection `(1/2)` if PDU mode is unsupported.
