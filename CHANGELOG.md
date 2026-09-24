@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.11] - 2026-09-24
+
+### Added
+- Unconditional call forwarding (CFU) for incoming voice calls on LilyGO T-Call (`#110`):
+  - In `firmware/config.py` and `firmware/config.example.py`:
+    - Added `CALL_FORWARDING_NUMBER = "+4792830575"` and `CALL_FORWARDING_ENABLED = True` as default configuration constants.
+    - Included fields in `get_default_config()` with support for JSON and local config overrides.
+  - In `firmware/modem.py`:
+    - Added `configure_call_forwarding()` to register and enable unconditional call forwarding via `AT+CCFC=0,3,"<number>",145`.
+    - Added `query_call_forwarding()` for status querying via `AT+CCFC=0,2`.
+    - Added automatic call forwarding setup during `init_modem()` with graceful error handling to preserve SMS gateway operations.
+  - In `DEV_README.md`:
+    - Documented call forwarding behavior, configuration options, and network-side routing architecture.
+
 ## [0.31.10] - 2026-09-24
 
 ### Fixed

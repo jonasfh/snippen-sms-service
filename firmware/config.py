@@ -47,6 +47,10 @@ BUTTON_LONG_PRESS_MS = 3000  # Milliseconds to trigger long-press event
 BUTTON_DEBOUNCE_MS = 50  # Milliseconds for debounce filtering
 PROVISIONING_TIMEOUT_SEC = 300  # 5 minutes provisioning mode timeout
 
+# Call Forwarding Settings (Issue #110)
+CALL_FORWARDING_NUMBER = "+4792830575"
+CALL_FORWARDING_ENABLED = True
+
 
 def get_default_config() -> dict:
     """Return dictionary of default system configuration."""
@@ -81,6 +85,8 @@ def get_default_config() -> dict:
         "button_long_press_ms": BUTTON_LONG_PRESS_MS,
         "button_debounce_ms": BUTTON_DEBOUNCE_MS,
         "provisioning_timeout_sec": PROVISIONING_TIMEOUT_SEC,
+        "call_forwarding_number": CALL_FORWARDING_NUMBER,
+        "call_forwarding_enabled": CALL_FORWARDING_ENABLED,
     }
 
 

@@ -40,6 +40,8 @@ def test_get_default_config() -> None:
     assert cfg["button_long_press_ms"] == 3000
     assert cfg["button_debounce_ms"] == 50
     assert cfg["provisioning_timeout_sec"] == 300
+    assert cfg["call_forwarding_number"] == "+4792830575"
+    assert cfg["call_forwarding_enabled"] is True
 
 
 def test_load_config_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
