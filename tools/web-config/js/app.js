@@ -55,6 +55,15 @@ const btnToggleApiToken = document.getElementById('btn-toggle-api-token');
 const pollInterval = document.getElementById('poll-interval');
 const inboxInterval = document.getElementById('inbox-interval');
 
+const cardCalls = document.getElementById('card-calls');
+const callForwardingNumber = document.getElementById('call-forwarding-number');
+const callForwardingEnabled = document.getElementById('call-forwarding-enabled');
+const callRejectEnabled = document.getElementById('call-reject-enabled');
+const callNotifyAdminEnabled = document.getElementById('call-notify-admin-enabled');
+const callNotifyAdminText = document.getElementById('call-notify-admin-text');
+const callReplyCallerEnabled = document.getElementById('call-reply-caller-enabled');
+const callReplyCallerText = document.getElementById('call-reply-caller-text');
+
 const cardTelemetry = document.getElementById('card-telemetry');
 const telIp = document.getElementById('tel-ip');
 const telWifiRssi = document.getElementById('tel-wifi-rssi');
@@ -153,10 +162,12 @@ function updateConnectionState(state, deviceName = '') {
 }
 
 function setCardsEnabled(enabled) {
-  const cards = [cardWifi, cardApi, cardTelemetry, cardConsole, actionBar];
+  const cards = [cardWifi, cardApi, cardCalls, cardTelemetry, cardConsole, actionBar];
   cards.forEach((el) => {
-    el.style.opacity = enabled ? '1' : '0.5';
-    el.style.pointerEvents = enabled ? 'auto' : 'none';
+    if (el) {
+      el.style.opacity = enabled ? '1' : '0.5';
+      el.style.pointerEvents = enabled ? 'auto' : 'none';
+    }
   });
 }
 
@@ -187,6 +198,27 @@ async function loadActiveConfig() {
     }
     if (cfg.inbox_check_interval_sec) {
       inboxInterval.value = cfg.inbox_check_interval_sec;
+    }
+    if (cfg.call_forwarding_number !== undefined) {
+      callForwardingNumber.value = cfg.call_forwarding_number;
+    }
+    if (cfg.call_forwarding_enabled !== undefined) {
+      callForwardingEnabled.checked = Boolean(cfg.call_forwarding_enabled);
+    }
+    if (cfg.call_reject_enabled !== undefined) {
+      callRejectEnabled.checked = Boolean(cfg.call_reject_enabled);
+    }
+    if (cfg.call_notify_admin_enabled !== undefined) {
+      callNotifyAdminEnabled.checked = Boolean(cfg.call_notify_admin_enabled);
+    }
+    if (cfg.call_notify_admin_text !== undefined) {
+      callNotifyAdminText.value = cfg.call_notify_admin_text;
+    }
+    if (cfg.call_reply_caller_enabled !== undefined) {
+      callReplyCallerEnabled.checked = Boolean(cfg.call_reply_caller_enabled);
+    }
+    if (cfg.call_reply_caller_text !== undefined) {
+      callReplyCallerText.value = cfg.call_reply_caller_text;
     }
   } catch (err) {
     console.warn('[Config] Kunne ikke lese config automatisk:', err);
@@ -441,6 +473,13 @@ btnApplyExit.addEventListener('click', async () => {
     snippen_api_base_url: url,
     outbox_poll_interval_sec: outboxSec,
     inbox_check_interval_sec: inboxSec,
+    call_forwarding_number: callForwardingNumber.value.trim(),
+    call_forwarding_enabled: callForwardingEnabled.checked,
+    call_reject_enabled: callRejectEnabled.checked,
+    call_notify_admin_enabled: callNotifyAdminEnabled.checked,
+    call_notify_admin_text: callNotifyAdminText.value.trim(),
+    call_reply_caller_enabled: callReplyCallerEnabled.checked,
+    call_reply_caller_text: callReplyCallerText.value.trim(),
   };
 
   // Only send password if entered

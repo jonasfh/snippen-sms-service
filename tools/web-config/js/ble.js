@@ -413,6 +413,13 @@ export class MockSnippenBLEClient extends EventTarget {
       snippen_api_token: 'se****99',
       outbox_poll_interval_sec: 5,
       inbox_check_interval_sec: 5,
+      call_forwarding_number: '+4792830575',
+      call_forwarding_enabled: true,
+      call_reject_enabled: true,
+      call_notify_admin_enabled: true,
+      call_reply_caller_enabled: true,
+      call_reply_caller_text: 'Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. Send SMS eller ring leieansvarlig på 92830575.',
+      call_notify_admin_text: 'Ubesvart anrop til Snippen SMS-gateway fra {caller}.',
     };
     this.mockNetworks = [
       { ssid: 'Snippen-Local', rssi: -54, auth: 3 },

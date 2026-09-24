@@ -174,6 +174,8 @@ def test_ble_server_config_write(mpy_env: MicroPythonEnvironment) -> None:
     read_back = json.loads(mock_ble.gatts_read(server.handle_config).decode("utf-8"))
     assert read_back["wifi_ssid"] == "NewOfficeWiFi"
     assert read_back["snippen_api_token"] == "br****23"
+    assert read_back["call_forwarding_number"] == "+4792830575"
+    assert read_back["call_reject_enabled"] is True
 
 
 def test_ble_server_command_write_and_response(mpy_env: MicroPythonEnvironment) -> None:

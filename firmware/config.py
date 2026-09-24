@@ -51,6 +51,16 @@ PROVISIONING_TIMEOUT_SEC = 300  # 5 minutes provisioning mode timeout
 CALL_FORWARDING_NUMBER = "+4792830575"
 CALL_FORWARDING_ENABLED = True
 
+# Call Rejection & SMS Alerts Settings (Issue #113)
+CALL_REJECT_ENABLED = True
+CALL_NOTIFY_ADMIN_ENABLED = True
+CALL_REPLY_CALLER_ENABLED = True
+CALL_REPLY_CALLER_TEXT = (
+    "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
+    "Send SMS eller ring leieansvarlig på 92830575."
+)
+CALL_NOTIFY_ADMIN_TEXT = "Ubesvart anrop til Snippen SMS-gateway fra {caller}."
+
 
 def get_default_config() -> dict:
     """Return dictionary of default system configuration."""
@@ -87,6 +97,11 @@ def get_default_config() -> dict:
         "provisioning_timeout_sec": PROVISIONING_TIMEOUT_SEC,
         "call_forwarding_number": CALL_FORWARDING_NUMBER,
         "call_forwarding_enabled": CALL_FORWARDING_ENABLED,
+        "call_reject_enabled": CALL_REJECT_ENABLED,
+        "call_notify_admin_enabled": CALL_NOTIFY_ADMIN_ENABLED,
+        "call_reply_caller_enabled": CALL_REPLY_CALLER_ENABLED,
+        "call_reply_caller_text": CALL_REPLY_CALLER_TEXT,
+        "call_notify_admin_text": CALL_NOTIFY_ADMIN_TEXT,
     }
 
 

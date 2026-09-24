@@ -345,6 +345,22 @@ class BLEConfigServer:
             "snippen_api_token": mask_token(cfg.get("snippen_api_token", "")),
             "outbox_poll_interval_sec": cfg.get("outbox_poll_interval_sec", 5),
             "inbox_check_interval_sec": cfg.get("inbox_check_interval_sec", 5),
+            "call_forwarding_number": cfg.get("call_forwarding_number", "+4792830575"),
+            "call_forwarding_enabled": cfg.get("call_forwarding_enabled", True),
+            "call_reject_enabled": cfg.get("call_reject_enabled", True),
+            "call_notify_admin_enabled": cfg.get("call_notify_admin_enabled", True),
+            "call_reply_caller_enabled": cfg.get("call_reply_caller_enabled", True),
+            "call_reply_caller_text": cfg.get(
+                "call_reply_caller_text",
+                (
+                    "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
+                    "Send SMS eller ring leieansvarlig på 92830575."
+                ),
+            ),
+            "call_notify_admin_text": cfg.get(
+                "call_notify_admin_text",
+                "Ubesvart anrop til Snippen SMS-gateway fra {caller}.",
+            ),
         }
         json_data = json.dumps(safe_cfg)
         ble.gatts_write(self.handle_config, json_data)

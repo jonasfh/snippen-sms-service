@@ -208,10 +208,14 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
   - **Memory Management**: Periodic `gc.collect()` in the main event loop, free heap monitoring, and aggressive garbage collection if free memory drops below 20 KB.
   - **Non-blocking WiFi Reconnect**: Automatic background reconnection with exponential backoff without stalling the main loop or starving the hardware watchdog.
 
-- **Call Forwarding / Taleanrop-viderekobling (`firmware/modem.py`)**:
-  - Configures network-based unconditional call forwarding (CFU) via `AT+CCFC=0,3,"<target>",145` during modem initialization (`init_modem()`).
-  - Incoming voice calls to the gateway's SIM card are transparently forwarded by the cellular operator network directly to the predefined target number (default `+4792830575`, configurable via `call_forwarding_number` and `call_forwarding_enabled` in `config.py` / `config.json`).
-  - Network-side forwarding ensures that voice calls never interfere with UART SMS operations or require local voice decoding, with graceful error handling so SMS services continue normally even if CFU setup fails.
+- **Call Handling, Forwarding & Rejection (`firmware/modem.py` & `firmware/main.py`)**:
+  - **Network Call Forwarding (`AT+CCFC`)**: Configures unconditional call forwarding (CFU via `AT+CCFC=0,3,"<target>",145`) during modem initialization. If supported by the SIM/carrier, incoming calls are rerouted entirely in the carrier network without local handling.
+  - **Local Call Rejection (`AT+CHUP`)**: When network CFU is unsupported (e.g. prepaid SIMs), the modem automatically presents caller ID (`AT+CLIP=1`), intercepts incoming calls (`RING` / `+CLIP`), and immediately rejects them using `AT+CHUP`.
+  - **SMS Notifications & Auto-Reply**:
+    - Dispatches an automated SMS alert to the administrator (`+4792830575`) with caller ID and timestamp.
+    - Sends an automated SMS reply to the caller informing them that the line is an automated SMS gateway for Snippen Booking.
+    - Built-in 30-second debounce prevents notification storms from repeated attempts.
+  - **BLE Web Configurator Support**: All parameters (forwarding enable, target number, call reject toggle, admin alert toggle, caller reply toggle, and custom SMS message templates) are configurable wirelessly via the Web Configurator (PWA) and persisted in `config.json`.
 
 ## CI/CD Workflows
 
