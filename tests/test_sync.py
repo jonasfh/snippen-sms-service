@@ -226,3 +226,48 @@ def test_sync_inbox_with_booking_resolver() -> None:
     assert updated_msg is not None
     assert updated_msg.booking_id == "book-777"
     assert updated_msg.status == MessageStatus.PROCESSED
+
+
+def test_sync_inbox_multipart_reassembly() -> None:
+    """Test that sync_inbox reassembles stored multipart SMS and marks all parts processed."""
+    storage = MessageStorage(":memory:")
+    p1 = storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4790000005",
+            recipient="snippen-sms-service",
+            body="\x05\x00\x03\x99\x02\x01Første del. ",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+    p2 = storage.save_message(
+        Message(
+            direction=MessageDirection.INBOUND,
+            sender="+4790000005",
+            recipient="snippen-sms-service",
+            body="\x05\x00\x03\x99\x02\x02Andre del.",
+            status=MessageStatus.RECEIVED,
+        )
+    )
+    assert p1.id is not None
+    assert p2.id is not None
+
+    mock_client = MagicMock(spec=SnippenClient)
+    # The client reports 1 message (with p1's ID)
+    mock_client.report_inbound_messages.side_effect = lambda msgs: [msgs[0].id]
+
+    sync = SyncService(storage=storage, client=mock_client)
+    acked = sync.sync_inbox()
+
+    # The client must receive only 1 reassembled message
+    mock_client.report_inbound_messages.assert_called_once()
+    reported_msgs = mock_client.report_inbound_messages.call_args[0][0]
+    assert len(reported_msgs) == 1
+    assert reported_msgs[0].body == "Første del. Andre del."
+
+    # Both parts in local storage must be acknowledged and marked PROCESSED
+    assert set(acked) == {p1.id, p2.id}
+    msg1 = storage.get_message(p1.id)
+    msg2 = storage.get_message(p2.id)
+    assert msg1 is not None and msg1.status == MessageStatus.PROCESSED
+    assert msg2 is not None and msg2.status == MessageStatus.PROCESSED

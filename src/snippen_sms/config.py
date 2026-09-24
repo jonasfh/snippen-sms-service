@@ -29,6 +29,7 @@ class GatewayConfig:
     sync_enabled: bool = True
     booking_resolution_enabled: bool = True
     conversation_ttl_seconds: float = 7200.0
+    multipart_timeout_seconds: float = 30.0
 
     @classmethod
     def from_env(cls) -> GatewayConfig:
@@ -68,5 +69,8 @@ class GatewayConfig:
             booking_resolution_enabled=booking_res_env in ("true", "1", "yes"),
             conversation_ttl_seconds=float(
                 os.getenv("SNIPPEN_SMS_CONVERSATION_TTL_SECONDS", "7200.0")
+            ),
+            multipart_timeout_seconds=float(
+                os.getenv("SNIPPEN_SMS_MULTIPART_TIMEOUT_SECONDS", "30.0")
             ),
         )

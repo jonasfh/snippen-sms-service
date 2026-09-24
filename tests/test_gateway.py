@@ -752,3 +752,36 @@ def test_gateway_incoming_message_with_booking_resolver():
         await service.stop()
 
     asyncio.run(_test())
+
+
+def test_gateway_incoming_multipart_message_reassembly():
+    """Test that incoming multipart SMS are reassembled into 1 message by GatewayService."""
+
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+        await service.start()
+
+        # Simulate two parts of a multipart SMS from same sender
+        provider.simulate_incoming(
+            sender="+4790011223",
+            body="\x05\x00\x03\x77\x02\x01Første del av lang melding. ",
+        )
+        provider.simulate_incoming(
+            sender="+4790011223",
+            body="\x05\x00\x03\x77\x02\x02Andre del av lang melding.",
+        )
+
+        messages = await service.poll_incoming_messages()
+        # Should be reassembled into exactly 1 message
+        assert len(messages) == 1
+        assert messages[0].sender == "+4790011223"
+        assert messages[0].body == "Første del av lang melding. Andre del av lang melding."
+
+        # Database should contain 1 message
+        assert service.storage.count_inbox() == 1
+
+        await service.stop()
+
+    asyncio.run(_test())

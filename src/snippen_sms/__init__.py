@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.31.6"
+__version__ = "0.31.7"
 
 from snippen_sms.client import (
     SnippenApiError,
@@ -38,6 +38,10 @@ from snippen_sms.providers import (
     get_provider,
     register_provider,
 )
+from snippen_sms.reassembler import (
+    InboundReassembler,
+    reassemble_stored_messages,
+)
 from snippen_sms.storage import MessageStorage
 from snippen_sms.sync import SyncService
 from snippen_sms.updater import (
@@ -58,6 +62,7 @@ __all__ = [
     "GatewayService",
     "HttpSmsProvider",
     "InMemorySmsProvider",
+    "InboundReassembler",
     "IncomingMessage",
     "Message",
     "MessageDirection",
@@ -84,5 +89,6 @@ __all__ = [
     "calculate_sha256",
     "get_provider",
     "parse_checksums_file",
+    "reassemble_stored_messages",
     "register_provider",
 ]

@@ -35,6 +35,18 @@ GSM7_BASIC = (
 
 # GSM 03.38 extension characters
 GSM7_EXTENDED = "^{}\\[~]|€\x0c"
+GSM7_EXT_MAP = {
+    10: "\x0c",
+    20: "^",
+    40: "{",
+    41: "}",
+    47: "\\",
+    60: "[",
+    61: "~",
+    62: "]",
+    64: "|",
+    101: "€",
+}
 
 _GSM7_ALL = set(GSM7_BASIC + GSM7_EXTENDED)
 
@@ -283,12 +295,138 @@ def split_sms_body(
     return [f"({i + 1}/{actual_total}) {c}" for i, c in enumerate(chunks)]
 
 
+def decode_pdu(pdu_hex: str) -> dict | None:
+    """Decode a GSM 03.40 / 3GPP TS 23.040 SMS-DELIVER PDU hex string.
+
+    Returns a dict with:
+      - sender: E.164 formatted phone number (e.g. +4790688031)
+      - timestamp: Service center timestamp (YY/MM/DD,HH:MM:SS)
+      - body: decoded text (GSM 7-bit or UCS-2)
+      - udh_info: (ref_id, total_parts, part_num) if multipart UDH present, else None
+      - dcs: Data coding scheme int
+    or None if decoding fails.
+    """
+    if not pdu_hex:
+        return None
+    s = pdu_hex.strip()
+    try:
+        smsc_len = int(s[:2], 16)
+        idx = 2 + smsc_len * 2
+        fo = int(s[idx : idx + 2], 16)
+        udhi = bool(fo & 0x40)
+        idx += 2
+
+        oa_digits = int(s[idx : idx + 2], 16)
+        idx += 2
+        toa = int(s[idx : idx + 2], 16)
+        idx += 2
+        oa_octets = (oa_digits + 1) // 2
+        oa_hex = s[idx : idx + oa_octets * 2]
+        idx += oa_octets * 2
+        sender_digits = "".join(oa_hex[i + 1] + oa_hex[i] for i in range(0, len(oa_hex), 2))[
+            :oa_digits
+        ]
+        sender = ("+" if (toa == 145 or toa == 0x91) else "") + sender_digits
+
+        # Skip TP-PID
+        idx += 2
+        dcs = int(s[idx : idx + 2], 16)
+        idx += 2
+        scts_hex = s[idx : idx + 14]
+        idx += 14
+        scts = "".join(scts_hex[i + 1] + scts_hex[i] for i in range(0, 14, 2))
+        timestamp = f"{scts[0:2]}/{scts[2:4]}/{scts[4:6]},{scts[6:8]}:{scts[8:10]}:{scts[10:12]}"
+
+        udl = int(s[idx : idx + 2], 16)
+        idx += 2
+        ud_hex = s[idx:]
+        ud_bytes = bytes(int(ud_hex[i : i + 2], 16) for i in range(0, len(ud_hex), 2))
+
+        udh_info = None
+        udh_septets = 0
+
+        if udhi and len(ud_bytes) > 0:
+            udhl = ud_bytes[0]
+            udh = ud_bytes[1 : 1 + udhl]
+            udh_septets = ((udhl + 1) * 8 + 6) // 7
+            p = 0
+            while p + 1 < len(udh):
+                iei = udh[p]
+                iel = udh[p + 1]
+                if iei == 0x00 and iel >= 3:
+                    udh_info = (udh[p + 2], udh[p + 3], udh[p + 4])
+                    break
+                if iei == 0x08 and iel >= 4:
+                    udh_info = ((udh[p + 2] << 8) | udh[p + 3], udh[p + 4], udh[p + 5])
+                    break
+                p += 2 + iel
+
+        is_ucs2 = (dcs & 0x0C) == 0x08
+        if is_ucs2:
+            payload = ud_bytes[1 + ud_bytes[0] :] if (udhi and len(ud_bytes) > 0) else ud_bytes
+            chars: list[str] = []
+            i = 0
+            n = len(payload)
+            while i + 1 < n:
+                val = (payload[i] << 8) | payload[i + 1]
+                i += 2
+                if 0xD800 <= val <= 0xDBFF and i + 1 < n:
+                    val2 = (payload[i] << 8) | payload[i + 1]
+                    if 0xDC00 <= val2 <= 0xDFFF:
+                        i += 2
+                        cp = 0x10000 + ((val - 0xD800) << 10) + (val2 - 0xDC00)
+                        chars.append(chr(cp))
+                        continue
+                chars.append(chr(val))
+            body = "".join(chars)
+        else:
+            septets: list[int] = []
+            buf = 0
+            bits = 0
+            for b in ud_bytes:
+                buf |= b << bits
+                bits += 8
+                while bits >= 7:
+                    septets.append(buf & 0x7F)
+                    buf >>= 7
+                    bits -= 7
+            if bits > 0 and len(septets) < udl:
+                septets.append(buf & 0x7F)
+
+            payload_septets = septets[udh_septets:udl]
+            chars = []
+            is_esc = False
+            for sept in payload_septets:
+                if is_esc:
+                    chars.append(GSM7_EXT_MAP.get(sept, "?"))
+                    is_esc = False
+                elif sept == 27:
+                    is_esc = True
+                elif sept < len(GSM7_BASIC):
+                    chars.append(GSM7_BASIC[sept])
+                else:
+                    chars.append("?")
+            body = "".join(chars)
+
+        return {
+            "sender": sender,
+            "timestamp": timestamp,
+            "body": body,
+            "udh_info": udh_info,
+            "dcs": dcs,
+        }
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def parse_udh(text: str) -> tuple[int, int, int, str] | None:
     """Detect and parse GSM User Data Header (UDH) for concatenated SMS.
 
     Supports:
     - 8-bit reference (IEI 0x00, 5-byte UDH: \\x05\\x00\\x03<ref><total><part>)
     - 16-bit reference (IEI 0x08, 6-byte UDH: \\x06\\x08\\x04<ref_hi><ref_lo><total><part>)
+    - 8-bit reference hex string (e.g. 050003...)
+    - 16-bit reference hex string (e.g. 060804...)
 
     Returns (ref_id, total_parts, part_num, clean_body) or None if not UDH.
     """
@@ -310,6 +448,33 @@ def parse_udh(text: str) -> tuple[int, int, int, str] | None:
         part = ord(text[6])
         if total > 1 and 1 <= part <= total:
             return ref_id, total, part, text[7:]
+
+    # Check for hex-encoded UDH
+    if len(text) >= 12 and text.startswith("050003"):
+        try:
+            ref_id = int(text[6:8], 16)
+            total = int(text[8:10], 16)
+            part = int(text[10:12], 16)
+            if total > 1 and 1 <= part <= total:
+                clean_body = text[12:]
+                if is_ucs2_hex(clean_body):
+                    clean_body = decode_ucs2_hex(clean_body)
+                return ref_id, total, part, clean_body
+        except ValueError:
+            pass
+
+    if len(text) >= 14 and text.startswith("060804"):
+        try:
+            ref_id = int(text[6:10], 16)
+            total = int(text[10:12], 16)
+            part = int(text[12:14], 16)
+            if total > 1 and 1 <= part <= total:
+                clean_body = text[14:]
+                if is_ucs2_hex(clean_body):
+                    clean_body = decode_ucs2_hex(clean_body)
+                return ref_id, total, part, clean_body
+        except ValueError:
+            pass
 
     return None
 
@@ -411,7 +576,14 @@ class InboundReassembler:
         """
         body = msg.get("body", "")
         sender = msg.get("sender", "")
-        info = parse_multipart_info(body)
+
+        udh_info = msg.get("udh_info")
+        if udh_info is not None and isinstance(udh_info, (tuple, list)) and len(udh_info) == 3:
+            ref_id, total, part_num = udh_info
+            clean_body = body
+            info = (ref_id, total, part_num, clean_body)
+        else:
+            info = parse_multipart_info(body)
 
         if info is None:
             return msg
