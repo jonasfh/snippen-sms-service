@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.7] - 2026-09-24
+
+### Added
+- Concatenated multipart SMS reassembly into a single unified inbound message (`#103`):
+  - In `firmware/sms_encoding.py`: Added full 3GPP PDU decoding (`decode_pdu`) supporting SMS-DELIVER, GSM 7-bit septets unpacking with fill bits, UCS-2 decoding with surrogate pairs, and 8-bit & 16-bit reference User Data Header (UDH) extraction. Updated `InboundReassembler` to accept parsed UDH metadata directly and correctly concatenate multi-segment messages in sequential order.
+  - In `firmware/modem.py`: Enhanced `read_inbound_sms` to prioritize PDU mode (`AT+CMGF=0`, `AT+CMGL=4`), preserving complete UDH headers and Norwegian characters (æ, ø, å) across multi-segment SMS before falling back to text mode (`AT+CMGF=1`). Fixed timestamp extraction in text mode when `CSDH=1` is active.
+  - In `src/snippen_sms/reassembler.py`: Implemented Python gateway `InboundReassembler` and `reassemble_stored_messages()` helper supporting binary UDH, hex UDH, and text indicators `(1/2)`.
+  - In `src/snippen_sms/gateway.py` and `src/snippen_sms/sync.py`: Integrated inbound reassembly into `GatewayService.poll_incoming_messages()` and `SyncService.sync_inbox()` ensuring only 1 unified message is transmitted to WordPress (`POST /wp-json/snippen/v1/sms/inbox`), with all local constituent message parts transitioned to `PROCESSED`.
+  - In `src/snippen_sms/config.py`: Added `multipart_timeout_seconds` configuration parameter (`SNIPPEN_SMS_MULTIPART_TIMEOUT_SECONDS`).
+
 ## [0.31.6] - 2026-09-23
 
 ### Fixed

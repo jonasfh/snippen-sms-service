@@ -13,6 +13,7 @@ from snippen_sms.client import (
 )
 from snippen_sms.context import BookingContextResolver
 from snippen_sms.models import Message, MessageDirection
+from snippen_sms.reassembler import reassemble_stored_messages
 from snippen_sms.storage import MessageStorage
 
 logger = logging.getLogger("snippen_sms.sync")
@@ -61,14 +62,21 @@ class SyncService:
             self.storage.get_message(msg.id) or msg for msg in unprocessed if msg.id is not None
         ]
 
-        logger.debug("Reporting %d unprocessed inbound SMS to Snippen...", len(fresh_unprocessed))
-        acknowledged_ids = self.client.report_inbound_messages(fresh_unprocessed)
+        # Reassemble any multipart message segments before reporting to Snippen
+        messages_to_report, ack_map = reassemble_stored_messages(fresh_unprocessed)
 
-        for msg_id in acknowledged_ids:
-            self.storage.mark_inbox_processed(msg_id)
-            logger.info("Marked inbound message ID %s as processed post-sync", msg_id)
+        logger.debug("Reporting %d unprocessed inbound SMS to Snippen...", len(messages_to_report))
+        acknowledged_ids = self.client.report_inbound_messages(messages_to_report)
 
-        return acknowledged_ids
+        all_processed_ids: list[int] = []
+        for ack_id in acknowledged_ids:
+            constituent_ids = ack_map.get(ack_id, [ack_id])
+            for msg_id in constituent_ids:
+                self.storage.mark_inbox_processed(msg_id)
+                all_processed_ids.append(msg_id)
+                logger.info("Marked inbound message ID %s as processed post-sync", msg_id)
+
+        return all_processed_ids
 
     def sync_outbox(self) -> list[Message]:
         """Fetch pending outgoing SMS messages from Snippen and enqueue them locally.

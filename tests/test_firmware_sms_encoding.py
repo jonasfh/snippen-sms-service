@@ -395,3 +395,97 @@ def test_inbound_reassembler_timeout_partial() -> None:
 
     # Subsequent timeout check returns empty (already released)
     assert reassembler.check_timeouts(timeout_sec=0) == []
+
+
+def test_decode_pdu_real_concatenated_gsm7() -> None:
+    from firmware.sms_encoding import decode_pdu
+
+    pdu1 = (
+        "06917429000100440A917409860813000062904281057480A005000346020190F63068BE5697E520"
+        "B43D3D07A9CB67D0BCEC2697E5A0B21B345FA7D7EB323B7D06B1C3EE3368DE9E83E6EF3628BD5E97"
+        "41E6871C046787E773501A640FBBD9E93328668381E8E5B39B056A97DD207499CD2ECB41F43C3C3D"
+        "5F83C4F2FABA2C07B9DF65D0FCE1A683E6EF36880683C16030180C442F9FDD207A9A0D7A80E66B79"
+        "DA5E0695DD"
+    )
+    pdu2 = (
+        "06917429000100440A9174098608130000629042810584809705000346020240E8329B0E4A93D36F"
+        "7A7ABE06B5CB6C72DA7DFE8196EF76BB2C0791CB6E10B9EC0691C32C5099CD2ECB41E2B0BC0C5ACB"
+        "C37375590E2297DD2074994D079DE5617A7A0E7A9F4162765A0E62A7CFE7B29B5C06A541EC343B7F"
+        "7E83DE67D0F94D3EAB1972D0BC7CFE81AC6910BD3CA797E5A034DA5E96D3CD6136DBE572B900"
+    )
+
+    d1 = decode_pdu(pdu1)
+    assert d1 is not None
+    assert d1["sender"] == "+4790688031"
+    assert d1["timestamp"] == "26/09/24,18:50:47"
+    assert d1["udh_info"] == (70, 2, 1)
+    assert "får plass" in d1["body"]
+    assert "sånt" in d1["body"]
+    assert "til å skrive" in d1["body"]
+
+    d2 = decode_pdu(pdu2)
+    assert d2 is not None
+    assert d2["sender"] == "+4790688031"
+    assert d2["timestamp"] == "26/09/24,18:50:48"
+    assert d2["udh_info"] == (70, 2, 2)
+    assert "godgjør seg" in d2["body"]
+
+    # Reassemble them together
+    reassembler = InboundReassembler()
+    assert reassembler.add_message(d1) is None
+    unified = reassembler.add_message(d2)
+    assert unified is not None
+    assert unified["sender"] == "+4790688031"
+    assert unified["parts_count"] == 2
+    assert "til å skrive en helt idiotisk melding" in unified["body"]
+    assert "godgjør seg? Vi tester ihvertfall...." in unified["body"]
+
+
+def test_decode_pdu_single_gsm7() -> None:
+    from firmware.sms_encoding import decode_pdu
+
+    # "Hei" in GSM 7-bit PDU
+    # SMSC len 0, fo 0, sender 4799999999 (91 47 99 99 99 99), pid 0, dcs 0, timestamp, udl 3, "Hei" = C8721A
+    pdu = "00000A91749999999900002690428105748003C8721A"
+    d = decode_pdu(pdu)
+    assert d is not None
+    assert d["sender"] == "+4799999999"
+    assert d["body"] == "Hei"
+    assert d["udh_info"] is None
+
+
+def test_decode_pdu_ucs2() -> None:
+    from firmware.sms_encoding import decode_pdu
+
+    # UCS-2 message: "Hei 🤖" (0048 0065 0069 0020 D83E DD16)
+    # fo 0, dcs 0x08, udl 12 bytes
+    pdu = "00000A9174999999990008269042810574800C0048006500690020D83EDD16"
+    d = decode_pdu(pdu)
+    assert d is not None
+    assert d["sender"] == "+4799999999"
+    assert d["body"] == "Hei 🤖"
+    assert d["udh_info"] is None
+
+
+def test_parse_udh_hex() -> None:
+    from firmware.sms_encoding import parse_udh
+
+    # 8-bit hex UDH
+    hex_8 = "0500032A0201004800650069"
+    parsed = parse_udh(hex_8)
+    assert parsed is not None
+    ref, total, part, body = parsed
+    assert ref == 42
+    assert total == 2
+    assert part == 1
+    assert body == "Hei"
+
+    # 16-bit hex UDH
+    hex_16 = "06080401200302004800650069"
+    parsed16 = parse_udh(hex_16)
+    assert parsed16 is not None
+    ref16, total16, part16, body16 = parsed16
+    assert ref16 == 0x0120
+    assert total16 == 3
+    assert part16 == 2
+    assert body16 == "Hei"

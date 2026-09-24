@@ -88,7 +88,12 @@ def parse_cmgl_header(line: str) -> dict | None:
     sender = tokens[1]
     if sms_encoding is not None:
         sender = sms_encoding.decode_inbound_text(sender)
-    timestamp = tokens[-1] if len(tokens) >= 3 else ""
+    if len(tokens) >= 4:
+        timestamp = tokens[3]
+    elif len(tokens) == 3:
+        timestamp = tokens[2]
+    else:
+        timestamp = ""
 
     return {
         "index": index,
@@ -334,46 +339,94 @@ class ModemDriver:
         """Read unread/received SMS messages from SIM card storage.
 
         Reassembles inbound multipart messages into unified messages.
+        Attempts PDU mode (AT+CMGF=0) first for standard 3GPP concatenated SMS
+        reassembly and character preservation, falling back to text mode (AT+CMGF=1).
         When delete_after_read is True, raw message segments are deleted immediately
         with AT+CMGD to prevent SIM memory overflow.
         """
         if self.uart is None:
             return []
 
-        # Ensure text mode and GSM charset
-        self.send_cmd("AT+CMGF=1", timeout_ms=1000)
-        self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
-
-        # Read all stored messages
-        _, lines = self.send_cmd('AT+CMGL="ALL"', timeout_ms=4000)
-
         raw_messages: list[dict] = []
-        current_msg: dict | None = None
-        body_lines: list[str] = []
 
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("+CMGL:"):
-                if current_msg is not None:
-                    raw_body = "\n".join(body_lines).strip("\r\n")
-                    if sms_encoding is not None:
-                        raw_body = sms_encoding.decode_inbound_text(raw_body)
-                    current_msg["body"] = raw_body
-                    raw_messages.append(current_msg)
-                    body_lines = []
+        # Attempt PDU mode first (AT+CMGF=0) for standard 3GPP concatenated SMS
+        if sms_encoding is not None and hasattr(sms_encoding, "decode_pdu"):
+            pdu_ok, _ = self.send_cmd("AT+CMGF=0", timeout_ms=1000)
+            if pdu_ok:
+                read_ok, pdu_lines = self.send_cmd("AT+CMGL=4", timeout_ms=4000)
+                if read_ok and any(l.strip().startswith("+CMGL:") for l in pdu_lines):
+                    cur_idx = None
+                    cur_stat = "REC UNREAD"
+                    for line in pdu_lines:
+                        stripped = line.strip()
+                        if stripped.startswith("+CMGL:"):
+                            parts = stripped[6:].split(",")
+                            try:
+                                cur_idx = int(parts[0].strip())
+                                stat_code = int(parts[1].strip()) if len(parts) > 1 else 0
+                                stat_map = {
+                                    0: "REC UNREAD",
+                                    1: "REC READ",
+                                    2: "STO UNSENT",
+                                    3: "STO SENT",
+                                }
+                                cur_stat = stat_map.get(stat_code, "REC UNREAD")
+                            except (ValueError, IndexError):
+                                cur_idx = None
+                        elif (
+                            cur_idx is not None
+                            and stripped
+                            and stripped not in ("OK", "ERROR")
+                            and not stripped.startswith(("+CMS ERROR", "+CME ERROR"))
+                        ):
+                            decoded = sms_encoding.decode_pdu(stripped)
+                            if decoded is not None:
+                                raw_messages.append(
+                                    {
+                                        "index": cur_idx,
+                                        "status": cur_stat,
+                                        "sender": decoded["sender"],
+                                        "timestamp": decoded["timestamp"],
+                                        "body": decoded["body"],
+                                        "udh_info": decoded.get("udh_info"),
+                                    }
+                                )
+                            cur_idx = None
 
-                current_msg = parse_cmgl_header(stripped)
-            elif current_msg is not None:
-                if stripped in ("OK", "ERROR") or stripped.startswith(("+CMS ERROR", "+CME ERROR")):
-                    continue
-                body_lines.append(line.rstrip("\r\n"))
+        # Fallback to Text mode if PDU mode returned no messages or was unsupported
+        if not raw_messages:
+            self.send_cmd("AT+CMGF=1", timeout_ms=1000)
+            self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
+            _, lines = self.send_cmd('AT+CMGL="ALL"', timeout_ms=4000)
 
-        if current_msg is not None:
-            raw_body = "\n".join(body_lines).strip("\r\n")
-            if sms_encoding is not None:
-                raw_body = sms_encoding.decode_inbound_text(raw_body)
-            current_msg["body"] = raw_body
-            raw_messages.append(current_msg)
+            current_msg: dict | None = None
+            body_lines: list[str] = []
+
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("+CMGL:"):
+                    if current_msg is not None:
+                        raw_body = "\n".join(body_lines).strip("\r\n")
+                        if sms_encoding is not None:
+                            raw_body = sms_encoding.decode_inbound_text(raw_body)
+                        current_msg["body"] = raw_body
+                        raw_messages.append(current_msg)
+                        body_lines = []
+
+                    current_msg = parse_cmgl_header(stripped)
+                elif current_msg is not None:
+                    if stripped in ("OK", "ERROR") or stripped.startswith(
+                        ("+CMS ERROR", "+CME ERROR")
+                    ):
+                        continue
+                    body_lines.append(line.rstrip("\r\n"))
+
+            if current_msg is not None:
+                raw_body = "\n".join(body_lines).strip("\r\n")
+                if sms_encoding is not None:
+                    raw_body = sms_encoding.decode_inbound_text(raw_body)
+                current_msg["body"] = raw_body
+                raw_messages.append(current_msg)
 
         # Delete read raw messages from SIM memory to avoid overflow
         if delete_after_read:

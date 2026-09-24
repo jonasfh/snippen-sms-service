@@ -12,7 +12,8 @@ from snippen_sms.config import GatewayConfig
 from snippen_sms.context import BookingContextResolver
 from snippen_sms.models import Message, MessageDirection, MessageStatus
 from snippen_sms.providers import get_provider
-from snippen_sms.providers.base import SmsProvider
+from snippen_sms.providers.base import IncomingMessage, SmsProvider
+from snippen_sms.reassembler import InboundReassembler
 from snippen_sms.storage import MessageStorage
 from snippen_sms.sync import SyncService
 from snippen_sms.updater import SoftwareUpdater, UpdateCheckResult
@@ -91,6 +92,9 @@ class GatewayService:
         self._last_update_check_time: float = 0.0
         self._last_sync_time: float = 0.0
         self._last_sync_result: dict[str, Any] | None = None
+        self.reassembler = InboundReassembler(
+            timeout_sec=getattr(self.config, "multipart_timeout_seconds", 30.0)
+        )
 
     @property
     def is_running(self) -> bool:
@@ -342,8 +346,18 @@ class GatewayService:
             logger.exception("Unexpected exception while polling incoming SMS from provider.")
             return []
 
-        persisted_messages: list[Message] = []
+        ready_items: list[IncomingMessage] = []
         for item in inbound_items:
+            res = self.reassembler.add_message(item)
+            if res is not None:
+                ready_items.append(res)
+
+        timed_out = self.reassembler.check_timeouts()
+        if timed_out:
+            ready_items.extend(timed_out)
+
+        persisted_messages: list[Message] = []
+        for item in ready_items:
             # Check for duplicate if provider_message_id is provided
             if item.provider_message_id:
                 existing = self.storage.get_message_by_modem_id(
