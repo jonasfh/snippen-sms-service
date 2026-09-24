@@ -18,6 +18,7 @@ from sms_encoding import (
     decode_ucs2_hex,
     encode_ucs2_hex,
     gsm7_length,
+    is_ascii_gsm,
     is_gsm7,
     is_ucs2_hex,
     parse_multipart_info,
@@ -26,6 +27,16 @@ from sms_encoding import (
     split_sms_body,
     ucs2_length,
 )
+
+
+def test_is_ascii_gsm() -> None:
+    assert is_ascii_gsm("Hello World 123!") is True
+    assert is_ascii_gsm("") is True
+    # Norwegian characters are non-ASCII and return False for UART safety
+    assert is_ascii_gsm("God dag, her er æ, ø og å!") is False
+    assert is_ascii_gsm("ÆØÅ") is False
+    # Emojis return False
+    assert is_ascii_gsm("Hei 🤖") is False
 
 
 def test_is_gsm7_ascii_and_extended() -> None:
@@ -148,12 +159,12 @@ def test_split_sms_body_short_gsm7() -> None:
 
 
 def test_split_sms_body_long_gsm7_word_boundaries() -> None:
-    # 250 character typical booking confirmation message
+    # 250 character typical booking confirmation message (pure GSM-7 ASCII)
     msg = (
-        "Hei! Din booking på Snippen grendehus for 24. september er bekreftet. "
-        "Vennligst betal leiebeløpet innen forfallsdato. "
-        "Dørkoden din er 4589 og er gyldig fra kl. 12:00. "
-        "Ved spørsmål, vennligst ta kontakt med styret. Velkommen til Snippen!"
+        "Hei! Din booking ved Snippen grendehus for 24. september er bekreftet. "
+        "Vennligst betal leiebelopet innen forfallsdato. "
+        "Doerkoden din er 4589 og er gyldig fra kl. 12:00. "
+        "Ved sporsmaal, vennligst ta kontakt med styret. Velkommen til Snippen!"
     )
     assert len(msg) > 160
     chunks = split_sms_body(msg)
@@ -170,6 +181,23 @@ def test_split_sms_body_long_gsm7_word_boundaries() -> None:
     assert not chunks[0].endswith("-")
     reconstructed = chunks[0][6:] + chunks[1][6:]
     assert reconstructed == msg
+
+
+def test_split_sms_body_long_norwegian_uses_ucs2() -> None:
+    msg = (
+        "Hei! Din booking på Snippen grendehus for 24. september er bekreftet. "
+        "Vennligst betal leiebeløpet innen forfallsdato. "
+        "Dørkoden din er 4589 og er gyldig fra kl. 12:00. "
+        "Ved spørsmål, vennligst ta kontakt med styret. Velkommen til Snippen!"
+    )
+    assert len(msg) > 160
+    chunks = split_sms_body(msg, add_indicators=False)
+
+    # Norwegian characters trigger UCS-2, so segments are strictly <= 67 characters
+    for chunk in chunks:
+        assert ucs2_length(chunk) <= 67
+
+    assert "".join(chunks) == msg
 
 
 def test_split_sms_body_long_token_no_whitespace() -> None:
