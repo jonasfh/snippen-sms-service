@@ -144,11 +144,18 @@
         await client.connect();
         const cfg = await client.readConfig();
         assert(cfg.wifi_ssid === 'Snippen-Local', 'Initial SSID mismatch');
+        assert(cfg.call_forwarding_number === '+4792830575', 'Initial call forwarding number mismatch');
+        assert(cfg.call_reject_enabled === true, 'Call reject should be enabled by default');
 
-        await client.writeConfig({ wifi_ssid: 'NewSSID', snippen_api_token: 'supersecrettoken123' });
+        await client.writeConfig({
+          wifi_ssid: 'NewSSID',
+          snippen_api_token: 'supersecrettoken123',
+          call_reject_enabled: false,
+        });
         const updated = await client.readConfig();
         assert(updated.wifi_ssid === 'NewSSID', 'Updated SSID mismatch');
         assert(updated.snippen_api_token === 'su****23', 'Token should be masked');
+        assert(updated.call_reject_enabled === false, 'Call reject should be false');
       });
 
       await runTest('MockSnippenBLEClient runs scanWifi and testWifi commands', async () => {

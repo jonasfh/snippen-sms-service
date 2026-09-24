@@ -107,6 +107,7 @@ class GatewayApp:
         self.last_wifi_reconnect = 0
         self.wifi_backoff_sec = 5
         self.consecutive_modem_failures = 0
+        self.last_call_notification: dict[str, float] = {}
 
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
         """Switch gateway into BLE provisioning mode (Issue #59, #60, #87)."""
@@ -440,6 +441,71 @@ class GatewayApp:
             print(f"[main] Error polling outbox: {exc}")
             return 0
 
+    def handle_incoming_call(self, caller: str) -> None:
+        """Process an incoming voice call: notify admin and reply to caller via SMS (Issue #113)."""
+        now = time.time()
+        last_time = self.last_call_notification.get(caller, 0)
+        if now - last_time < 30:
+            print(
+                f"[main] Call from '{caller}' debounced (last handled {int(now - last_time)}s ago)."
+            )
+            return
+        self.last_call_notification[caller] = now
+
+        print(f"[main] Handling incoming call event from '{caller or 'skjult nummer'}'.")
+
+        # 1. Notify admin via SMS
+        notify_admin = self.config.get("call_notify_admin_enabled", True)
+        admin_number = self.config.get("call_forwarding_number", "+4792830575")
+        if notify_admin and admin_number and self.modem is not None:
+            template = self.config.get(
+                "call_notify_admin_text",
+                "Ubesvart anrop til Snippen SMS-gateway fra {caller}.",
+            )
+            display_caller = caller if caller else "skjult nummer"
+            admin_msg = template.replace("{caller}", display_caller)
+            print(f"[main] Sending call alert SMS to admin ({admin_number})...")
+            try:
+                ok_admin, err_admin = self.modem.send_sms(admin_number, admin_msg)
+                if ok_admin:
+                    print(f"[main] Admin call notification SMS sent successfully ({err_admin}).")
+                else:
+                    print(
+                        f"[main] Warning: Failed to send admin call notification SMS: {err_admin}"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Error dispatching admin call alert SMS: {exc}")
+
+        # 2. Automated SMS reply to caller
+        reply_caller = self.config.get("call_reply_caller_enabled", True)
+        if reply_caller and caller and self.modem is not None:
+            reply_text = self.config.get(
+                "call_reply_caller_text",
+                (
+                    "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
+                    "Send SMS eller ring leieansvarlig på 92830575."
+                ),
+            )
+            print(f"[main] Sending automated SMS reply to caller ({caller})...")
+            try:
+                ok_reply, err_reply = self.modem.send_sms(caller, reply_text)
+                if ok_reply:
+                    print(f"[main] Automated caller SMS reply sent successfully ({err_reply}).")
+                else:
+                    print(f"[main] Warning: Failed to send automated caller SMS reply: {err_reply}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Error dispatching caller SMS reply: {exc}")
+
+    def poll_incoming_calls(self) -> None:
+        """Check for incoming voice calls and handle them (Issue #113)."""
+        if self.modem is not None and hasattr(self.modem, "check_incoming_call"):
+            try:
+                caller = self.modem.check_incoming_call()
+                if caller is not None:
+                    self.handle_incoming_call(caller)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Error polling incoming calls: {exc}")
+
     def heartbeat(self) -> None:
         """Log diagnostic status and perform health maintenance (Issue #53)."""
         print(f"[main] Heartbeat tick - cycle #{self.cycle_count}")
@@ -532,6 +598,9 @@ class GatewayApp:
         elif wifi is not None and wifi.is_connected():
             self.wifi_backoff_sec = 5
 
+        # Check for incoming voice calls (Issue #113)
+        self.poll_incoming_calls()
+
         # Check inbox interval
         inbox_interval = self.config.get("inbox_check_interval_sec", 5)
         if now - self.last_inbox_check >= inbox_interval:
@@ -567,13 +636,14 @@ class GatewayApp:
                     print(f"[main] Reached max cycles ({max_cycles}). Stopping loop.")
                     break
 
-                # Sleep in 50ms slices while polling button for instant response
+                # Sleep in 50ms slices while polling button and incoming calls for instant response
                 prev_mode = self.is_provisioning_mode
                 for _ in range(20):
                     if not self.running:
                         break
                     if self.button is not None:
                         self.button.poll()
+                    self.poll_incoming_calls()
                     if self.is_provisioning_mode != prev_mode:
                         break
                     time.sleep(0.05)

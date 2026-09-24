@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.12] - 2026-09-24
+
+### Added
+- Automated incoming call rejection (`AT+CHUP`) and SMS alerts with Web Configurator integration (`#113`):
+  - In `firmware/config.py` and `firmware/config.example.py`:
+    - Added `CALL_REJECT_ENABLED`, `CALL_NOTIFY_ADMIN_ENABLED`, `CALL_REPLY_CALLER_ENABLED`, `CALL_REPLY_CALLER_TEXT`, and `CALL_NOTIFY_ADMIN_TEXT` settings.
+  - In `firmware/modem.py`:
+    - Enabled Caller ID presentation (`AT+CLIP=1`) during `init_modem()`.
+    - Added `parse_clip_header()` to extract normalized E.164 phone numbers from URC lines.
+    - Added `reject_call()` to terminate incoming/active voice calls with `AT+CHUP`.
+    - Added `check_incoming_call()` to inspect UART buffer for `RING` / `+CLIP` and reject calls automatically.
+  - In `firmware/main.py`:
+    - Integrated `poll_incoming_calls()` into main tick and the 50ms sleep loop for near-instant call interception.
+    - Added `handle_incoming_call()` with 30-second debounce per caller, sending automated SMS alerts to administrator and auto-reply SMS to caller.
+  - In `firmware/ble_config.py` and `tools/web-config/`:
+    - Added an "Anropshåndtering & Viderekobling" configuration card to the BLE Web Configurator (PWA).
+    - Synchronized all call parameters across BLE GATT characteristic read/write, mock client, and web app UI.
+  - In `DEV_README.md`:
+    - Documented call handling, network forwarding, local rejection, and PWA configuration options.
+
 ## [0.31.11] - 2026-09-24
 
 ### Added

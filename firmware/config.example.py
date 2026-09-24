@@ -14,6 +14,11 @@ LONG_POLL_TIMEOUT_SEC = 25
 INBOX_CHECK_INTERVAL_SEC = 5
 HEARTBEAT_INTERVAL_SEC = 30
 
-# Call Forwarding (Issue #110)
+# Call Forwarding & Rejection (Issue #110, #113)
 CALL_FORWARDING_NUMBER = "+4792830575"
 CALL_FORWARDING_ENABLED = True
+CALL_REJECT_ENABLED = True
+CALL_NOTIFY_ADMIN_ENABLED = True
+CALL_REPLY_CALLER_ENABLED = True
+CALL_REPLY_CALLER_TEXT = "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. Send SMS eller ring leieansvarlig på 92830575."
+CALL_NOTIFY_ADMIN_TEXT = "Ubesvart anrop til Snippen SMS-gateway fra {caller}."

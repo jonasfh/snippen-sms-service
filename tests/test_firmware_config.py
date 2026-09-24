@@ -42,6 +42,11 @@ def test_get_default_config() -> None:
     assert cfg["provisioning_timeout_sec"] == 300
     assert cfg["call_forwarding_number"] == "+4792830575"
     assert cfg["call_forwarding_enabled"] is True
+    assert cfg["call_reject_enabled"] is True
+    assert cfg["call_notify_admin_enabled"] is True
+    assert cfg["call_reply_caller_enabled"] is True
+    assert "{caller}" in cfg["call_notify_admin_text"]
+    assert "92830575" in cfg["call_reply_caller_text"]
 
 
 def test_load_config_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

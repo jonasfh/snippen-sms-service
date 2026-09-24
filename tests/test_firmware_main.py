@@ -284,3 +284,54 @@ def test_gateway_app_ble_server_lifecycle_and_commands(
     assert res["status"] == "ok"
     assert app.is_provisioning_mode is False
     assert app.ble_server.is_running is False
+
+
+def test_gateway_app_handle_incoming_call(mpy_env: MicroPythonEnvironment) -> None:
+    import main
+
+    sent_messages: list[tuple[str, str]] = []
+
+    class MockModem:
+        def send_sms(self, recipient: str, text: str) -> tuple[bool, str]:
+            sent_messages.append((recipient, text))
+            return True, "1"
+
+    app = main.GatewayApp(
+        config={
+            "call_notify_admin_enabled": True,
+            "call_forwarding_number": "+4792830575",
+            "call_reply_caller_enabled": True,
+            "call_reply_caller_text": "Autosvar til {caller}.",
+            "call_notify_admin_text": "Ubesvart anrop fra {caller}.",
+        }
+    )
+    app.modem = MockModem()  # type: ignore[assignment]
+
+    # First call: triggers admin notification and caller reply
+    app.handle_incoming_call("+4790000000")
+    assert len(sent_messages) == 2
+    assert sent_messages[0][0] == "+4792830575"
+    assert "fra +4790000000" in sent_messages[0][1]
+    assert sent_messages[1][0] == "+4790000000"
+
+    # Immediate second call from same caller: should be debounced
+    sent_messages.clear()
+    app.handle_incoming_call("+4790000000")
+    assert len(sent_messages) == 0
+
+
+def test_gateway_app_poll_incoming_calls_integrated(mpy_env: MicroPythonEnvironment) -> None:
+    import main
+
+    calls_handled: list[str] = []
+
+    class MockModem:
+        def check_incoming_call(self) -> str | None:
+            return "+4791111111"
+
+    app = main.GatewayApp()
+    app.modem = MockModem()  # type: ignore[assignment]
+    app.handle_incoming_call = lambda caller: calls_handled.append(caller)  # type: ignore[assignment]
+
+    app.poll_incoming_calls()
+    assert calls_handled == ["+4791111111"]

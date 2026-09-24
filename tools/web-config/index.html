@@ -174,7 +174,65 @@
       </div>
     </section>
 
-    <!-- Card 4: Telemetry -->
+    <!-- Card 4: Call Handling & Forwarding -->
+    <section class="card" id="card-calls" style="opacity: 0.5; pointer-events: none;">
+      <div class="card-header">
+        <h2 class="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+          </svg>
+          Anropshåndtering & Viderekobling
+        </h2>
+      </div>
+
+      <div class="form-group">
+        <label for="call-forwarding-number">Telefonnummer for viderekobling / varsel</label>
+        <input type="tel" id="call-forwarding-number" placeholder="+4792830575" value="+4792830575">
+      </div>
+
+      <div class="form-group" style="gap: 0.25rem;">
+        <label class="checkbox-label" for="call-forwarding-enabled">
+          <input type="checkbox" id="call-forwarding-enabled">
+          <span>Viderekoble anrop via mobilnettet (AT+CCFC)</span>
+        </label>
+        <small style="font-size: 0.72rem; color: var(--text-muted); margin-left: 1.6rem;">
+          Krever at SIM-abonnementet tillater nettverksviderekobling (støttes normalt ikke på kontantkort).
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label" for="call-reject-enabled">
+          <input type="checkbox" id="call-reject-enabled" checked>
+          <span>Automatisk anropsavvisning (Legg på ved innkommende anrop)</span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label" for="call-notify-admin-enabled">
+          <input type="checkbox" id="call-notify-admin-enabled" checked>
+          <span>Send SMS-varsel til administrator ved ubesvarte anrop</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-left: 1.6rem;">
+        <label for="call-notify-admin-text">Varseltekst til administrator (bruk {caller})</label>
+        <input type="text" id="call-notify-admin-text" value="Ubesvart anrop til Snippen SMS-gateway fra {caller}.">
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label" for="call-reply-caller-enabled">
+          <input type="checkbox" id="call-reply-caller-enabled" checked>
+          <span>Send automatisk svar-SMS til den som ringer</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-left: 1.6rem;">
+        <label for="call-reply-caller-text">Svartekst til innringer</label>
+        <textarea id="call-reply-caller-text" rows="3">Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. Send SMS eller ring leieansvarlig på 92830575.</textarea>
+      </div>
+    </section>
+
+    <!-- Card 5: Telemetry -->
     <section class="card" id="card-telemetry" style="opacity: 0.5; pointer-events: none;">
       <div class="card-header">
         <h2 class="card-title">

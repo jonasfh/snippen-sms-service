@@ -985,3 +985,91 @@ def test_init_modem_call_forwarding_failure_graceful(mpy_env: MicroPythonEnviron
     # Even if network call forwarding fails, modem init should still succeed for SMS gateway operations
     assert driver.init_modem() is True
     assert ccfc_called is True
+
+
+def test_parse_clip_header() -> None:
+    from modem import parse_clip_header
+
+    assert parse_clip_header('+CLIP: "+4792830575",145,,,,0') == "+4792830575"
+    assert parse_clip_header('+CLIP: "92830575",129') == "+4792830575"
+    assert parse_clip_header("+CLIP: +4792830575,145") == "+4792830575"
+    assert parse_clip_header('+CLIP: "",145') == ""
+    assert parse_clip_header("RING") is None
+    assert parse_clip_header("OK") is None
+
+
+def test_reject_call(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    chup_sent = False
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal chup_sent
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == "AT+CHUP":
+            chup_sent = True
+            return b"OK\r\n"
+        return b"ERROR\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    assert driver.reject_call() is True
+    assert chup_sent is True
+
+
+def test_check_incoming_call_detected_and_rejected(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    chup_sent = False
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal chup_sent
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == "AT+CHUP":
+            chup_sent = True
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"call_reject_enabled": True})
+
+    # Simulate incoming call URC arriving in UART buffer
+    uart.feed_read(b'RING\r\n+CLIP: "+4792830575",145,,,,0\r\n')
+
+    caller = driver.check_incoming_call()
+    assert caller == "+4792830575"
+    assert chup_sent is True
+
+
+def test_check_incoming_call_reject_disabled(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    chup_sent = False
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal chup_sent
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == "AT+CHUP":
+            chup_sent = True
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"call_reject_enabled": False})
+
+    uart.feed_read(b'RING\r\n+CLIP: "+4792830575",145\r\n')
+
+    caller = driver.check_incoming_call()
+    assert caller == "+4792830575"
+    assert chup_sent is False
+
+
+def test_check_incoming_call_none_when_empty(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    driver = ModemDriver(uart=uart)
+    assert driver.check_incoming_call() is None

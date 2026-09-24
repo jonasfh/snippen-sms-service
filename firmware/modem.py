@@ -103,6 +103,37 @@ def parse_cmgl_header(line: str) -> dict | None:
     }
 
 
+def parse_clip_header(line: str) -> str | None:
+    """Parse caller phone number from +CLIP URC header line (Issue #113).
+
+    Format: +CLIP: "<number>",<type>[,<subaddr>,<satype>,[<alpha>],<cli_validity>]
+    Example: +CLIP: "+4792830575",145,,,,0
+    """
+    if not line.startswith("+CLIP:"):
+        return None
+
+    content = line[6:].strip()
+    first_quote = content.find('"')
+    if first_quote != -1:
+        second_quote = content.find('"', first_quote + 1)
+        if second_quote != -1:
+            raw_num = content[first_quote + 1 : second_quote].strip()
+            if raw_num:
+                try:
+                    return normalize_phone_number(raw_num)
+                except ValueError:
+                    return raw_num
+    parts = content.split(",")
+    if parts and parts[0].strip():
+        num = parts[0].strip().strip('"')
+        if num:
+            try:
+                return normalize_phone_number(num)
+            except ValueError:
+                return num
+    return ""
+
+
 class ModemDriver:
     """Driver for SimCom A7670E 4G/LTE cellular modem interfacing over UART."""
 
@@ -243,6 +274,9 @@ class ModemDriver:
                 print(
                     "[modem] Warning: Could not register call forwarding (network or SIM may not support CFU)."
                 )
+
+        # Enable caller ID presentation (AT+CLIP=1) for incoming call handling (Issue #113)
+        self.send_cmd("AT+CLIP=1", timeout_ms=1000)
 
         return True
 
@@ -761,3 +795,66 @@ class ModemDriver:
                     except ValueError:
                         pass
         return results
+
+    def reject_call(self) -> bool:
+        """Reject/hang up an incoming or active voice call via AT+CHUP (Issue #113)."""
+        success, _ = self.send_cmd("AT+CHUP", timeout_ms=1500)
+        return success
+
+    def check_incoming_call(self) -> str | None:
+        """Check UART buffer for incoming voice call indicators (RING, +CLIP) (Issue #113).
+
+        If an incoming call is detected and call_reject_enabled is True, the call
+        is automatically rejected using AT+CHUP.
+
+        :return: Normalized caller phone number (or "" if withheld/unknown), or None if no call.
+        """
+        if self.uart is None:
+            return None
+
+        available = getattr(self.uart, "any", lambda: 0)()
+        if not available:
+            return None
+
+        raw_lines: list[str] = []
+        start = _ticks_ms()
+        while _ticks_diff(_ticks_ms(), start) < 300:
+            line = self.uart.readline()
+            if line:
+                decoded = line.decode("utf-8", "ignore").strip()
+                if decoded:
+                    raw_lines.append(decoded)
+            else:
+                break
+
+        has_ring = any(l == "RING" or "RING" in l for l in raw_lines)
+        clip_line = next((l for l in raw_lines if l.startswith("+CLIP:")), None)
+
+        if not has_ring and clip_line is None:
+            return None
+
+        caller: str | None = None
+        if clip_line:
+            caller = parse_clip_header(clip_line)
+
+        # If RING was received without +CLIP, wait briefly for caller ID line
+        if caller is None and has_ring:
+            clip_start = _ticks_ms()
+            while _ticks_diff(_ticks_ms(), clip_start) < 600:
+                line = self.uart.readline()
+                if line:
+                    decoded = line.decode("utf-8", "ignore").strip()
+                    if decoded.startswith("+CLIP:"):
+                        caller = parse_clip_header(decoded)
+                        break
+                time.sleep_ms(20)
+
+        # Reject call if enabled in configuration (Issue #113)
+        if self.config.get("call_reject_enabled", True):
+            self.reject_call()
+            time.sleep_ms(100)
+            self.flush_input()
+
+        caller_str = caller if caller is not None else ""
+        print(f"[modem] Incoming voice call detected from '{caller_str or 'unknown'}'.")
+        return caller_str

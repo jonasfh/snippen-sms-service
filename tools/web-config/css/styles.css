@@ -265,6 +265,8 @@ label {
 input[type="text"],
 input[type="password"],
 input[type="number"],
+input[type="tel"],
+textarea,
 select {
   width: 100%;
   height: 46px;
@@ -278,10 +280,33 @@ select {
   transition: all var(--transition-fast);
 }
 
-input:focus, select:focus {
+textarea {
+  height: auto;
+  min-height: 80px;
+  padding: 0.65rem 0.85rem;
+  resize: vertical;
+}
+
+input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--accent-cyan-glow);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-cyan, #0284c7);
+  cursor: pointer;
 }
 
 .toggle-password-btn {
