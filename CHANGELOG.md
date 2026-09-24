@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.10] - 2026-09-24
+
+### Fixed
+- Fixed Norwegian character corruption (æ, ø, å) and UCS-2 text mode parameters on SimCom A7670E (`#109`):
+  - In `firmware/sms_encoding.py`:
+    - Added `is_ascii_gsm(text)` to identify characters that can be safely transmitted in 7-bit ASCII/GSM over UART.
+    - Updated `split_sms_body(..., force_ucs2)` to partition messages containing non-ASCII characters (Norwegian æ, ø, å or emojis) into UCS-2 chunks (max 70 chars for single, max 67 chars per segment for multipart).
+  - In `firmware/modem.py`:
+    - Automatically configured `AT+CSMP=17,167,0,8` (DCS=8) and `AT+CSCS="UCS2"` whenever outbound messages contain non-ASCII characters.
+    - Configured UCS-2 mode once per `send_sms()` transmission, preventing mid-message character set switching between concatenated segments.
+    - Restored `AT+CSMP=17,167,0,0` and `AT+CSCS="GSM"` cleanly in `finally:` block.
+
 ## [0.31.9] - 2026-09-24
 
 ### Added

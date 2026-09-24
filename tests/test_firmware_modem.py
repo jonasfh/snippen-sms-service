@@ -469,11 +469,11 @@ def test_send_sms_multipart_gsm7_success(mpy_env: MicroPythonEnvironment) -> Non
     uart.responder = responder
     driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 10})
 
-    # Message exceeding 160 characters
+    # Message exceeding 160 characters (pure GSM-7 ASCII)
     long_msg = (
         "Hei! Dette er en lang bookingbekreftelse fra Snippen grendehus for det kommende arrangementet. "
-        "Dørkoden din er 9876 og gjelder fra fredag kl 15:00 til søndag kl 18:00. "
-        "Ta vare på koden! Velkommen skal dere være!"
+        "Doerkoden din er 9876 og gjelder fra fredag kl 15:00 til soendag kl 18:00. "
+        "Ta vare paa koden! Velkommen skal dere vaere!"
     )
     assert len(long_msg) > 160
 
@@ -493,6 +493,47 @@ def test_send_sms_multipart_gsm7_success(mpy_env: MicroPythonEnvironment) -> Non
     assert reconstructed == long_msg
 
 
+def test_send_sms_multipart_ucs2_with_norwegian(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    cmgsex_calls = 0
+    csmp_set = False
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal cmgsex_calls, csmp_set
+        data_str = data.decode("utf-8", errors="ignore")
+        if "AT+CSMP=17,167,0,8" in data_str:
+            csmp_set = True
+            return b"OK\r\n"
+        if "AT+CSMP=17,167,0,0" in data_str:
+            return b"OK\r\n"
+        if 'AT+CSCS="UCS2"' in data_str or 'AT+CSCS="GSM"' in data_str:
+            return b"OK\r\n"
+        if "AT+CMGSEX=" in data_str or "AT+CMGS=" in data_str:
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            cmgsex_calls += 1
+            return f"\r\n+CMGSEX: {70 + cmgsex_calls}\r\n\r\nOK\r\n".encode()
+        return None
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 10})
+
+    # Message with Norwegian characters exceeding 70 characters
+    norwegian_msg = (
+        "Hei! Din booking på Snippen er bekreftet. "
+        "Dørkoden din er 4589 og er gyldig fra kl. 12:00. "
+        "Ved spørsmål, ta kontakt med styret. Velkommen skal dere være!"
+    )
+
+    success, ref = driver.send_sms("+4799999999", norwegian_msg)
+    assert success is True
+    assert csmp_set is True
+    assert cmgsex_calls > 1
+    assert ref.startswith("71,72")
+
+
 def test_send_sms_multipart_ucs2_with_emojis(mpy_env: MicroPythonEnvironment) -> None:
     from modem import ModemDriver
 
@@ -502,6 +543,8 @@ def test_send_sms_multipart_ucs2_with_emojis(mpy_env: MicroPythonEnvironment) ->
     def responder(data: bytes) -> bytes | None:
         nonlocal cmgsex_calls
         data_str = data.decode("utf-8", errors="ignore")
+        if "AT+CSMP=" in data_str:
+            return b"OK\r\n"
         if 'AT+CSCS="UCS2"' in data_str or 'AT+CSCS="GSM"' in data_str:
             return b"OK\r\n"
         if "AT+CMGSEX=" in data_str or "AT+CMGS=" in data_str:

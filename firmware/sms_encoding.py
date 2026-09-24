@@ -63,6 +63,26 @@ def is_gsm7(text: str) -> bool:
     return True
 
 
+def is_ascii_gsm(text: str) -> bool:
+    """Return True if all characters in text belong to printable 7-bit ASCII within GSM 03.38.
+
+    Characters outside standard printable ASCII (such as Norwegian æ, ø, å or emojis)
+    cannot be safely sent over UART in AT+CSCS="GSM" mode without byte corruption,
+    and require UCS-2 encoding with AT+CSMP=17,167,0,8.
+    """
+    if not text:
+        return True
+    for ch in text:
+        code = ord(ch)
+        if code < 32 and ch not in "\r\n\t":
+            return False
+        if code > 126:
+            return False
+        if ch not in _GSM7_ALL:
+            return False
+    return True
+
+
 def gsm7_length(text: str) -> int:
     """Return character count in GSM 03.38 septets (extended characters count as 2)."""
     if not text:
@@ -215,6 +235,7 @@ def split_sms_body(
     multipart_gsm_limit: int = 153,
     multipart_ucs2_limit: int = 67,
     add_indicators: bool = True,
+    force_ucs2: bool | None = None,
 ) -> list[str]:
     """Split an SMS message into ordered chunks if it exceeds single SMS capacity.
 
@@ -226,7 +247,11 @@ def split_sms_body(
     if not text:
         return [""]
 
-    use_gsm = is_gsm7(text)
+    if force_ucs2 is not None:
+        use_gsm = not force_ucs2
+    else:
+        use_gsm = is_ascii_gsm(text)
+
     if use_gsm:
         single_limit = max_gsm_len
         char_len_fn = lambda c: 2 if c in GSM7_EXTENDED else 1

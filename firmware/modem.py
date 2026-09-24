@@ -244,19 +244,31 @@ class ModemDriver:
         msg_ref: int | None = None,
         part_num: int = 1,
         total_parts: int = 1,
+        use_ucs2: bool | None = None,
     ) -> tuple[bool, str | None]:
         """Transmit a single SMS payload over UART, using AT+CMGSEX for multipart or AT+CMGS for single."""
         # Ensure SMS text mode (AT+CMGF=1) for AT+CMGS / AT+CMGSEX
         self.send_cmd("AT+CMGF=1", timeout_ms=1000)
 
-        use_ucs2 = False
-        if sms_encoding is not None and not sms_encoding.is_gsm7(text):
-            use_ucs2 = True
+        needs_restore = False
+        if use_ucs2 is None:
+            if sms_encoding is not None:
+                if hasattr(sms_encoding, "is_ascii_gsm"):
+                    use_ucs2 = not sms_encoding.is_ascii_gsm(text)
+                elif hasattr(sms_encoding, "is_gsm7"):
+                    use_ucs2 = not sms_encoding.is_gsm7(text)
+                else:
+                    use_ucs2 = False
+            else:
+                use_ucs2 = False
+            if use_ucs2:
+                needs_restore = True
+                self.send_cmd("AT+CSMP=17,167,0,8", timeout_ms=1000)
+                self.send_cmd('AT+CSCS="UCS2"', timeout_ms=1000)
 
         is_multipart = total_parts > 1 and msg_ref is not None
 
-        if use_ucs2:
-            self.send_cmd('AT+CSCS="UCS2"', timeout_ms=1000)
+        if use_ucs2 and sms_encoding is not None:
             encoded_number = sms_encoding.encode_ucs2_hex(target_number)
             if is_multipart:
                 cmgs_cmd = f'AT+CMGSEX="{encoded_number}",{msg_ref},{part_num},{total_parts}\r\n'
@@ -296,7 +308,7 @@ class ModemDriver:
                 self.write_raw(b"\x1b")
                 time.sleep_ms(100)
                 self.flush_input()
-                if use_ucs2:
+                if use_ucs2 and sms_encoding is not None:
                     fallback_cmd = f'AT+CMGS="{encoded_number}"\r\n'
                 else:
                     fallback_cmd = f'AT+CMGS="{target_number}"\r\n'
@@ -339,7 +351,8 @@ class ModemDriver:
             error_line = next((line for line in lines if "ERROR" in line), "Unknown send failure")
             return False, error_line
         finally:
-            if use_ucs2:
+            if needs_restore:
+                self.send_cmd("AT+CSMP=17,167,0,0", timeout_ms=1000)
                 self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
 
     def send_sms(
@@ -349,6 +362,8 @@ class ModemDriver:
 
         Uses AT+CMGSEX for concatenated multi-part SMS so parts are reassembled
         into a single unified message on the recipient handset.
+        Automatically uses UCS-2 with AT+CSMP=17,167,0,8 for non-ASCII characters
+        (such as Norwegian æ, ø, å or emojis).
         Returns (True, message_reference) on success, or (False, error_reason) on failure.
         """
         if self.uart is None:
@@ -359,9 +374,17 @@ class ModemDriver:
         except ValueError as err:
             return False, f"Invalid phone number: {err}"
 
+        # Determine if UCS-2 is required (Norwegian characters, international text, emojis)
+        use_ucs2 = False
+        if sms_encoding is not None:
+            if hasattr(sms_encoding, "is_ascii_gsm"):
+                use_ucs2 = not sms_encoding.is_ascii_gsm(text)
+            elif hasattr(sms_encoding, "is_gsm7"):
+                use_ucs2 = not sms_encoding.is_gsm7(text)
+
         # Segment long messages into chunks if necessary (without indicators, for UDH / CMGSEX concatenation)
         if sms_encoding is not None and hasattr(sms_encoding, "split_sms_body"):
-            chunks = sms_encoding.split_sms_body(text, add_indicators=False)
+            chunks = sms_encoding.split_sms_body(text, add_indicators=False, force_ucs2=use_ucs2)
         else:
             chunks = [text]
 
@@ -371,26 +394,40 @@ class ModemDriver:
             msg_ref = self._outbound_msg_ref
             self._outbound_msg_ref = (self._outbound_msg_ref % 255) + 1
 
-        refs: list[str] = []
-        for idx, chunk in enumerate(chunks):
-            if idx > 0 and self.chunk_delay_ms > 0:
-                time.sleep_ms(self.chunk_delay_ms)
+        # Ensure SMS text mode (AT+CMGF=1)
+        self.send_cmd("AT+CMGF=1", timeout_ms=1000)
 
-            ok, ref_or_err = self._send_single_sms(
-                target_number,
-                chunk,
-                timeout_ms=timeout_ms,
-                msg_ref=msg_ref,
-                part_num=idx + 1,
-                total_parts=total_parts,
-            )
-            if not ok:
-                if total_parts > 1:
-                    return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"
-                return False, ref_or_err
-            refs.append(ref_or_err if ref_or_err else "OK")
+        # Configure UCS-2 mode with CSMP DCS=8 for the entire transmission if needed
+        if use_ucs2:
+            self.send_cmd("AT+CSMP=17,167,0,8", timeout_ms=1000)
+            self.send_cmd('AT+CSCS="UCS2"', timeout_ms=1000)
 
-        return True, ",".join(refs)
+        try:
+            refs: list[str] = []
+            for idx, chunk in enumerate(chunks):
+                if idx > 0 and self.chunk_delay_ms > 0:
+                    time.sleep_ms(self.chunk_delay_ms)
+
+                ok, ref_or_err = self._send_single_sms(
+                    target_number,
+                    chunk,
+                    timeout_ms=timeout_ms,
+                    msg_ref=msg_ref,
+                    part_num=idx + 1,
+                    total_parts=total_parts,
+                    use_ucs2=use_ucs2,
+                )
+                if not ok:
+                    if total_parts > 1:
+                        return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"
+                    return False, ref_or_err
+                refs.append(ref_or_err if ref_or_err else "OK")
+
+            return True, ",".join(refs)
+        finally:
+            if use_ucs2:
+                self.send_cmd("AT+CSMP=17,167,0,0", timeout_ms=1000)
+                self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
 
     def read_inbound_sms(self, delete_after_read: bool = True) -> list[dict]:
         """Read unread/received SMS messages from SIM card storage.
