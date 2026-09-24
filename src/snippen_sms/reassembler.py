@@ -289,6 +289,66 @@ def reassemble_stored_messages(
             standalone.append(msg)
             if msg.id is not None:
                 ack_map[msg.id] = [msg.id]
+    # Merge any standalone messages that are unjoined text-mode chunks from same sender
+    # (e.g. if modem stripped UDH in text mode, segment 1 is 153 chars or ends without terminal punctuation)
+    if len(standalone) > 1:
+        merged_standalone: list[Message] = []
+        i = 0
+        n = len(standalone)
+        while i < n:
+            curr = standalone[i]
+            curr_body = (
+                curr.body[:-1]
+                if curr.body.endswith("@") and not curr.body.endswith("@@")
+                else curr.body
+            )
+            absorbed_ids = [curr.id] if curr.id is not None else []
+            while i + 1 < n:
+                nxt = standalone[i + 1]
+                if curr.sender and curr.sender == nxt.sender:
+                    nxt_body = (
+                        nxt.body[:-1]
+                        if nxt.body.endswith("@") and not nxt.body.endswith("@@")
+                        else nxt.body
+                    )
+                    is_concatenated_len = len(curr_body) in (153, 160, 67, 70)
+                    is_sentence_continuation = (
+                        curr_body
+                        and not curr_body.endswith((".", "!", "?", "\n"))
+                        and nxt_body
+                        and nxt_body[0].islower()
+                    )
+                    if is_concatenated_len or is_sentence_continuation:
+                        curr_body = curr_body + nxt_body
+                        if nxt.id is not None:
+                            absorbed_ids.append(nxt.id)
+                        i += 1
+                        continue
+                break
+            merged_msg = Message(
+                id=curr.id,
+                direction=curr.direction,
+                sender=curr.sender,
+                recipient=curr.recipient,
+                body=curr_body,
+                status=curr.status,
+                external_id=curr.external_id,
+                modem_message_id=curr.modem_message_id,
+                booking_id=curr.booking_id,
+                conversation_id=curr.conversation_id,
+                error_message=curr.error_message,
+                created_at=curr.created_at,
+                modified_at=curr.modified_at,
+            )
+            merged_standalone.append(merged_msg)
+            if curr.id is not None:
+                ack_map[curr.id] = absorbed_ids
+            i += 1
+        standalone = merged_standalone
+    elif len(standalone) == 1:
+        curr = standalone[0]
+        if curr.body.endswith("@") and not curr.body.endswith("@@"):
+            curr.body = curr.body[:-1]
 
     merged_messages: list[Message] = list(standalone)
 
