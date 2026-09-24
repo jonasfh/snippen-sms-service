@@ -234,6 +234,16 @@ class ModemDriver:
                 return False
             time.sleep_ms(1000)
 
+        # Configure unconditional call forwarding if enabled (Issue #110)
+        cf_enabled = self.config.get("call_forwarding_enabled", True)
+        cf_number = self.config.get("call_forwarding_number", "")
+        if cf_enabled and cf_number:
+            ok_cf = self.configure_call_forwarding(number=cf_number, enable=True)
+            if not ok_cf:
+                print(
+                    "[modem] Warning: Could not register call forwarding (network or SIM may not support CFU)."
+                )
+
         return True
 
     def _send_single_sms(
@@ -660,3 +670,94 @@ class ModemDriver:
                 info["iccid"] = line.replace("+CCID:", "").strip()
                 break
         return info
+
+    def configure_call_forwarding(
+        self,
+        number: str | None = None,
+        enable: bool = True,
+        reason: int = 0,
+        timeout_ms: int = 5000,
+    ) -> bool:
+        """Configure cellular call forwarding via AT+CCFC (3GPP TS 27.007).
+
+        :param number: Target phone number (e.g. "+4792830575"). If None, uses config value.
+        :param enable: True to register & activate (mode 3), False to disable (mode 0).
+        :param reason: Forwarding reason: 0=unconditional (CFU), 1=busy, 2=no reply, 3=not reachable.
+        :param timeout_ms: Timeout in ms for network supplementary service response.
+        :return: True if modem/network responded OK, False otherwise.
+        """
+        if not enable:
+            cmd = f"AT+CCFC={reason},0"
+            success, lines = self.send_cmd(cmd, timeout_ms=timeout_ms)
+            if success:
+                print(f"[modem] Call forwarding disabled (reason {reason}).")
+                return True
+            print(f"[modem] Warning: Failed to disable call forwarding: {' '.join(lines)}")
+            return False
+
+        target_number = (
+            number if number is not None else self.config.get("call_forwarding_number", "")
+        )
+        if not target_number:
+            print("[modem] Warning: Call forwarding target number is empty.")
+            return False
+
+        try:
+            normalized = normalize_phone_number(target_number)
+        except ValueError as exc:
+            print(f"[modem] Error: Invalid call forwarding number '{target_number}': {exc}")
+            return False
+
+        addr_type = 145 if normalized.startswith("+") else 129
+        cmd = f'AT+CCFC={reason},3,"{normalized}",{addr_type}'
+        success, lines = self.send_cmd(cmd, timeout_ms=timeout_ms)
+        if success:
+            print(
+                f"[modem] Call forwarding configured successfully to {normalized} (reason {reason})."
+            )
+            return True
+
+        print(
+            f"[modem] Warning: Failed to configure call forwarding to {normalized}: {' '.join(lines)}"
+        )
+        return False
+
+    def query_call_forwarding(
+        self,
+        reason: int = 0,
+        timeout_ms: int = 5000,
+    ) -> list[dict] | None:
+        """Query cellular call forwarding status via AT+CCFC=<reason>,2.
+
+        :param reason: Forwarding reason (0=unconditional).
+        :param timeout_ms: Timeout in ms.
+        :return: List of status dicts or None if command failed.
+        """
+        cmd = f"AT+CCFC={reason},2"
+        success, lines = self.send_cmd(cmd, timeout_ms=timeout_ms)
+        if not success:
+            return None
+
+        results: list[dict] = []
+        for line in lines:
+            if line.startswith("+CCFC:"):
+                content = line[6:].strip()
+                parts = [p.strip().strip('"') for p in content.split(",")]
+                if len(parts) >= 2:
+                    try:
+                        status = int(parts[0])
+                        cls_val = int(parts[1])
+                        num = parts[2] if len(parts) > 2 else ""
+                        typ = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else None
+                        results.append(
+                            {
+                                "status": status,
+                                "active": status == 1,
+                                "class": cls_val,
+                                "number": num,
+                                "type": typ,
+                            }
+                        )
+                    except ValueError:
+                        pass
+        return results

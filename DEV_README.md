@@ -208,6 +208,11 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
   - **Memory Management**: Periodic `gc.collect()` in the main event loop, free heap monitoring, and aggressive garbage collection if free memory drops below 20 KB.
   - **Non-blocking WiFi Reconnect**: Automatic background reconnection with exponential backoff without stalling the main loop or starving the hardware watchdog.
 
+- **Call Forwarding / Taleanrop-viderekobling (`firmware/modem.py`)**:
+  - Configures network-based unconditional call forwarding (CFU) via `AT+CCFC=0,3,"<target>",145` during modem initialization (`init_modem()`).
+  - Incoming voice calls to the gateway's SIM card are transparently forwarded by the cellular operator network directly to the predefined target number (default `+4792830575`, configurable via `call_forwarding_number` and `call_forwarding_enabled` in `config.py` / `config.json`).
+  - Network-side forwarding ensures that voice calls never interfere with UART SMS operations or require local voice decoding, with graceful error handling so SMS services continue normally even if CFU setup fails.
+
 ## CI/CD Workflows
 
 - **PR Validator (`.github/workflows/pr-validator.yml`)**:

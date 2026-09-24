@@ -831,3 +831,157 @@ def test_read_inbound_sms_text_mode_chunks_merged_and_at_stripped(
     assert "helt idiotisk melding?" in messages[0]["body"]
     assert 1 in deleted_indices
     assert 2 in deleted_indices
+
+
+def test_configure_call_forwarding_success(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    commands_sent: list[str] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        commands_sent.append(cmd)
+        if cmd == 'AT+CCFC=0,3,"+4792830575",145':
+            return b"OK\r\n"
+        return b"ERROR\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    assert driver.configure_call_forwarding("+4792830575") is True
+    assert 'AT+CCFC=0,3,"+4792830575",145' in commands_sent
+
+
+def test_configure_call_forwarding_normalization(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    commands_sent: list[str] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        commands_sent.append(cmd)
+        if cmd == 'AT+CCFC=0,3,"+4792830575",145':
+            return b"OK\r\n"
+        return b"ERROR\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    # 8-digit Norwegian number shorthand should normalize to +4792830575
+    assert driver.configure_call_forwarding("92 83 05 75") is True
+    assert 'AT+CCFC=0,3,"+4792830575",145' in commands_sent
+
+
+def test_configure_call_forwarding_disable(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    commands_sent: list[str] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        commands_sent.append(cmd)
+        if cmd == "AT+CCFC=0,0":
+            return b"OK\r\n"
+        return b"ERROR\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    assert driver.configure_call_forwarding(enable=False) is True
+    assert "AT+CCFC=0,0" in commands_sent
+
+
+def test_configure_call_forwarding_invalid_or_empty(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    driver = ModemDriver(uart=uart)
+    assert driver.configure_call_forwarding(number="") is False
+    assert driver.configure_call_forwarding(number="   ") is False
+
+
+def test_configure_call_forwarding_error_response(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    uart.auto_responses = {
+        'AT+CCFC=0,3,"+4792830575",145': b"+CME ERROR: 30\r\n",
+    }
+    driver = ModemDriver(uart=uart)
+    assert driver.configure_call_forwarding("+4792830575") is False
+
+
+def test_query_call_forwarding(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    uart.auto_responses = {
+        "AT+CCFC=0,2": (b'+CCFC: 1,1,"+4792830575",145\r\n+CCFC: 0,2,"",129\r\nOK\r\n'),
+    }
+    driver = ModemDriver(uart=uart)
+    res = driver.query_call_forwarding(reason=0)
+    assert res is not None
+    assert len(res) == 2
+    assert res[0]["active"] is True
+    assert res[0]["status"] == 1
+    assert res[0]["class"] == 1
+    assert res[0]["number"] == "+4792830575"
+    assert res[0]["type"] == 145
+    assert res[1]["active"] is False
+
+
+def test_init_modem_with_call_forwarding(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    ccfc_called = False
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal ccfc_called
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd in ("AT", "ATE0", "AT+CMGF=1", 'AT+CSCS="GSM"'):
+            return b"OK\r\n"
+        if cmd == "AT+CPIN?":
+            return b"+CPIN: READY\r\n\r\nOK\r\n"
+        if cmd == 'AT+CCFC=0,3,"+4792830575",145':
+            ccfc_called = True
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    cfg = {
+        "call_forwarding_enabled": True,
+        "call_forwarding_number": "+4792830575",
+    }
+    driver = ModemDriver(uart=uart, config=cfg)
+    assert driver.init_modem() is True
+    assert ccfc_called is True
+
+
+def test_init_modem_call_forwarding_failure_graceful(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    ccfc_called = False
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal ccfc_called
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd in ("AT", "ATE0", "AT+CMGF=1", 'AT+CSCS="GSM"'):
+            return b"OK\r\n"
+        if cmd == "AT+CPIN?":
+            return b"+CPIN: READY\r\n\r\nOK\r\n"
+        if cmd == 'AT+CCFC=0,3,"+4792830575",145':
+            ccfc_called = True
+            return b"+CME ERROR: 30\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    cfg = {
+        "call_forwarding_enabled": True,
+        "call_forwarding_number": "+4792830575",
+    }
+    driver = ModemDriver(uart=uart, config=cfg)
+    # Even if network call forwarding fails, modem init should still succeed for SMS gateway operations
+    assert driver.init_modem() is True
+    assert ccfc_called is True
