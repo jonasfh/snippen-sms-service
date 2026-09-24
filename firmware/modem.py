@@ -239,6 +239,9 @@ class ModemDriver:
         self, target_number: str, text: str, timeout_ms: int = 15000
     ) -> tuple[bool, str | None]:
         """Transmit a single SMS payload over UART."""
+        # Ensure SMS text mode (AT+CMGF=1) for AT+CMGS
+        self.send_cmd("AT+CMGF=1", timeout_ms=1000)
+
         use_ucs2 = False
         if sms_encoding is not None and not sms_encoding.is_gsm7(text):
             use_ucs2 = True
@@ -351,10 +354,10 @@ class ModemDriver:
 
         # Attempt PDU mode first (AT+CMGF=0) for standard 3GPP concatenated SMS
         if sms_encoding is not None and hasattr(sms_encoding, "decode_pdu"):
-            pdu_ok, _ = self.send_cmd("AT+CMGF=0", timeout_ms=1000)
+            pdu_ok, _ = self.send_cmd("AT+CMGF=0", timeout_ms=3000)
             if pdu_ok:
-                read_ok, pdu_lines = self.send_cmd("AT+CMGL=4", timeout_ms=4000)
-                if read_ok and any(l.strip().startswith("+CMGL:") for l in pdu_lines):
+                _, pdu_lines = self.send_cmd("AT+CMGL=4", timeout_ms=10000)
+                if any(l.strip().startswith("+CMGL:") for l in pdu_lines):
                     cur_idx = None
                     cur_stat = "REC UNREAD"
                     for line in pdu_lines:
@@ -392,12 +395,11 @@ class ModemDriver:
                                     }
                                 )
                             cur_idx = None
-
         # Fallback to Text mode if PDU mode returned no messages or was unsupported
         if not raw_messages:
             self.send_cmd("AT+CMGF=1", timeout_ms=1000)
             self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
-            _, lines = self.send_cmd('AT+CMGL="ALL"', timeout_ms=4000)
+            _, lines = self.send_cmd('AT+CMGL="ALL"', timeout_ms=6000)
 
             current_msg: dict | None = None
             body_lines: list[str] = []
@@ -409,6 +411,9 @@ class ModemDriver:
                         raw_body = "\n".join(body_lines).strip("\r\n")
                         if sms_encoding is not None:
                             raw_body = sms_encoding.decode_inbound_text(raw_body)
+                        # Strip trailing @ from modem 7-bit septet padding bug in text mode
+                        if raw_body.endswith("@") and not raw_body.endswith("@@"):
+                            raw_body = raw_body[:-1]
                         current_msg["body"] = raw_body
                         raw_messages.append(current_msg)
                         body_lines = []
@@ -425,6 +430,9 @@ class ModemDriver:
                 raw_body = "\n".join(body_lines).strip("\r\n")
                 if sms_encoding is not None:
                     raw_body = sms_encoding.decode_inbound_text(raw_body)
+                # Strip trailing @ from modem 7-bit septet padding bug in text mode
+                if raw_body.endswith("@") and not raw_body.endswith("@@"):
+                    raw_body = raw_body[:-1]
                 current_msg["body"] = raw_body
                 raw_messages.append(current_msg)
 
@@ -447,7 +455,47 @@ class ModemDriver:
         if timed_out:
             assembled.extend(timed_out)
 
+        # Fallback text-mode concatenation for adjacent unjoined segments from same sender
+        if len(assembled) > 1:
+            assembled = self._merge_text_mode_segments(assembled)
+
         return assembled
+
+    def _merge_text_mode_segments(self, messages: list[dict]) -> list[dict]:
+        """Merge consecutive unjoined text-mode segments from the same sender."""
+        if len(messages) <= 1:
+            return messages
+
+        merged: list[dict] = []
+        i = 0
+        n = len(messages)
+        while i < n:
+            curr = messages[i]
+            while i + 1 < n:
+                nxt = messages[i + 1]
+                if curr.get("sender") and curr.get("sender") == nxt.get("sender"):
+                    curr_body = curr.get("body", "")
+                    nxt_body = nxt.get("body", "")
+                    # Segment boundary criteria:
+                    # 1. Non-final segment is 153 chars (standard GSM concatenated chunk length), OR
+                    # 2. Non-final segment doesn't end with terminal punctuation and next starts with lowercase
+                    is_concatenated_len = len(curr_body) in (153, 160, 67, 70)
+                    is_sentence_continuation = (
+                        curr_body
+                        and not curr_body.endswith((".", "!", "?", "\n"))
+                        and nxt_body
+                        and nxt_body[0].islower()
+                    )
+                    if is_concatenated_len or is_sentence_continuation:
+                        curr = dict(curr)
+                        curr["body"] = curr_body + nxt_body
+                        curr["parts_count"] = curr.get("parts_count", 1) + 1
+                        i += 1
+                        continue
+                break
+            merged.append(curr)
+            i += 1
+        return merged
 
     def delete_sms(self, index: int) -> bool:
         """Delete an SMS message from SIM memory at specified storage index."""

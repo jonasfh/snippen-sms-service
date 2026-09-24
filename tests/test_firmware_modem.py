@@ -704,3 +704,48 @@ def test_read_inbound_sms_pdu_multipart_reassembly(mpy_env: MicroPythonEnvironme
     assert "godgjør seg" in messages[0]["body"]
     assert 1 in deleted_indices
     assert 2 in deleted_indices
+
+
+def test_read_inbound_sms_text_mode_chunks_merged_and_at_stripped(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    deleted_indices: list[int] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        # Simulate PDU mode being rejected, forcing text mode fallback
+        if cmd == "AT+CMGF=0":
+            return b"ERROR\r\n"
+        if cmd == "AT+CMGF=1" or cmd == 'AT+CSCS="GSM"':
+            return b"OK\r\n"
+        if cmd == 'AT+CMGL="ALL"':
+            # 153 chars part 1, and part 2 ending with @
+            part1 = "Hva skjer hvis jeg sender en skikkelig lang sms som ikke fr plass i vanlig 160 tegn, men heller typisk bruker noe snt som 40000000 tegn til  skrive en"
+            part2 = "helt idiotisk melding? Kommer den den da, eller bare krasjer den helt gratis og blir liggende i lilygo og godgjr seg? Vi tester ihvertfall....@"
+            return (
+                f'+CMGL: 1,"REC READ","+4790688031",,"26/09/24,18:50:47+08"\r\n'
+                f"{part1}\r\n"
+                f'+CMGL: 2,"REC READ","+4790688031",,"26/09/24,18:50:48+08"\r\n'
+                f"{part2}\r\n"
+                f"OK\r\n"
+            ).encode()
+        if cmd.startswith("AT+CMGD="):
+            idx = int(cmd.split("=")[1].strip())
+            deleted_indices.append(idx)
+            return b"OK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+    messages = driver.read_inbound_sms(delete_after_read=True)
+
+    # Should be merged into exactly 1 message and trailing @ stripped
+    assert len(messages) == 1
+    assert messages[0]["sender"] == "+4790688031"
+    assert not messages[0]["body"].endswith("@")
+    assert "helt idiotisk melding?" in messages[0]["body"]
+    assert 1 in deleted_indices
+    assert 2 in deleted_indices

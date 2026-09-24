@@ -310,3 +310,33 @@ def test_reassemble_stored_messages_incomplete() -> None:
     assert merged[0].id == 21
     assert merged[0].body == "\x05\x00\x03\x30\x02\x01Only part 1 received so far"
     assert ack_map[21] == [21]
+
+
+def test_reassemble_stored_messages_text_mode_chunks_and_trailing_at() -> None:
+    now = datetime.now(UTC)
+    chunk1 = Message(
+        id=50,
+        direction=MessageDirection.INBOUND,
+        sender="+4790688031",
+        recipient="+4790000000",
+        body="Hva skjer hvis jeg sender en skikkelig lang sms som ikke fr plass i vanlig 160 tegn, men heller typisk bruker noe snt som 40000000 tegn til  skrive en",
+        status=MessageStatus.RECEIVED,
+        created_at=now,
+        modified_at=now,
+    )
+    chunk2 = Message(
+        id=51,
+        direction=MessageDirection.INBOUND,
+        sender="+4790688031",
+        recipient="+4790000000",
+        body="helt idiotisk melding? Kommer den den da, eller bare krasjer den helt gratis og blir liggende i lilygo og godgjr seg? Vi tester ihvertfall....@",
+        status=MessageStatus.RECEIVED,
+        created_at=now,
+        modified_at=now,
+    )
+    merged, ack_map = reassemble_stored_messages([chunk1, chunk2])
+    assert len(merged) == 1
+    assert merged[0].id == 50
+    assert not merged[0].body.endswith("@")
+    assert "helt idiotisk melding?" in merged[0].body
+    assert set(ack_map[50]) == {50, 51}

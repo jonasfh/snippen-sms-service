@@ -415,7 +415,8 @@ def decode_pdu(pdu_hex: str) -> dict | None:
             "udh_info": udh_info,
             "dcs": dcs,
         }
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        print(f"[sms_encoding] decode_pdu error: {exc}")
         return None
 
 
