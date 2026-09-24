@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.9] - 2026-09-24
+
+### Added
+- Outbound concatenated (multipart) SMS using `AT+CMGSEX` on SimCom A7670E (`#107`):
+  - In `firmware/modem.py`:
+    - Updated `send_sms()` to split long messages without manual `(1/2)` indicators and assign a revolving reference ID (`_outbound_msg_ref`, 1–255).
+    - Updated `_send_single_sms()` to transmit multi-part segments via `AT+CMGSEX="<dest>",<mr>,<part>,<total>`, instructing the cellular network and receiving handsets to concatenate parts into a single seamless message.
+    - Added automatic fallback to standard `AT+CMGS` if `AT+CMGSEX` is unsupported or rejected.
+    - Updated response parser to recognize both `+CMGS:` and `+CMGSEX:` message reference acknowledgments.
+  - In `firmware/sms_encoding.py`:
+    - Updated `split_sms_body()` to properly use `default_mp_limit` (153 chars GSM-7, 67 code units UCS-2) as the maximum payload per segment when `add_indicators=False`.
+
 ## [0.31.8] - 2026-09-24
 
 ### Fixed

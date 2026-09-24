@@ -447,17 +447,21 @@ def test_send_sms_multipart_gsm7_success(mpy_env: MicroPythonEnvironment) -> Non
     from modem import ModemDriver
 
     uart = MockUART(1)
-    cmgs_payloads: list[str] = []
+    cmgsex_commands: list[str] = []
+    payloads: list[str] = []
     msg_counter = 50
 
     def responder(data: bytes) -> bytes | None:
         nonlocal msg_counter
         data_str = data.decode("utf-8", errors="ignore")
+        if "AT+CMGSEX=" in data_str:
+            cmgsex_commands.append(data_str)
+            return b"\r\n> "
         if "AT+CMGS=" in data_str:
             return b"\r\n> "
         if data.endswith(b"\x1a"):
-            cmgs_payloads.append(data_str)
-            resp = f"\r\n+CMGS: {msg_counter}\r\n\r\nOK\r\n".encode()
+            payloads.append(data_str)
+            resp = f"\r\n+CMGSEX: {msg_counter}\r\n\r\nOK\r\n".encode()
             msg_counter += 1
             return resp
         return None
@@ -477,27 +481,34 @@ def test_send_sms_multipart_gsm7_success(mpy_env: MicroPythonEnvironment) -> Non
 
     assert success is True
     assert ref == "50,51"
-    assert len(cmgs_payloads) == 2
-    assert "(1/2) " in cmgs_payloads[0]
-    assert "(2/2) " in cmgs_payloads[1]
+    assert len(cmgsex_commands) == 2
+    assert cmgsex_commands[0] == 'AT+CMGSEX="+4799999999",1,1,2\r\n'
+    assert cmgsex_commands[1] == 'AT+CMGSEX="+4799999999",1,2,2\r\n'
+    assert len(payloads) == 2
+    # Seamless concatenation: no (1/2) prefix in payload
+    assert "(1/2)" not in payloads[0]
+    assert "(2/2)" not in payloads[1]
+    # Reconstructed text without trailing ctrl-z matches original
+    reconstructed = "".join(p[:-1] for p in payloads)
+    assert reconstructed == long_msg
 
 
 def test_send_sms_multipart_ucs2_with_emojis(mpy_env: MicroPythonEnvironment) -> None:
     from modem import ModemDriver
 
     uart = MockUART(1)
-    cmgs_calls = 0
+    cmgsex_calls = 0
 
     def responder(data: bytes) -> bytes | None:
-        nonlocal cmgs_calls
+        nonlocal cmgsex_calls
         data_str = data.decode("utf-8", errors="ignore")
         if 'AT+CSCS="UCS2"' in data_str or 'AT+CSCS="GSM"' in data_str:
             return b"OK\r\n"
-        if "AT+CMGS=" in data_str:
+        if "AT+CMGSEX=" in data_str or "AT+CMGS=" in data_str:
             return b"\r\n> "
         if data.endswith(b"\x1a"):
-            cmgs_calls += 1
-            return f"\r\n+CMGS: {80 + cmgs_calls}\r\n\r\nOK\r\n".encode()
+            cmgsex_calls += 1
+            return f"\r\n+CMGSEX: {80 + cmgsex_calls}\r\n\r\nOK\r\n".encode()
         return None
 
     uart.responder = responder
@@ -511,8 +522,36 @@ def test_send_sms_multipart_ucs2_with_emojis(mpy_env: MicroPythonEnvironment) ->
 
     success, ref = driver.send_sms("+4799999999", long_emoji_msg)
     assert success is True
-    assert cmgs_calls == 2
+    assert cmgsex_calls == 2
     assert ref == "81,82"
+
+
+def test_send_sms_multipart_cmgsex_fallback_to_cmgs(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    cmgs_calls = 0
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal cmgs_calls
+        data_str = data.decode("utf-8", errors="ignore")
+        if "AT+CMGSEX=" in data_str:
+            return b"\r\nERROR\r\n"
+        if "AT+CMGS=" in data_str:
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            cmgs_calls += 1
+            return f"\r\n+CMGS: {90 + cmgs_calls}\r\n\r\nOK\r\n".encode()
+        return None
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 10})
+
+    msg = "A" * 200
+    success, ref = driver.send_sms("+4799999999", msg)
+    assert success is True
+    assert cmgs_calls == 2
+    assert ref == "91,92"
 
 
 def test_send_sms_multipart_failure_aborts_cleanly(mpy_env: MicroPythonEnvironment) -> None:
