@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.16] - 2026-09-25
+
+### Fixed
+- Fixed Web Configurator `writeConfig` exceeding 512-byte GATT write limit during save (`#121`):
+  - In `tools/web-config/js/app.js`:
+    - Defined and exported `DEFAULT_CALL_REPLY_CALLER_TEXT` and `DEFAULT_CALL_NOTIFY_ADMIN_TEXT`.
+    - Omitted default unchanged call notification text templates from the save payload, reducing default save payload to ~250 bytes.
+  - In `tools/web-config/js/ble.js`:
+    - Implemented automatic key-value chunking in `writeConfig(configObj)` so that whenever a configuration payload exceeds 450 bytes (e.g., when the user configures custom text in multiple fields), it is transparently split into smaller sequential GATT writes (<= 400 bytes each).
+    - Prevents Chrome Web Bluetooth from throwing `Failed to execute 'writeValueWithResponse' on 'BluetoothRemoteGATTCharacteristic': Value can't exceed 512 bytes.`
+  - In `tests/test_web_config_contract.py`:
+    - Added synchronization and chunking contract tests for default call notification templates and chunked GATT writes.
+
 ## [0.31.15] - 2026-09-25
 
 ### Fixed

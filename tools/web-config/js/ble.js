@@ -182,6 +182,7 @@ export class SnippenBLEClient extends EventTarget {
 
   /**
    * Write updated configuration to the Config characteristic.
+   * If payload exceeds 450 bytes, chunk keys into smaller writes to respect 512-byte GATT limit (Issue #121).
    * @param {object} configObj
    * @returns {Promise<boolean>}
    */
@@ -189,15 +190,36 @@ export class SnippenBLEClient extends EventTarget {
     this._ensureConnected();
     try {
       const payload = encodeJson(configObj);
-      if (typeof this.charConfig.writeValueWithResponse === 'function') {
-        await this.charConfig.writeValueWithResponse(payload);
+      if (payload.byteLength > 450) {
+        const entries = Object.entries(configObj);
+        let currentChunk = {};
+        for (const [k, v] of entries) {
+          const testChunk = { ...currentChunk, [k]: v };
+          if (encodeJson(testChunk).byteLength > 400 && Object.keys(currentChunk).length > 0) {
+            await this._writeRawConfig(encodeJson(currentChunk));
+            currentChunk = { [k]: v };
+          } else {
+            currentChunk[k] = v;
+          }
+        }
+        if (Object.keys(currentChunk).length > 0) {
+          await this._writeRawConfig(encodeJson(currentChunk));
+        }
       } else {
-        await this.charConfig.writeValue(payload);
+        await this._writeRawConfig(payload);
       }
       return true;
     } catch (err) {
       this.dispatchEvent(new CustomEvent('error', { detail: err }));
       throw err;
+    }
+  }
+
+  async _writeRawConfig(payload) {
+    if (typeof this.charConfig.writeValueWithResponse === 'function') {
+      await this.charConfig.writeValueWithResponse(payload);
+    } else {
+      await this.charConfig.writeValue(payload);
     }
   }
 
