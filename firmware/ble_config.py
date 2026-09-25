@@ -34,6 +34,12 @@ CHAR_STATUS_UUID_STR = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 CHAR_COMMAND_UUID_STR = "6e400004-b5a3-f393-e0a9-e50e24dcca9e"
 CHAR_LOGS_UUID_STR = "6e400005-b5a3-f393-e0a9-e50e24dcca9e"
 
+DEFAULT_CALL_REPLY_CALLER_TEXT = (
+    "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
+    "Send SMS eller ring leieansvarlig på 92830575."
+)
+DEFAULT_CALL_NOTIFY_ADMIN_TEXT = "Ubesvart anrop til Snippen SMS-gateway fra {caller}."
+
 
 def mask_token(token: str) -> str:
     """Mask sensitive authentication token for secure BLE readout."""
@@ -138,7 +144,7 @@ class BLEConfigServer:
         )
         char_command = (
             bluetooth.UUID(CHAR_COMMAND_UUID_STR),
-            bluetooth.FLAG_WRITE | bluetooth.FLAG_NOTIFY,
+            bluetooth.FLAG_READ | bluetooth.FLAG_WRITE | bluetooth.FLAG_NOTIFY,
         )
         char_logs = (
             bluetooth.UUID(CHAR_LOGS_UUID_STR),
@@ -149,12 +155,12 @@ class BLEConfigServer:
         ((self.handle_config, self.handle_status, self.handle_command, self.handle_logs),) = (
             ble.gatts_register_services((service,))
         )
-        # Increase characteristic buffer sizes from default 20 bytes to 1024 bytes
-        # to prevent payload truncation on incoming writes and outgoing notifications.
+        # Increase characteristic buffer sizes from default 20 bytes up to GATT maximum 512 bytes
+        # to prevent payload truncation on incoming writes and outgoing notifications (Issue #119).
         for h in (self.handle_config, self.handle_status, self.handle_command, self.handle_logs):
             if hasattr(ble, "gatts_set_buffer"):
                 try:
-                    ble.gatts_set_buffer(h, 1024)
+                    ble.gatts_set_buffer(h, 512, False)
                 except Exception:  # noqa: BLE001, S110
                     pass
         self._services_registered = True
@@ -281,6 +287,7 @@ class BLEConfigServer:
             self._handle_write(conn_handle, value_handle)
 
     def _handle_write(self, conn_handle: int, value_handle: int) -> None:
+        self.conn_handle = conn_handle
         ble = self._get_ble()
         if ble is None:
             return
@@ -331,10 +338,14 @@ class BLEConfigServer:
                 response = {"cmd": cmd_name, "status": "error", "message": str(exc)}
 
         if response is not None:
-            self.notify_command_response(response)
+            self.notify_command_response(response, conn_handle=conn_handle)
 
     def update_config_characteristic(self, cfg: dict) -> None:
-        """Update read value of config characteristic with sensitive keys masked."""
+        """Update read value of config characteristic with sensitive keys masked.
+
+        Omit default long text templates when unchanged to ensure JSON payload remains
+        well below GATT 512-byte attribute limits (Issue #119).
+        """
         ble = self._get_ble()
         if ble is None or self.handle_config is None:
             return
@@ -350,18 +361,17 @@ class BLEConfigServer:
             "call_reject_enabled": cfg.get("call_reject_enabled", True),
             "call_notify_admin_enabled": cfg.get("call_notify_admin_enabled", True),
             "call_reply_caller_enabled": cfg.get("call_reply_caller_enabled", True),
-            "call_reply_caller_text": cfg.get(
-                "call_reply_caller_text",
-                (
-                    "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
-                    "Send SMS eller ring leieansvarlig på 92830575."
-                ),
-            ),
-            "call_notify_admin_text": cfg.get(
-                "call_notify_admin_text",
-                "Ubesvart anrop til Snippen SMS-gateway fra {caller}.",
-            ),
         }
+
+        # Include custom text only if differing from default and non-empty
+        reply_caller = cfg.get("call_reply_caller_text", "")
+        if reply_caller and reply_caller != DEFAULT_CALL_REPLY_CALLER_TEXT:
+            safe_cfg["call_reply_caller_text"] = reply_caller[:200]
+
+        notify_admin = cfg.get("call_notify_admin_text", "")
+        if notify_admin and notify_admin != DEFAULT_CALL_NOTIFY_ADMIN_TEXT:
+            safe_cfg["call_notify_admin_text"] = notify_admin[:100]
+
         json_data = json.dumps(safe_cfg)
         ble.gatts_write(self.handle_config, json_data)
 
@@ -379,17 +389,37 @@ class BLEConfigServer:
             except Exception as exc:  # noqa: BLE001
                 print(f"[ble] Failed to notify status: {exc}")
 
-    def notify_command_response(self, response: dict | str) -> None:
-        """Send command result notification back to connected central."""
+    def notify_command_response(self, response: dict | str, conn_handle: int | None = None) -> None:
+        """Send command result notification back to connected central (Issue #119)."""
         ble = self._get_ble()
         if ble is None or self.handle_command is None:
             return
 
         payload_str = json.dumps(response) if isinstance(response, dict) else str(response)
+
+        # Truncate response if needed to ensure notification fits within GATT attribute limits
+        if len(payload_str) > 500:
+            if (
+                isinstance(response, dict)
+                and "lines" in response
+                and isinstance(response["lines"], list)
+            ):
+                lines = list(response["lines"])
+                trimmed_resp = dict(response)
+                trimmed_resp["lines"] = lines
+                while lines and len(json.dumps(trimmed_resp)) > 450:
+                    lines.pop(0)
+                payload_str = json.dumps(trimmed_resp)
+            else:
+                payload_str = payload_str[:500]
+
         ble.gatts_write(self.handle_command, payload_str)
-        if self.conn_handle is not None:
+        target_conn = conn_handle if conn_handle is not None else self.conn_handle
+        if target_conn is not None:
             try:
-                ble.gatts_notify(self.conn_handle, self.handle_command, payload_str)
+                ble.gatts_notify(target_conn, self.handle_command, payload_str)
+                if hasattr(time, "sleep_ms"):
+                    time.sleep_ms(20)
             except Exception as exc:  # noqa: BLE001
                 print(f"[ble] Failed to notify command response: {exc}")
 

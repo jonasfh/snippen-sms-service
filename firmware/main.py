@@ -186,6 +186,11 @@ class GatewayApp:
 
         if cmd in ("START_OPERATIONS", "RESUME_OPERATIONS"):
             self.live_operations_active = True
+            # Defer initial network poll so WiFi HTTPS does not monopolize 2.4 GHz radio (Issue #119)
+            now = time.time()
+            self.last_outbox_poll = now
+            self.last_inbox_check = now
+            self.last_heartbeat = now
             print("[main] Live gateway operations started over BLE.")
             return {
                 "cmd": cmd,
@@ -205,10 +210,10 @@ class GatewayApp:
             }
 
         if cmd == "GET_LOGS":
-            count = 50
+            count = 15
             if isinstance(payload, dict) and "count" in payload:
                 try:
-                    count = int(payload["count"])
+                    count = min(30, max(1, int(payload["count"])))
                 except (ValueError, TypeError):
                     pass
             lines = self.logger.get_lines(count) if self.logger is not None else []

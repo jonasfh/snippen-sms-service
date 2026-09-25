@@ -108,13 +108,17 @@ function initClient() {
   }
   client = isSimulator ? new MockSnippenBLEClient() : new SnippenBLEClient();
 
-  client.addEventListener('connected', (e) => {
+  client.addEventListener('connected', async (e) => {
     updateConnectionState('connected', e.detail.deviceName || 'Snippen Gateway');
     deviceMac.textContent = e.detail.deviceId ? `ID: ${e.detail.deviceId.slice(0, 12)}` : '';
     setCardsEnabled(true);
     showFeedback('Tilkoblet Snippen SMS Gateway via BLE!', 'success');
-    loadActiveConfig();
-    fetchInitialLogs();
+    try {
+      await loadActiveConfig();
+      await fetchInitialLogs();
+    } catch (err) {
+      console.warn('[BLE] Feil under lasting etter tilkobling:', err);
+    }
   });
 
   client.addEventListener('disconnected', (e) => {
@@ -211,13 +215,13 @@ async function loadActiveConfig() {
     if (cfg.call_notify_admin_enabled !== undefined) {
       callNotifyAdminEnabled.checked = Boolean(cfg.call_notify_admin_enabled);
     }
-    if (cfg.call_notify_admin_text !== undefined) {
+    if (cfg.call_notify_admin_text) {
       callNotifyAdminText.value = cfg.call_notify_admin_text;
     }
     if (cfg.call_reply_caller_enabled !== undefined) {
       callReplyCallerEnabled.checked = Boolean(cfg.call_reply_caller_enabled);
     }
-    if (cfg.call_reply_caller_text !== undefined) {
+    if (cfg.call_reply_caller_text) {
       callReplyCallerText.value = cfg.call_reply_caller_text;
     }
   } catch (err) {
