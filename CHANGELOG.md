@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.15] - 2026-09-25
+
+### Fixed
+- Fixed 512-byte GATT attribute truncation during config read and START_OPERATIONS timeout (`#119`):
+  - In `firmware/ble_config.py`:
+    - Compacted `safe_cfg` serialization by omitting default call notification text templates (`DEFAULT_CALL_REPLY_CALLER_TEXT` and `DEFAULT_CALL_NOTIFY_ADMIN_TEXT`) when unchanged, reducing config JSON payload to ~280 bytes (well below the 512-byte GATT limit).
+    - Added `bluetooth.FLAG_READ` to `char_command` and configured GATT buffer sizes explicitly to 512 bytes with overwrite mode (`append=False`).
+    - Fixed connection handle tracking on GATT writes (`self.conn_handle = conn_handle`) and explicitly passed `conn_handle` to command response notifications.
+    - Added dynamic payload size trimming in `notify_command_response` so oversized responses (such as `GET_LOGS`) never exceed GATT notification limits.
+  - In `firmware/main.py`:
+    - Updated `START_OPERATIONS` command handler to reset `last_outbox_poll`, `last_inbox_check`, and `last_heartbeat` timers to the current time, preventing immediate heavy WiFi HTTPS operations from colliding with the BLE radio response.
+    - Capped default `GET_LOGS` count to 15 (max 30) to keep initial responses compact.
+  - In `tools/web-config/`:
+    - In `js/app.js`: Sequenced `loadActiveConfig()` and `fetchInitialLogs()` sequentially on BLE connection instead of concurrently, avoiding Web Bluetooth GATT operation collision errors.
+    - In `js/app.js`: Preserved default call notification template strings when omitted from read config JSON.
+    - In `js/ble.js`: Increased command response timeouts (`sendCommand`, `startOperations`, `stopOperations` to 20000ms; `getLogs` to 15000ms).
+
 ## [0.31.14] - 2026-09-25
 
 ### Added

@@ -336,3 +336,97 @@ def test_gateway_app_ble_live_operations_and_logs(mpy_env: MicroPythonEnvironmen
     assert len(res_logs_after["lines"]) <= 1
     if res_logs_after["lines"]:
         assert "GET_LOGS" in res_logs_after["lines"][0]
+
+
+def test_ble_server_config_payload_stays_under_gatt_limit(mpy_env: MicroPythonEnvironment) -> None:
+    """Verify that default config JSON payload stays well below 512-byte GATT attribute limit (Issue #119)."""
+    import ble_config
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(
+        ble=mock_ble,
+        config={
+            "wifi_ssid": "Snippen-WiFi-Network",
+            "snippen_api_base_url": "https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+            "snippen_api_token": "snip_tok_secret_value_12345",
+            "outbox_poll_interval_sec": 5,
+            "inbox_check_interval_sec": 5,
+            "call_forwarding_number": "+4792830575",
+            "call_forwarding_enabled": True,
+            "call_reject_enabled": True,
+            "call_notify_admin_enabled": True,
+            "call_reply_caller_enabled": True,
+            "call_reply_caller_text": ble_config.DEFAULT_CALL_REPLY_CALLER_TEXT,
+            "call_notify_admin_text": ble_config.DEFAULT_CALL_NOTIFY_ADMIN_TEXT,
+        },
+    )
+    server.start()
+
+    raw_bytes = mock_ble.gatts_read(server.handle_config)
+    assert len(raw_bytes) <= 500
+    assert len(raw_bytes) < 400, f"Payload unexpectedly large: {len(raw_bytes)} bytes"
+
+    parsed = json.loads(raw_bytes.decode("utf-8"))
+    assert parsed["wifi_ssid"] == "Snippen-WiFi-Network"
+    # Default text templates omitted to save GATT space
+    assert "call_reply_caller_text" not in parsed
+    assert "call_notify_admin_text" not in parsed
+
+    # When user configures custom text, it should be included
+    server.config["call_reply_caller_text"] = "Egendefinert svar til innringer."
+    server.update_config_characteristic(server.config)
+
+    raw_custom = mock_ble.gatts_read(server.handle_config)
+    assert len(raw_custom) <= 500
+    parsed_custom = json.loads(raw_custom.decode("utf-8"))
+    assert parsed_custom["call_reply_caller_text"] == "Egendefinert svar til innringer."
+
+
+def test_ble_server_command_oversized_response_truncation(mpy_env: MicroPythonEnvironment) -> None:
+    """Verify that oversized command responses (like GET_LOGS) are trimmed to <= 500 bytes (Issue #119)."""
+    import ble_config
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    server.start()
+    server.conn_handle = 3
+
+    # Generate huge response with 50 lines (each 60 chars = ~3000 bytes)
+    huge_lines = [
+        f"[{i:02d}] 2026-09-25T20:00:{i:02d} System event occurred on cellular modem"
+        for i in range(50)
+    ]
+    huge_response = {"cmd": "GET_LOGS", "status": "ok", "lines": huge_lines}
+
+    server.notify_command_response(huge_response, conn_handle=3)
+
+    raw_resp = mock_ble.gatts_read(server.handle_command)
+    assert len(raw_resp) <= 500, f"Response exceeds 500 bytes: {len(raw_resp)}"
+
+    # Ensure it remains valid JSON
+    decoded = json.loads(raw_resp.decode("utf-8"))
+    assert decoded["cmd"] == "GET_LOGS"
+    assert decoded["status"] == "ok"
+    assert isinstance(decoded["lines"], list)
+    assert len(decoded["lines"]) > 0
+
+
+def test_gateway_app_start_operations_defers_polling(mpy_env: MicroPythonEnvironment) -> None:
+    """Verify START_OPERATIONS resets timers so immediate polling does not block BLE (Issue #119)."""
+    import ble_config
+    import main
+    import utime as time
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    app = main.GatewayApp(config={"wifi_ssid": "TestSSID"}, ble_server=server)
+    app.setup()
+    app.last_outbox_poll = 0
+    app.last_inbox_check = 0
+
+    before_time = time.time()
+    res = app.on_ble_command("START_OPERATIONS", {})
+    assert res["status"] == "ok"
+    assert app.live_operations_active is True
+    assert app.last_outbox_poll >= before_time
+    assert app.last_inbox_check >= before_time

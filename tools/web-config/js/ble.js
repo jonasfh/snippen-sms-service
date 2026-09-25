@@ -204,10 +204,10 @@ export class SnippenBLEClient extends EventTarget {
   /**
    * Send a JSON command and await matching notification response.
    * @param {object} cmdPayload - Must include { cmd: "..." }
-   * @param {number} [timeoutMs=15000]
+   * @param {number} [timeoutMs=20000]
    * @returns {Promise<object>}
    */
-  async sendCommand(cmdPayload, timeoutMs = 15000) {
+  async sendCommand(cmdPayload, timeoutMs = 20000) {
     this._ensureConnected();
     const cmdName = cmdPayload.cmd;
     if (!cmdName) {
@@ -282,29 +282,29 @@ export class SnippenBLEClient extends EventTarget {
 
   /**
    * Start normal gateway operations while keeping BLE connected for live logging.
-   * @param {number} [timeoutMs=10000]
+   * @param {number} [timeoutMs=20000]
    * @returns {Promise<object>}
    */
-  async startOperations(timeoutMs = 10000) {
+  async startOperations(timeoutMs = 20000) {
     return await this.sendCommand({ cmd: 'START_OPERATIONS' }, timeoutMs);
   }
 
   /**
    * Pause normal gateway operations while keeping BLE connected for configuration.
-   * @param {number} [timeoutMs=10000]
+   * @param {number} [timeoutMs=20000]
    * @returns {Promise<object>}
    */
-  async stopOperations(timeoutMs = 10000) {
+  async stopOperations(timeoutMs = 20000) {
     return await this.sendCommand({ cmd: 'STOP_OPERATIONS' }, timeoutMs);
   }
 
   /**
    * Fetch historical log lines from gateway in-memory buffer.
-   * @param {number} [count=50]
-   * @param {number} [timeoutMs=10000]
+   * @param {number} [count=20]
+   * @param {number} [timeoutMs=15000]
    * @returns {Promise<string[]>}
    */
-  async getLogs(count = 50, timeoutMs = 10000) {
+  async getLogs(count = 20, timeoutMs = 15000) {
     const res = await this.sendCommand({ cmd: 'GET_LOGS', count }, timeoutMs);
     return res.lines || [];
   }

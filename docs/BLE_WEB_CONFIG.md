@@ -96,3 +96,6 @@ Webappen er en fullverdig PWA og kan installeres på telefonen:
 
 ### «Tilkobling feilet eller brutt»
 - ESP32 tillater kun én tilkoblet sentral (telefon/PC) om gangen. Hvis du har koblet til via f.eks. *nRF Connect*, koble fra den før du kobler til fra webappen.
+
+### «Hvorfor står det '(Paired)' etter enhetsnavnet i tilkoblingspanelet?»
+- Når du har koblet til enheten én gang tidligere i Chrome/Edge, lagrer operativsystemet og nettleseren enheten i listen over kjente/parede Bluetooth-enheter. Dette er helt normalt og forventet oppførsel i Web Bluetooth. Det betyr bare at nettleseren husker enheten fra forrige økt.
