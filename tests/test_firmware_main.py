@@ -335,3 +335,36 @@ def test_gateway_app_poll_incoming_calls_integrated(mpy_env: MicroPythonEnvironm
 
     app.poll_incoming_calls()
     assert calls_handled == ["+4791111111"]
+
+
+def test_gateway_app_poll_incoming_sms_integrated(mpy_env: MicroPythonEnvironment) -> None:
+    import main
+
+    inbox_processed = 0
+
+    class MockModem:
+        def __init__(self) -> None:
+            self._has_sms = True
+
+        def check_incoming_sms(self) -> bool:
+            if self._has_sms:
+                self._has_sms = False
+                return True
+            return False
+
+    app = main.GatewayApp()
+    app.modem = MockModem()  # type: ignore[assignment]
+
+    def mock_process_inbox() -> int:
+        nonlocal inbox_processed
+        inbox_processed += 1
+        return 1
+
+    app.process_inbox = mock_process_inbox  # type: ignore[assignment]
+
+    app.poll_incoming_sms()
+    assert inbox_processed == 1
+
+    # Second call should not trigger process_inbox since no new indication
+    app.poll_incoming_sms()
+    assert inbox_processed == 1

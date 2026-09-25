@@ -158,6 +158,8 @@ class ModemDriver:
             if (sms_encoding is not None and hasattr(sms_encoding, "InboundReassembler"))
             else None
         )
+        self._pending_callers: list[str] = []
+        self._pending_sms_urc: bool = False
 
     def flush_input(self) -> None:
         """Clear any buffered unread incoming bytes from the UART interface."""
@@ -201,6 +203,8 @@ class ModemDriver:
             if raw_line:
                 decoded = raw_line.decode("utf-8", "ignore").strip()
                 if decoded:
+                    if decoded.startswith("+CMTI:"):
+                        self._pending_sms_urc = True
                     lines.append(decoded)
                     for token in stop_tokens:
                         if decoded == token or decoded.startswith(token):
@@ -277,6 +281,12 @@ class ModemDriver:
 
         # Enable caller ID presentation (AT+CLIP=1) for incoming call handling (Issue #113)
         self.send_cmd("AT+CLIP=1", timeout_ms=1000)
+
+        # Configure SMS event notifications / URC (AT+CNMI=2,1,0,0,0) (Issue #115)
+        # Mode 2: buffer/route URC, mt 1: route +CMTI indication when SMS received
+        ok_cnmi, _ = self.send_cmd("AT+CNMI=2,1,0,0,0", timeout_ms=1000)
+        if not ok_cnmi:
+            print("[modem] Warning: Failed to configure SMS URC notifications (AT+CNMI=2,1,0,0,0).")
 
         return True
 
@@ -801,20 +811,14 @@ class ModemDriver:
         success, _ = self.send_cmd("AT+CHUP", timeout_ms=1500)
         return success
 
-    def check_incoming_call(self) -> str | None:
-        """Check UART buffer for incoming voice call indicators (RING, +CLIP) (Issue #113).
-
-        If an incoming call is detected and call_reject_enabled is True, the call
-        is automatically rejected using AT+CHUP.
-
-        :return: Normalized caller phone number (or "" if withheld/unknown), or None if no call.
-        """
+    def _poll_urc(self) -> None:
+        """Poll UART buffer for unsolicited result codes (RING, +CLIP, +CMTI) (Issue #113, #115)."""
         if self.uart is None:
-            return None
+            return
 
         available = getattr(self.uart, "any", lambda: 0)()
         if not available:
-            return None
+            return
 
         raw_lines: list[str] = []
         start = _ticks_ms()
@@ -827,34 +831,65 @@ class ModemDriver:
             else:
                 break
 
+        # Check for SMS indication URC (+CMTI: "SM", <index>)
+        for l in raw_lines:
+            if l.startswith("+CMTI:"):
+                self._pending_sms_urc = True
+
         has_ring = any(l == "RING" or "RING" in l for l in raw_lines)
         clip_line = next((l for l in raw_lines if l.startswith("+CLIP:")), None)
 
-        if not has_ring and clip_line is None:
-            return None
+        if has_ring or clip_line is not None:
+            caller: str | None = None
+            if clip_line:
+                caller = parse_clip_header(clip_line)
 
-        caller: str | None = None
-        if clip_line:
-            caller = parse_clip_header(clip_line)
+            # If RING was received without +CLIP, wait briefly for caller ID line
+            if caller is None and has_ring:
+                clip_start = _ticks_ms()
+                while _ticks_diff(_ticks_ms(), clip_start) < 600:
+                    line = self.uart.readline()
+                    if line:
+                        decoded = line.decode("utf-8", "ignore").strip()
+                        if decoded.startswith("+CLIP:"):
+                            caller = parse_clip_header(decoded)
+                            break
+                        elif decoded.startswith("+CMTI:"):
+                            self._pending_sms_urc = True
+                    time.sleep_ms(20)
 
-        # If RING was received without +CLIP, wait briefly for caller ID line
-        if caller is None and has_ring:
-            clip_start = _ticks_ms()
-            while _ticks_diff(_ticks_ms(), clip_start) < 600:
-                line = self.uart.readline()
-                if line:
-                    decoded = line.decode("utf-8", "ignore").strip()
-                    if decoded.startswith("+CLIP:"):
-                        caller = parse_clip_header(decoded)
-                        break
-                time.sleep_ms(20)
+            # Reject call if enabled in configuration (Issue #113)
+            if self.config.get("call_reject_enabled", True):
+                self.reject_call()
+                time.sleep_ms(100)
+                self.flush_input()
 
-        # Reject call if enabled in configuration (Issue #113)
-        if self.config.get("call_reject_enabled", True):
-            self.reject_call()
-            time.sleep_ms(100)
-            self.flush_input()
+            caller_str = caller if caller is not None else ""
+            print(f"[modem] Incoming voice call detected from '{caller_str or 'unknown'}'.")
+            self._pending_callers.append(caller_str)
 
-        caller_str = caller if caller is not None else ""
-        print(f"[modem] Incoming voice call detected from '{caller_str or 'unknown'}'.")
-        return caller_str
+    def check_incoming_call(self) -> str | None:
+        """Check UART buffer for incoming voice call indicators (RING, +CLIP) (Issue #113).
+
+        If an incoming call is detected and call_reject_enabled is True, the call
+        is automatically rejected using AT+CHUP.
+
+        :return: Normalized caller phone number (or "" if withheld/unknown), or None if no call.
+        """
+        if not self._pending_callers:
+            self._poll_urc()
+        if self._pending_callers:
+            return self._pending_callers.pop(0)
+        return None
+
+    def check_incoming_sms(self) -> bool:
+        """Check UART buffer or cached event for incoming SMS indication (+CMTI) (Issue #115).
+
+        :return: True if a new SMS URC (+CMTI) has been received, False otherwise.
+        """
+        if not self._pending_sms_urc:
+            self._poll_urc()
+        if self._pending_sms_urc:
+            self._pending_sms_urc = False
+            return True
+        return False

@@ -11,7 +11,7 @@ SNIPPEN_API_TOKEN = "your-bearer-or-api-token-here"
 
 OUTBOX_POLL_INTERVAL_SEC = 5
 LONG_POLL_TIMEOUT_SEC = 25
-INBOX_CHECK_INTERVAL_SEC = 5
+INBOX_CHECK_INTERVAL_SEC = 30  # Fallback poll interval; SMS are processed immediately via +CMTI URC
 HEARTBEAT_INTERVAL_SEC = 30
 
 # Call Forwarding & Rejection (Issue #110, #113)

@@ -190,6 +190,7 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
     - Multipart messages are dispatched via `AT+CMGSEX="<recipient>",<ref>,<part>,<total>` with a shared revolving message reference, allowing receiving handsets (iOS / Android) to automatically concatenate all parts into a single seamless message.
     - If `AT+CMGSEX` is rejected by the modem, it automatically falls back to standard sequential `AT+CMGS` with configurable delay (`sms_chunk_delay_ms`).
   - **Inbound Reassembly (`InboundReassembler` & PDU mode)**:
+    - Firmware configures cellular event notifications via `AT+CNMI=2,1,0,0,0` (Issue #115) to receive immediate `+CMTI` Unsolicited Result Codes (URC) when a new SMS arrives on the SIM, triggering instant inbox processing (< 50ms) rather than relying solely on polling. A fallback poll interval (`inbox_check_interval_sec`, default 30s) acts as a safety net.
     - Firmware reads inbound SMS using 3GPP PDU mode (`AT+CMGF=0`, `AT+CMGL=4`), extracting User Data Headers (UDH, 8-bit & 16-bit reference) and unpacking GSM 7-bit septets with fill bits. This ensures 100% accurate concatenation and preserves Norwegian characters (æ, ø, å).
     - Falls back to text mode (`AT+CMGF=1`) and text indicator detection `(1/2)` if PDU mode is unsupported.
     - Buffers parts per sender in memory, reassembles complete messages in proper order, deletes raw segments immediately from SIM storage with `AT+CMGD` to prevent SIM overflow, and releases timed-out partial segments (`sms_multipart_timeout_sec`) safely.

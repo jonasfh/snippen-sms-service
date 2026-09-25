@@ -506,6 +506,19 @@ class GatewayApp:
             except Exception as exc:  # noqa: BLE001
                 print(f"[main] Error polling incoming calls: {exc}")
 
+    def poll_incoming_sms(self) -> None:
+        """Check for incoming SMS URC notifications (+CMTI) and process immediately (Issue #115)."""
+        if self.modem is not None and hasattr(self.modem, "check_incoming_sms"):
+            try:
+                if self.modem.check_incoming_sms():
+                    print(
+                        "[main] Incoming SMS notification (+CMTI) detected. Processing inbox immediately..."
+                    )
+                    self.process_inbox()
+                    self.last_inbox_check = time.time()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Error polling incoming SMS: {exc}")
+
     def heartbeat(self) -> None:
         """Log diagnostic status and perform health maintenance (Issue #53)."""
         print(f"[main] Heartbeat tick - cycle #{self.cycle_count}")
@@ -598,11 +611,12 @@ class GatewayApp:
         elif wifi is not None and wifi.is_connected():
             self.wifi_backoff_sec = 5
 
-        # Check for incoming voice calls (Issue #113)
+        # Check for incoming voice calls (Issue #113) and SMS URC notifications (Issue #115)
         self.poll_incoming_calls()
+        self.poll_incoming_sms()
 
-        # Check inbox interval
-        inbox_interval = self.config.get("inbox_check_interval_sec", 5)
+        # Check inbox fallback interval
+        inbox_interval = self.config.get("inbox_check_interval_sec", 30)
         if now - self.last_inbox_check >= inbox_interval:
             self.process_inbox()
             self.last_inbox_check = now
@@ -636,7 +650,7 @@ class GatewayApp:
                     print(f"[main] Reached max cycles ({max_cycles}). Stopping loop.")
                     break
 
-                # Sleep in 50ms slices while polling button and incoming calls for instant response
+                # Sleep in 50ms slices while polling button, voice calls, and SMS for instant response
                 prev_mode = self.is_provisioning_mode
                 for _ in range(20):
                     if not self.running:
@@ -644,6 +658,7 @@ class GatewayApp:
                     if self.button is not None:
                         self.button.poll()
                     self.poll_incoming_calls()
+                    self.poll_incoming_sms()
                     if self.is_provisioning_mode != prev_mode:
                         break
                     time.sleep(0.05)
