@@ -12,6 +12,10 @@ class MockPin:
     OUT = 1
     PULL_UP = 1
     PULL_DOWN = 2
+    IRQ_RISING = 1
+    IRQ_FALLING = 2
+    IRQ_LOW_LEVEL = 4
+    IRQ_HIGH_LEVEL = 8
 
     # Class-level pin state tracker for test assertions
     instances: ClassVar[dict[int, MockPin]] = {}
@@ -22,6 +26,8 @@ class MockPin:
         self.pin_id = pin_id
         self.mode = mode
         self.pull = pull
+        self.irq_handler: Any = None
+        self.irq_trigger: Any = None
         if value is not None:
             self._value = value
         elif pull == MockPin.PULL_UP:
@@ -30,6 +36,15 @@ class MockPin:
             self._value = 0
         self.value_history: list[int] = [self._value]
         MockPin.instances[pin_id] = self
+
+    def irq(self, handler: Any = None, trigger: Any = None) -> Self:
+        self.irq_handler = handler
+        self.irq_trigger = trigger
+        return self
+
+    def trigger_irq(self) -> None:
+        if callable(self.irq_handler):
+            self.irq_handler(self)
 
     def value(self, val: int | None = None) -> int:
         if val is not None:

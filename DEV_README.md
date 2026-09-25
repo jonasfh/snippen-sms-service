@@ -20,7 +20,7 @@ snippen-sms-service/
 ├── firmware/                 # MicroPython standalone gateway firmware
 │   ├── ble_config.py         # Bluetooth Low Energy (BLE) GATT provisioning server
 │   ├── boot.py               # Hardware init, modem power rail & UART1 configuration
-│   ├── button.py             # BOOT button (GPIO 0) debounced input & long-press handler
+│   ├── button.py             # BOOT button (GPIO 0) debounced input with hardware IRQ support
 │   ├── config.py             # Hardware pinouts, timers & API settings
 │   ├── config.example.py     # Local config overrides template
 │   ├── logger.py             # In-memory circular log buffer & stdout/stderr stream redirector

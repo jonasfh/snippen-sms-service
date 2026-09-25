@@ -24,16 +24,19 @@ def _extract_js_constant(js_content: str, const_name: str) -> str:
     return match.group(1)
 
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+JS_PATH = REPO_ROOT / "tools" / "web-config" / "js" / "ble.js"
+
+
 def test_ble_web_config_file_exists() -> None:
     """Ensure tools/web-config/js/ble.js exists and is accessible."""
-    js_path = Path("tools/web-config/js/ble.js")
-    assert js_path.is_file(), f"File {js_path} does not exist"
-    assert js_path.stat().st_size > 0
+    assert JS_PATH.is_file(), f"File {JS_PATH} does not exist"
+    assert JS_PATH.stat().st_size > 0
 
 
 def test_ble_uuid_constants_synchronized() -> None:
     """Verify that GATT Service and Characteristic UUIDs in JS match firmware."""
-    js_content = Path("tools/web-config/js/ble.js").read_text(encoding="utf-8")
+    js_content = JS_PATH.read_text(encoding="utf-8")
 
     js_service_uuid = _extract_js_constant(js_content, "SERVICE_UUID")
     js_char_config = _extract_js_constant(js_content, "CHAR_CONFIG_UUID")
@@ -50,7 +53,7 @@ def test_ble_uuid_constants_synchronized() -> None:
 
 def test_ble_commands_synchronized() -> None:
     """Verify that all commands handled by firmware are present in ble.js."""
-    js_content = Path("tools/web-config/js/ble.js").read_text(encoding="utf-8")
+    js_content = JS_PATH.read_text(encoding="utf-8")
 
     expected_commands = [
         "SCAN_WIFI",

@@ -226,3 +226,100 @@ def test_button_no_pin_handled_gracefully(mpy_env: MicroPythonEnvironment) -> No
     handler.pin = None
     assert handler.is_down() is False
     assert handler.poll() is None
+
+
+def test_button_hardware_irq_attached_and_triggered(mpy_env: MicroPythonEnvironment) -> None:
+    import button
+
+    mock_pin = MockPin(pin_id=0, value=1)
+    press_count = 0
+
+    def on_press() -> None:
+        nonlocal press_count
+        press_count += 1
+
+    handler = button.ButtonHandler(
+        pin=mock_pin,
+        debounce_ms=50,
+        on_press=on_press,
+        enable_irq=True,
+    )
+
+    assert mock_pin.irq_handler is not None
+    assert mock_pin.irq_trigger == MockPin.IRQ_FALLING
+
+    # Trigger hardware interrupt directly
+    mock_pin.trigger_irq()
+    assert handler._irq_triggered is True
+
+    # Next poll consumes interrupt event and invokes callback
+    evt = handler.poll()
+    assert evt == "press"
+    assert press_count == 1
+    assert handler._irq_triggered is False
+
+
+def test_button_hardware_irq_catches_quick_press_during_blocking_work(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    """Verify that a brief click during simulated network blocking is captured."""
+    import button
+
+    mock_pin = MockPin(pin_id=0, value=1)
+    press_count = 0
+
+    def on_press() -> None:
+        nonlocal press_count
+        press_count += 1
+
+    handler = button.ButtonHandler(
+        pin=mock_pin,
+        debounce_ms=50,
+        on_press=on_press,
+        enable_irq=True,
+    )
+
+    # User clicks button briefly (pin falls low, IRQ fires, pin releases high)
+    mock_pin.value(0)
+    mock_pin.trigger_irq()
+    mock_pin.value(1)  # Released before CPU ever ran poll()
+
+    # CPU returns from blocking call seconds later and runs poll()
+    evt = handler.poll()
+    assert evt == "press"
+    assert press_count == 1
+
+
+def test_button_hardware_irq_debounced(mpy_env: MicroPythonEnvironment) -> None:
+    """Verify rapid glitch interrupts within debounce_ms window are debounced."""
+    import button
+
+    mock_pin = MockPin(pin_id=0, value=1)
+    press_count = 0
+
+    def on_press() -> None:
+        nonlocal press_count
+        press_count += 1
+
+    handler = button.ButtonHandler(
+        pin=mock_pin,
+        debounce_ms=50,
+        on_press=on_press,
+        enable_irq=True,
+    )
+
+    # First IRQ at t=0
+    mock_pin.trigger_irq()
+    assert handler._irq_triggered is True
+
+    # Rapid glitch IRQs within 10ms
+    mock_pin.trigger_irq()
+    mock_pin.trigger_irq()
+
+    # Consume
+    assert handler.poll() == "press"
+    assert press_count == 1
+
+    # Immediate subsequent poll without new valid IRQ yields None
+    assert handler.poll() is None
+    assert press_count == 1
