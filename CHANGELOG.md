@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.14] - 2026-09-25
+
+### Added
+- Hardware interrupt (`Pin.irq`) support for BOOT button (GPIO 0) (`#117`):
+  - In `firmware/button.py`:
+    - Configured hardware interrupt with `Pin.irq(trigger=Pin.IRQ_FALLING, ...)` on the BOOT button for instant, zero-delay press detection.
+    - Implemented zero-allocation ISR (`_on_irq`) with hardware debounce timing to comply with MicroPython hard-ISR constraints.
+    - Added scheduled dispatch via `micropython.schedule()` and flag-based fallback so presses occurring during blocking TLS/HTTPS network calls are never missed.
+    - Maintained full backward compatibility with polling-based workflows.
+  - In `tests/mocks/micropython_mocks.py`:
+    - Added IRQ trigger constants and `MockPin.irq()` / `MockPin.trigger_irq()` simulation.
+  - In `tests/test_firmware_button.py`:
+    - Added unit tests for hardware interrupt registration, debouncing, and detection of brief button presses during simulated blocking execution.
+
 ## [0.31.13] - 2026-09-25
 
 ### Added
