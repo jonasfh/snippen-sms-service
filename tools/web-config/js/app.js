@@ -196,7 +196,7 @@ async function loadActiveConfig() {
     if (cfg.outbox_poll_interval_sec) {
       pollInterval.value = cfg.outbox_poll_interval_sec;
     }
-    if (cfg.inbox_check_interval_sec) {
+    if (cfg.inbox_check_interval_sec && inboxInterval) {
       inboxInterval.value = cfg.inbox_check_interval_sec;
     }
     if (cfg.call_forwarding_number !== undefined) {
@@ -466,13 +466,11 @@ btnApplyExit.addEventListener('click', async () => {
   const url = apiBaseUrl.value.trim();
   const token = apiToken.value.trim();
   const outboxSec = parseInt(pollInterval.value, 10) || 5;
-  const inboxSec = parseInt(inboxInterval.value, 10) || 5;
 
   const payload = {
     wifi_ssid: ssid,
     snippen_api_base_url: url,
     outbox_poll_interval_sec: outboxSec,
-    inbox_check_interval_sec: inboxSec,
     call_forwarding_number: callForwardingNumber.value.trim(),
     call_forwarding_enabled: callForwardingEnabled.checked,
     call_reject_enabled: callRejectEnabled.checked,
@@ -481,6 +479,10 @@ btnApplyExit.addEventListener('click', async () => {
     call_reply_caller_enabled: callReplyCallerEnabled.checked,
     call_reply_caller_text: callReplyCallerText.value.trim(),
   };
+
+  if (inboxInterval) {
+    payload.inbox_check_interval_sec = parseInt(inboxInterval.value, 10) || 30;
+  }
 
   // Only send password if entered
   if (password) {

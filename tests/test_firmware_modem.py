@@ -1073,3 +1073,84 @@ def test_check_incoming_call_none_when_empty(mpy_env: MicroPythonEnvironment) ->
     uart = MockUART(1)
     driver = ModemDriver(uart=uart)
     assert driver.check_incoming_call() is None
+
+
+def test_init_modem_configures_cnmi_urc(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    commands_received: list[str] = []
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        commands_received.append(cmd)
+        if cmd == "AT+CPIN?":
+            return b"+CPIN: READY\r\nOK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"call_forwarding_enabled": False})
+    ok = driver.init_modem()
+    assert ok is True
+    assert "AT+CNMI=2,1,0,0,0" in commands_received
+
+
+def test_check_incoming_sms_indication_detected(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    driver = ModemDriver(uart=uart)
+
+    uart.feed_read(b'+CMTI: "SM", 1\r\n')
+    assert driver.check_incoming_sms() is True
+    # Subsequent call should return False since notification was consumed
+    assert driver.check_incoming_sms() is False
+
+
+def test_check_incoming_sms_none_when_empty(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    driver = ModemDriver(uart=uart)
+    assert driver.check_incoming_sms() is False
+
+
+def test_urc_demux_incoming_call_and_sms(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+
+    def responder(data: bytes) -> bytes | None:
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"call_reject_enabled": False})
+
+    # Feed both SMS indication and voice call URC into UART
+    uart.feed_read(b'+CMTI: "SM", 3\r\nRING\r\n+CLIP: "+4792830575",145\r\n')
+
+    # Calling check_incoming_call should demux and find the caller
+    caller = driver.check_incoming_call()
+    assert caller == "+4792830575"
+
+    # Calling check_incoming_sms should also find the SMS URC that was buffered
+    assert driver.check_incoming_sms() is True
+
+
+def test_cmti_captured_during_command_response(mpy_env: MicroPythonEnvironment) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+
+    def responder(data: bytes) -> bytes | None:
+        cmd = data.decode("utf-8", errors="ignore").strip()
+        if cmd == "AT":
+            return b'AT\r\n+CMTI: "SM", 5\r\nOK\r\n'
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart)
+
+    success, _ = driver.send_cmd("AT")
+    assert success is True
+    assert driver.check_incoming_sms() is True

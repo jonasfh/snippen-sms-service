@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.13] - 2026-09-25
+
+### Added
+- Event-driven inbound SMS via `AT+CNMI` URC and simplified Web Configurator interface (`#115`):
+  - In `firmware/modem.py`:
+    - Configured cellular modem SMS event notifications with `AT+CNMI=2,1,0,0,0` during `init_modem()`.
+    - Added `_poll_urc()` to reliably demultiplex voice call URC (`RING`, `+CLIP`) and incoming SMS indications (`+CMTI:`) from UART streams without dropping events.
+    - Added `check_incoming_sms()` to detect `+CMTI` notifications and trigger instant processing.
+    - Captured asynchronous `+CMTI` indications received during active AT command responses.
+  - In `firmware/main.py`:
+    - Added `poll_incoming_sms()` to check for incoming SMS indications and trigger `process_inbox()` immediately (<50ms response time).
+    - Integrated `poll_incoming_sms()` into `tick()` and the 50ms fast sleep loop.
+    - Updated `inbox_check_interval_sec` default to 30 seconds as a fallback safety net.
+  - In `tools/web-config/`:
+    - Removed `inbox-interval` input field from `index.html` to eliminate confusing configuration for end users.
+    - Clarified `poll-interval` label and helper text for outbox polling.
+    - Updated `tools/web-config/js/app.js` to handle optional `inbox-interval` cleanly.
+  - In `docs/architecture.md` and `DEV_README.md`:
+    - Documented event-driven inbound SMS architecture, `+CMTI` URC handling, and fallback polling timers.
+
 ## [0.31.12] - 2026-09-24
 
 ### Added

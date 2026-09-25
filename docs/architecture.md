@@ -248,7 +248,7 @@ flowchart TD
 4. **Service Restart Resilience**: Any pending outbox messages persist across gateway restarts and will be processed once the service restarts and the SMS provider is available.
 
 ### Inbox Ingestion & Handling
-1. **Provider Polling**: The gateway periodically polls the SMS provider (`SmsProvider.receive_sms()`) via `GatewayService.poll_incoming_messages()` (or `process_inbox()`).
+1. **Event-Driven & Polling Ingestion**: In the microcontroller firmware, the cellular modem is configured via `AT+CNMI=2,1,0,0,0` to emit `+CMTI` Unsolicited Result Codes (URC) immediately when an SMS is received, triggering instant (<50ms) retrieval and forwarding without waiting for a timer. A fallback interval (`inbox_check_interval_sec`, default 30s) provides resilience. In the Python gateway, periodic polling (`SmsProvider.receive_sms()`) via `GatewayService.poll_incoming_messages()` is supported.
 2. **Deduplication**: Incoming messages are deduplicated against existing database records via `provider_message_id` / `modem_message_id` to prevent ingesting or processing duplicate deliveries.
 3. **Local Persistence**: Each unique inbound SMS is immediately persisted into the local SQLite database with `direction=inbound`, `status=received`, timestamp, and provider identifiers.
 4. **Unprocessed Message Distinction**: Downstream systems can query unhandled incoming messages via `GatewayService.get_unprocessed_inbox()` (or `MessageStorage.get_unprocessed_inbox()`) and transition them to `PROCESSED` using `mark_inbox_processed(message_id)`.
