@@ -81,3 +81,67 @@ def test_mask_token_parity() -> None:
     ]
     for raw, expected in test_cases:
         assert mask_token(raw) == expected
+
+
+def test_default_call_texts_synchronized() -> None:
+    """Verify that default call reply/notification texts match between firmware and app.js (Issue #121)."""
+    from firmware.ble_config import (
+        DEFAULT_CALL_NOTIFY_ADMIN_TEXT,
+        DEFAULT_CALL_REPLY_CALLER_TEXT,
+    )
+
+    app_js_path = REPO_ROOT / "tools" / "web-config" / "js" / "app.js"
+    app_js_content = app_js_path.read_text(encoding="utf-8")
+
+    # Verify constants are defined in app.js
+    assert DEFAULT_CALL_REPLY_CALLER_TEXT in app_js_content
+    assert DEFAULT_CALL_NOTIFY_ADMIN_TEXT in app_js_content
+
+
+def test_write_config_chunking_contract() -> None:
+    """Verify that config object chunking keeps each write payload <= 400 bytes (Issue #121)."""
+    import json
+
+    full_config = {
+        "wifi_ssid": "Snippen-Long-Network-Name-12345",
+        "wifi_password": "super-long-wifi-wpa2-psk-passphrase-value",
+        "snippen_api_base_url": "https://vestreholmensameie.no/wp-json/snippen/v1/sms",
+        "snippen_api_token": "snip_tok_abcdefghijklmnopqrstuvwxyz0123456789",
+        "outbox_poll_interval_sec": 5,
+        "inbox_check_interval_sec": 30,
+        "call_forwarding_number": "+4792830575",
+        "call_forwarding_enabled": True,
+        "call_reject_enabled": True,
+        "call_notify_admin_enabled": True,
+        "call_notify_admin_text": "Egendefinert varseltekst til administrator om ubesvart anrop fra {caller}.",
+        "call_reply_caller_enabled": True,
+        "call_reply_caller_text": (
+            "Egendefinert lang autosvartekst til innringer som overskrider standardlengden "
+            "og tester at oppdelingen i mindre GATT-pakker fungerer uten feil under lagring."
+        ),
+    }
+
+    # Simulate chunking logic from ble.js
+    chunks: list[dict] = []
+    current_chunk: dict = {}
+    for k, v in full_config.items():
+        test_chunk = {**current_chunk, k: v}
+        encoded = json.dumps(test_chunk).encode("utf-8")
+        if len(encoded) > 400 and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = {k: v}
+        else:
+            current_chunk[k] = v
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Every chunk must be <= 400 bytes, well within GATT 512-byte limit
+    for chunk in chunks:
+        payload_len = len(json.dumps(chunk).encode("utf-8"))
+        assert payload_len <= 400, f"Chunk exceeded 400 bytes: {payload_len}"
+
+    # Merging all chunks together must reconstruct the full configuration
+    merged = {}
+    for chunk in chunks:
+        merged.update(chunk)
+    assert merged == full_config

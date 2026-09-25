@@ -4,6 +4,11 @@
 
 import { SnippenBLEClient, MockSnippenBLEClient, isWebBluetoothSupported } from './ble.js';
 
+export const DEFAULT_CALL_REPLY_CALLER_TEXT =
+  'Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. Send SMS eller ring leieansvarlig på 92830575.';
+export const DEFAULT_CALL_NOTIFY_ADMIN_TEXT =
+  'Ubesvart anrop til Snippen SMS-gateway fra {caller}.';
+
 // Register Service Worker for PWA support
 if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
@@ -479,10 +484,18 @@ btnApplyExit.addEventListener('click', async () => {
     call_forwarding_enabled: callForwardingEnabled.checked,
     call_reject_enabled: callRejectEnabled.checked,
     call_notify_admin_enabled: callNotifyAdminEnabled.checked,
-    call_notify_admin_text: callNotifyAdminText.value.trim(),
     call_reply_caller_enabled: callReplyCallerEnabled.checked,
-    call_reply_caller_text: callReplyCallerText.value.trim(),
   };
+
+  const adminText = callNotifyAdminText.value.trim();
+  if (adminText && adminText !== DEFAULT_CALL_NOTIFY_ADMIN_TEXT) {
+    payload.call_notify_admin_text = adminText;
+  }
+
+  const callerText = callReplyCallerText.value.trim();
+  if (callerText && callerText !== DEFAULT_CALL_REPLY_CALLER_TEXT) {
+    payload.call_reply_caller_text = callerText;
+  }
 
   if (inboxInterval) {
     payload.inbox_check_interval_sec = parseInt(inboxInterval.value, 10) || 30;
