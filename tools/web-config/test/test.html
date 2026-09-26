@@ -119,6 +119,15 @@
         assert(decoded.wifi_ssid === 'TestSSID', 'Decoded SSID mismatch');
         assert(decoded.rssi === -45, 'Decoded RSSI mismatch');
         assert(decoded.active === true, 'Decoded boolean mismatch');
+
+        // Verify DataView and ArrayBuffer inputs decode identically
+        const dv = new DataView(encoded.buffer, encoded.byteOffset, encoded.byteLength);
+        const fromDv = decodeJson(dv);
+        assert(fromDv.wifi_ssid === 'TestSSID', 'DataView SSID mismatch');
+
+        const ab = encoded.buffer;
+        const fromAb = decodeJson(ab);
+        assert(fromAb.wifi_ssid === 'TestSSID', 'ArrayBuffer SSID mismatch');
       });
 
       await runTest('isWebBluetoothSupported returns boolean', () => {

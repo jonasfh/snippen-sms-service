@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.17] - 2026-09-25
+
+### Fixed
+- Fixed `TypeError` in `decodeJson` when decoding `Uint8Array` / `BufferSource` (`#123`):
+  - In `tools/web-config/js/ble.js`:
+    - Updated `decodeJson(buffer)` to decode any `BufferSource` (`Uint8Array`, `ArrayBuffer`, `DataView`) or `string` directly with `new TextDecoder('utf-8').decode(buffer)`.
+    - Removed invalid `new DataView(buffer)` constructor invocation on `Uint8Array` objects which triggered `TypeError: First argument to DataView constructor must be an ArrayBuffer`.
+  - In `tools/web-config/test/test.html`:
+    - Verified `encodeJson` and `decodeJson` bijection across `Uint8Array`, `DataView`, and `ArrayBuffer`.
+  - In `tests/test_web_config_contract.py`:
+    - Added contract test ensuring `decodeJson` handles all `BufferSource` inputs without throwing.
+
 ## [0.31.16] - 2026-09-25
 
 ### Fixed

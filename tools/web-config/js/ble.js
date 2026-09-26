@@ -43,13 +43,15 @@ export function encodeJson(obj) {
 }
 
 /**
- * Decode a DataView or ArrayBuffer to a parsed JSON object.
- * @param {DataView|ArrayBuffer} buffer
+ * Decode a DataView, ArrayBuffer, TypedArray, or string to a parsed JSON object.
+ * @param {DataView|ArrayBuffer|Uint8Array|string} buffer
  * @returns {any}
  */
 export function decodeJson(buffer) {
-  const dataView = buffer instanceof DataView ? buffer : new DataView(buffer);
-  const text = new TextDecoder('utf-8').decode(dataView);
+  if (typeof buffer === 'string') {
+    return JSON.parse(buffer);
+  }
+  const text = new TextDecoder('utf-8').decode(buffer);
   return JSON.parse(text);
 }
 

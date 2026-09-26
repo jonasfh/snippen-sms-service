@@ -145,3 +145,15 @@ def test_write_config_chunking_contract() -> None:
     for chunk in chunks:
         merged.update(chunk)
     assert merged == full_config
+
+
+def test_decode_json_supports_buffersource() -> None:
+    """Verify that decodeJson implementation in ble.js decodes BufferSource directly without invalid DataView constructor calls (Issue #123)."""
+    js_content = JS_PATH.read_text(encoding="utf-8")
+
+    # Ensure decodeJson does not instantiate new DataView(buffer) unconditionally
+    # which throws TypeError if buffer is a Uint8Array or other TypedArray
+    assert "new DataView(buffer)" not in js_content, (
+        "decodeJson should not pass arbitrary buffers directly to new DataView(buffer)"
+    )
+    assert "new TextDecoder('utf-8').decode(buffer)" in js_content
