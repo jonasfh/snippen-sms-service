@@ -3,26 +3,17 @@
 ## Purpose
 Guide AI agents working in this repository.
 
-## Key Rules & Guidelines
+## Project-Specific Configuration
 
-- **Python Standards & Best Practices**: Use Python 3.14+. Project source code resides in `src/snippen_sms/` (or `snippen_sms/`). In Dev Containers, the virtual environment is maintained at `/home/vscode/.venv` (outside `/workspaces/snippen-sms-service`) to prevent host/container `.venv` collisions.
-- **Testing & Quality Control**:
-  - Always write `pytest` unit/integration tests for new functionality and update existing tests when modifying functionality.
-  - Run linting (`ruff check .` / `flake8`) and tests (`pytest`) before completing a task. Resolving all linting errors and warnings is mandatory.
-  - Run pytest/ruff via `/home/vscode/.venv/bin/pytest` or `/home/vscode/.venv/bin/ruff check .` (or system/container tools).
-  - **Frontend / Web Config Testing (`tools/web-config/`)**: When developing exclusively on frontend/web assets (HTML, CSS, JavaScript in `tools/web-config/`), running the full Python test suite (`pytest`) is NOT required during iterative development unless Python files are modified. Run the targeted contract test (`pytest tests/test_web_config_contract.py`) when GATT characteristics or contract definitions change.
-- **Database Rules**: Always include `created_at` and `modified_at` timestamps on database models and custom database tables.
-- **GitHub Issue Workflow**: All development MUST follow an associated GitHub Issue or direct Code Scanning / Dependabot alert IDs. Create branches like `gh-issue/<id>`, `dep-<ids>-fix-dependabot-issues`, or `sec-<ids>-fix-code-scanning-issues`, create PRs, and format commit messages accordingly (`(#<id>) Description` or `(sec-<ids>) Description` / `(dep-<ids>) Description`). Commits within the submodule referencing an issue in this repository must use the full reference `(jonasfh/snippen-sms-service#<id>) Description`.
-- **Formatting & Whitespace Hygiene**: Routinely run the repository formatter (`python scripts/format.py`) after creating or editing files and always before committing. All project files (Python, Markdown, JSON, YAML, TOML, etc.) must have:
-  - Trailing whitespaces stripped.
-  - A single newline (`\n`) at the end of the file.
-  - Duplicate/excess trailing newlines removed.
-- **PR Merging Strategy**: When merging PRs, ALWAYS use **Rebase and merge** (`gh pr merge <id> --rebase --delete-branch`) by default. If rebasing issues or conflicts arise, create a standard merge commit (`gh pr merge <id> --merge --delete-branch`). Do NOT use squash and merge (`--squash`) unless explicitly instructed or required for a specific reason.
-- **Documentation**: Always update documentation (`README.md`, `DEV_README.md`, `docs/`, and architecture documents) whenever implementing new features, endpoints, data models, or database schemas. Keeping documentation in sync with the codebase is mandatory.
+- **Python Version**: Python 3.14+
+- **Source Code**: `src/snippen_sms/`
+- **Dev Container Virtual Environment**: `/home/vscode/.venv` (outside workspace to prevent collisions)
+- **SMS Provider Backends**: `mock`, `memory`, `fake` (HTTP-based), and `http`
+- **Frontend Testing**: `tools/web-config/` (optional; run `pytest tests/test_web_config_contract.py` when BLE contract changes)
 
 ## Self-Improvement & Environment Adaptation
-- **Continuous Agent Guideline Updates**: Whenever an agent experiences friction, environment errors (e.g., sandbox network access for `gh` CLI commands requiring `BypassSandbox: true`, missing CLI tools, unusual log locations, or git ref locks), the agent MUST update `AGENTS.md` and `.agents/` (or `.agents/common-agent-instructions/`) modular guidelines with the discovered workaround or instructions so subsequent agent sessions execute cleanly without repeating trial-and-error.
-- **Dev Container Virtual Environment**: To avoid host OS workspace `.venv` files breaking container execution, Dev Container virtualenvs are located outside the workspace at `/home/vscode/.venv` (configured in `.devcontainer/devcontainer.json` via `python.defaultInterpreterPath`).
+
+Whenever an agent experiences friction or environment errors (e.g., sandbox network issues for `gh` CLI, missing tools, unusual log locations, git ref locks), update `AGENTS.md` and `.agents/` modular guidelines with workarounds so subsequent sessions execute cleanly.
 
 ## Modular Sub-guidelines
 
@@ -31,6 +22,13 @@ Guide AI agents working in this repository.
 - 📝 **[Documentation Standards & Diagrams](file:///.agents/common-agent-instructions/DOCUMENTATION.md)**: Documentation synchronization, README/DEV_README maintenance, and Mermaid syntax rules.
 - 🧪 **[Quality & Testing Principles](file:///.agents/common-agent-instructions/TESTING.md)**: Automated test requirements, zero-linting policy, and formatting hygiene.
 - 📐 **[Common Architecture](file:///.agents/common-agent-instructions/ARCHITECTURE.md)**: Modularity, decoupling, and universal database timestamp rules.
+
+### Python-Specific Submodule Guidelines
+- 🛠️ **[Python Environment & Tooling](file:///.agents/python-agent-instructions/PYTHON_ENVIRONMENT_AND_TOOLING.md)**: Virtual environment management (`uv`, `poetry`, `venv`), dependency locking via `pyproject.toml`, and code formatting with `ruff`.
+- 🏷️ **[Python Typing & Style](file:///.agents/python-agent-instructions/PYTHON_TYPING_AND_STYLE.md)**: Strict type hints (PEP 484/585/604), Pydantic v2 & dataclasses, zero dynamic `Any`.
+- 🧪 **[Python Testing & QA](file:///.agents/python-agent-instructions/PYTHON_TESTING.md)**: Unit/integration testing with `pytest`, async patterns (`pytest-asyncio`), test isolation, and static type checking.
+- 📐 **[Python Architecture](file:///.agents/python-agent-instructions/PYTHON_ARCHITECTURE.md)**: Async programming (`asyncio`), `src/` layout, modularity, explicit interfaces, and deterministic execution.
+- 📝 **[Python Documentation](file:///.agents/python-agent-instructions/PYTHON_DOCUMENTATION.md)**: Google-style docstrings (PEP 257), type hints as documentation, and sync rules.
 
 ### Project-Specific Guidelines
 - 🐍 **[Project Architecture & Tech Stack](file:///.agents/ARCHITECTURE.md)**: Python tech stack, directory structure, module layout, and async I/O.
