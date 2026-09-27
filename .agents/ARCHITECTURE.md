@@ -2,7 +2,7 @@
 
 ## Tech Stack & Environment
 - **Python**: 3.14+ (Dev Container virtualenv located at `/home/vscode/.venv` outside workspace)
-- **Framework / Service**: FastAPI / Python Async SMS Service
+- **Framework / Service**: Python Async SMS Service
 - **Dependency & Package Management**: `pyproject.toml` (pip / uv / poetry)
 - **Module Structure**: `src/snippen_sms/`
 
@@ -11,25 +11,33 @@
 ```
 snippen-sms-service/
 ├── .devcontainer/                    # Dev Container configuration for Python 3.14
-├── .agents/                          # Project-specific agent instructions
-│   ├── ARCHITECTURE.md               # Python architecture & directory layout
-│   ├── TESTING.md                    # Python pytest/ruff commands
-│   └── common-agent-instructions/    # Submodule: common technology-agnostic instructions
+├── .agents/                          # Agent guidelines
+│   ├── ARCHITECTURE.md               # This file - Python architecture overview
+│   ├── TESTING.md                    # Project-specific testing & quality commands
+│   ├── python-agent-instructions/    # Submodule: Python-specific standards
+│   └── common-agent-instructions/    # Submodule: Common technology-agnostic standards
+├── docs/                             # System documentation & architecture guides
+├── firmware/                         # MicroPython standalone gateway firmware
+├── scripts/                          # Development & formatting utilities
 ├── src/
 │   └── snippen_sms/                  # Python application package
-│       ├── __init__.py               # Version declaration
-│       └── main.py                   # Service entry point
 ├── tests/                            # pytest test suite
-│   ├── conftest.py                   # pytest fixtures
-│   └── test_main.py                  # Unit tests
+├── tools/                            # Companion configuration and testing tools
 ├── pyproject.toml                    # Dependencies and tools configuration
 ├── README.md                         # User documentation
 ├── DEV_README.md                     # Developer documentation
-└── CHANGELOG.md                      # Project history
+├── CHANGELOG.md                      # Project history
+└── Dockerfile                        # Production container image (Python 3.14-slim)
 ```
 
 ## Python-Specific Architectural Rules
-- **Modular & Testable**: Keep application logic modular, decoupled from framework-specific handlers where practical.
-- **Database Tables**: Always include `created_at` and `modified_at` timestamp columns on database models (see [Common Architecture Standards](file:///.agents/common-agent-instructions/ARCHITECTURE.md)).
-- **Type Annotations**: Use Python type hints (`typing`) across all new classes and functions.
-- **Async & I/O**: Use async/await for network or SMS provider integrations where applicable.
+
+Refer to [Python Architecture Standards](file:///.agents/python-agent-instructions/PYTHON_ARCHITECTURE.md) for:
+- Asynchronous programming (`asyncio`) patterns
+- `src/` layout conventions
+- Modularity and decoupling principles
+- Explicit interfaces and deterministic execution
+
+Also see [Common Architecture Standards](file:///.agents/common-agent-instructions/ARCHITECTURE.md) for:
+- Modularity principles
+- Database timestamp requirements (`created_at`, `modified_at`)

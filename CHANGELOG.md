@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.18] - 2026-09-27
+
+### Changed
+- Refactored agent guidelines structure for consistency:
+  - Added `python-agent-instructions` as a git submodule with comprehensive Python-specific standards (environment, typing, testing, architecture, documentation)
+  - Consolidated `AGENTS.md` to reference modular guidelines and eliminate redundant documentation
+  - Updated `.agents/ARCHITECTURE.md` and `.agents/TESTING.md` to link to Python standards instead of duplicating content
+  - Project-specific guidelines now focus only on SMS service context while leveraging shared Python and common standards
+
 ## [0.31.17] - 2026-09-25
 
 ### Fixed
