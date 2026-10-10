@@ -103,3 +103,65 @@ def test_load_config_dot_local_file(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     loaded = config.load_config(str(tmp_path / "non_existent.json"))
     assert loaded["wifi_ssid"] == "Dot-Local-WiFi"
     assert loaded["long_poll_timeout_sec"] == 50
+
+
+def test_board_profiles_catalog() -> None:
+    assert "lilygo_t_call_a7670e" in config.BOARD_PROFILES
+    profile = config.BOARD_PROFILES["lilygo_t_call_a7670e"]
+    assert profile["pin_modem_power"] == 12
+    assert profile["pin_modem_reset"] == 5
+    assert profile["pin_modem_pwrkey"] == 4
+    assert profile["pin_modem_tx"] == 26
+    assert profile["pin_modem_rx"] == 25
+    assert profile["pin_boot_button"] == 0
+    assert profile["modem_uart_id"] == 1
+    assert profile["modem_baudrate"] == 115200
+
+
+def test_get_default_config_board_profile() -> None:
+    cfg = config.get_default_config()
+    assert cfg["board_profile"] == "lilygo_t_call_a7670e"
+    assert cfg["pin_modem_power"] == 12
+
+    # Fallback when unknown profile is specified
+    cfg_unknown = config.get_default_config("non_existent_profile")
+    assert cfg_unknown["board_profile"] == "lilygo_t_call_a7670e"
+
+
+def test_load_config_with_board_profile_in_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "config_local", None)
+    monkeypatch.chdir(tmp_path)
+    json_path = tmp_path / "test_config.json"
+    data = {
+        "board_profile": "lilygo_t_call_a7670e",
+        "wifi_ssid": "Test-WiFi",
+    }
+    json_path.write_text(json.dumps(data), encoding="utf-8")
+
+    loaded = config.load_config(str(json_path))
+    assert loaded["board_profile"] == "lilygo_t_call_a7670e"
+    assert loaded["wifi_ssid"] == "Test-WiFi"
+    assert loaded["pin_modem_power"] == 12
+
+
+def test_load_config_with_board_profile_in_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_local = types.ModuleType("config_local")
+    fake_local.BOARD_PROFILE = "lilygo_t_call_a7670e"  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "config_local", fake_local)
+
+    non_existent = tmp_path / "non_existent.json"
+    loaded = config.load_config(str(non_existent))
+    assert loaded["board_profile"] == "lilygo_t_call_a7670e"
+
+
+def test_save_config_persists_board_profile(tmp_path: Path) -> None:
+    json_path = tmp_path / "config.json"
+    success = config.save_config({"board_profile": "lilygo_t_call_a7670e"}, str(json_path))
+    assert success is True
+    saved = json.loads(json_path.read_text(encoding="utf-8"))
+    assert saved["board_profile"] == "lilygo_t_call_a7670e"

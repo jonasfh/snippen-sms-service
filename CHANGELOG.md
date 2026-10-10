@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.19] - 2026-10-10
+
+### Added
+- Firmware OTA Fase 1: Maskinvareprofiler og versjonsstyring (`#127`):
+  - Innført `firmware/version.py` med eksplisitt `FIRMWARE_VERSION` synkronisert mot pakkens `__version__`.
+  - Utvidet `firmware/config.py` med kartotek over maskinvareprofiler (`BOARD_PROFILES`), med standardprofil `lilygo_t_call_a7670e` for produksjon.
+  - Støtte for `board_profile` i `config.json` og `config_local.py`, med automatisk oppslag og fallback til standardprofil.
+  - Eksponert `firmware_version` og `board_profile` i telemetristatus (`get_telemetry_status()`) over BLE GATT og i `safe_cfg`.
+  - Oppdatert Web Bluetooth-konfiguratoren (`tools/web-config`) med visning av aktiv maskinvareprofil og firmwareversjon i telemetrikortet.
+  - Lagt til validering av firmware-versjonssynkronisering i `scripts/validate_pr.py`.
+
 ## [0.31.18] - 2026-09-27
 
 ### Changed

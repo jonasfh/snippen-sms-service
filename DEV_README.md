@@ -217,6 +217,19 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
     - Sends an automated SMS reply to the caller informing them that the line is an automated SMS gateway for Snippen Booking.
     - Built-in 30-second debounce prevents notification storms from repeated attempts.
   - **BLE Web Configurator Support**: All parameters (forwarding enable, target number, call reject toggle, admin alert toggle, caller reply toggle, and custom SMS message templates) are configurable wirelessly via the Web Configurator (PWA) and persisted in `config.json`.
+- **Hardware Profiles & Versioning (`firmware/version.py` & `firmware/config.py`)**:
+  - **Version Source**: `firmware/version.py` defines `FIRMWARE_VERSION`, which is synchronized with `src/snippen_sms/__init__.py` and validated by CI (`scripts/validate_pr.py`).
+  - **Board Profiles (`BOARD_PROFILES`)**: Supported boards and their respective GPIO mappings and timings are centralized in `firmware/config.py`:
+    - `lilygo_t_call_a7670e` (default production profile):
+      - `pin_modem_power`: GPIO 12 (VCC power rail)
+      - `pin_modem_reset`: GPIO 5
+      - `pin_modem_pwrkey`: GPIO 4
+      - `pin_modem_tx`: GPIO 26
+      - `pin_modem_rx`: GPIO 25
+      - `pin_boot_button`: GPIO 0
+      - `modem_uart_id`: UART 1 (115200 baud)
+  - **Setting Board Profile**: Specify `"board_profile": "lilygo_t_call_a7670e"` in `config.json` or `config_local.py`.
+  - **Telemetry Exposure**: Active `firmware_version` and `board_profile` are reported in real-time via `get_telemetry_status()` over BLE GATT and displayed on the Web Configurator (`tools/web-config`).
 
 ## CI/CD Workflows
 

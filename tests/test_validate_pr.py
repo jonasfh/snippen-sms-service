@@ -91,3 +91,24 @@ def test_check_formatting_hygiene_duplicate_eof_newline(tmp_path: Path):
 
     with pytest.raises(ValueError, match="duplicate trailing newlines at end of file"):
         validate_pr.check_formatting_hygiene(tmp_path)
+
+
+def test_check_firmware_version_sync_matching(tmp_path: Path):
+    fw_dir = tmp_path / "firmware"
+    fw_dir.mkdir(parents=True)
+    (fw_dir / "version.py").write_text('FIRMWARE_VERSION = "0.31.19"\n', encoding="utf-8")
+
+    assert validate_pr.check_firmware_version_sync(tmp_path, "0.31.19") == "0.31.19"
+
+
+def test_check_firmware_version_sync_mismatch(tmp_path: Path):
+    fw_dir = tmp_path / "firmware"
+    fw_dir.mkdir(parents=True)
+    (fw_dir / "version.py").write_text('FIRMWARE_VERSION = "0.31.18"\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Firmware version mismatch"):
+        validate_pr.check_firmware_version_sync(tmp_path, "0.31.19")
+
+
+def test_check_firmware_version_sync_missing(tmp_path: Path):
+    assert validate_pr.check_firmware_version_sync(tmp_path, "0.31.19") is None

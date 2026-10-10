@@ -157,3 +157,22 @@ def test_decode_json_supports_buffersource() -> None:
         "decodeJson should not pass arbitrary buffers directly to new DataView(buffer)"
     )
     assert "new TextDecoder('utf-8').decode(buffer)" in js_content
+
+
+def test_telemetry_board_profile_and_version_in_web_config() -> None:
+    """Verify that Web UI index.html and app.js support board_profile and firmware_version (Issue #127)."""
+    html_path = REPO_ROOT / "tools" / "web-config" / "index.html"
+    app_js_path = REPO_ROOT / "tools" / "web-config" / "js" / "app.js"
+
+    html_content = html_path.read_text(encoding="utf-8")
+    app_js_content = app_js_path.read_text(encoding="utf-8")
+
+    # DOM elements in index.html
+    assert 'id="tel-version"' in html_content
+    assert 'id="tel-board-profile"' in html_content
+
+    # Binding and telemetry update logic in app.js
+    assert "telBoardProfile" in app_js_content
+    assert "tel-board-profile" in app_js_content
+    assert "stat.board_profile" in app_js_content
+    assert "stat.firmware_version" in app_js_content

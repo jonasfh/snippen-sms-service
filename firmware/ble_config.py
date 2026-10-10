@@ -361,6 +361,7 @@ class BLEConfigServer:
             "call_reject_enabled": cfg.get("call_reject_enabled", True),
             "call_notify_admin_enabled": cfg.get("call_notify_admin_enabled", True),
             "call_reply_caller_enabled": cfg.get("call_reply_caller_enabled", True),
+            "board_profile": cfg.get("board_profile", "lilygo_t_call_a7670e"),
         }
 
         # Include custom text only if differing from default and non-empty
