@@ -20,6 +20,11 @@ except ImportError:
 
 
 try:
+    from version import FIRMWARE_VERSION
+except ImportError:
+    FIRMWARE_VERSION = "0.0.0"
+
+try:
     import gc
 except ImportError:
     gc = None
@@ -237,6 +242,8 @@ class GatewayApp:
             "live_operations": self.live_operations_active,
             "cycle_count": self.cycle_count,
             "wifi_ssid": self.config.get("wifi_ssid", ""),
+            "firmware_version": FIRMWARE_VERSION,
+            "board_profile": self.config.get("board_profile", "lilygo_t_call_a7670e"),
         }
         try:
             import network

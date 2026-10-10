@@ -364,7 +364,7 @@ def test_ble_server_config_payload_stays_under_gatt_limit(mpy_env: MicroPythonEn
 
     raw_bytes = mock_ble.gatts_read(server.handle_config)
     assert len(raw_bytes) <= 500
-    assert len(raw_bytes) < 400, f"Payload unexpectedly large: {len(raw_bytes)} bytes"
+    assert len(raw_bytes) < 450, f"Payload unexpectedly large: {len(raw_bytes)} bytes"
 
     parsed = json.loads(raw_bytes.decode("utf-8"))
     assert parsed["wifi_ssid"] == "Snippen-WiFi-Network"
@@ -430,3 +430,52 @@ def test_gateway_app_start_operations_defers_polling(mpy_env: MicroPythonEnviron
     assert app.live_operations_active is True
     assert app.last_outbox_poll >= before_time
     assert app.last_inbox_check >= before_time
+
+
+def test_ble_server_config_includes_board_profile(mpy_env: MicroPythonEnvironment) -> None:
+    """Verify board_profile is exposed in BLE config characteristic (Issue #127)."""
+    import ble_config
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(
+        ble=mock_ble,
+        config={
+            "wifi_ssid": "TestWiFi",
+            "board_profile": "lilygo_t_call_a7670e",
+        },
+    )
+    server.start()
+
+    config_bytes = mock_ble.gatts_read(server.handle_config)
+    config_data = json.loads(config_bytes.decode("utf-8"))
+    assert config_data["board_profile"] == "lilygo_t_call_a7670e"
+
+
+def test_ble_server_notify_status_includes_version_and_profile(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    """Verify telemetry status reporting exposes firmware_version and board_profile (Issue #127)."""
+    import ble_config
+    import main
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    app = main.GatewayApp(
+        config={"wifi_ssid": "TestSSID", "board_profile": "lilygo_t_call_a7670e"},
+        ble_server=server,
+    )
+    app.setup()
+
+    status = app.get_telemetry_status()
+    assert "firmware_version" in status
+    assert status["firmware_version"] == "0.31.19"
+    assert status["board_profile"] == "lilygo_t_call_a7670e"
+
+    server.start()
+    server.conn_handle = 1
+    server.notify_status(status)
+
+    status_bytes = mock_ble.gatts_read(server.handle_status)
+    status_data = json.loads(status_bytes.decode("utf-8"))
+    assert status_data["firmware_version"] == "0.31.19"
+    assert status_data["board_profile"] == "lilygo_t_call_a7670e"

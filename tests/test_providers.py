@@ -33,7 +33,7 @@ def test_incoming_message_structure():
     assert msg.provider_message_id is None
 
     # Test timezone normalization with naive datetime
-    naive_dt = datetime(2026, 8, 29, 12, 0, 0, tzinfo=None)  # noqa: DTZ001
+    naive_dt = datetime(2026, 8, 29, 12, 0, 0, tzinfo=None)
     msg_naive = IncomingMessage(
         sender="+4790000000",
         body="Test",

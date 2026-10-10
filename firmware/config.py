@@ -5,7 +5,27 @@ try:
 except ImportError:
     import json
 
-# Hardware Pinout (Lilygo T-Call A7670E)
+# Hardware Profiles (Issue #127)
+BOARD_PROFILES = {
+    "lilygo_t_call_a7670e": {
+        "name": "Lilygo T-Call A7670E",
+        "pin_modem_power": 12,
+        "pin_modem_reset": 5,
+        "pin_modem_pwrkey": 4,
+        "pin_modem_tx": 26,
+        "pin_modem_rx": 25,
+        "pin_boot_button": 0,
+        "modem_uart_id": 1,
+        "modem_baudrate": 115200,
+        "modem_uart_timeout_ms": 2000,
+        "modem_pwrkey_pulse_ms": 1500,
+        "modem_boot_wait_sec": 6,
+    },
+}
+
+DEFAULT_BOARD_PROFILE = "lilygo_t_call_a7670e"
+
+# Hardware Pinout (Default: Lilygo T-Call A7670E)
 PIN_MODEM_POWER = 12  # VCC Power Rail: Set HIGH to power modem
 PIN_MODEM_RESET = 5  # Reset: Active-low internally, hold HIGH during operation
 PIN_MODEM_PWRKEY = 4  # PWRKEY: Pulse HIGH for 1.5s to turn modem on
@@ -62,19 +82,22 @@ CALL_REPLY_CALLER_TEXT = (
 CALL_NOTIFY_ADMIN_TEXT = "Ubesvart anrop til Snippen SMS-gateway fra {caller}."
 
 
-def get_default_config() -> dict:
-    """Return dictionary of default system configuration."""
+def get_default_config(board_profile: str = DEFAULT_BOARD_PROFILE) -> dict:
+    """Return dictionary of default system configuration for specified board profile."""
+    profile_key = board_profile if board_profile in BOARD_PROFILES else DEFAULT_BOARD_PROFILE
+    profile = BOARD_PROFILES[profile_key]
     return {
-        "pin_modem_power": PIN_MODEM_POWER,
-        "pin_modem_reset": PIN_MODEM_RESET,
-        "pin_modem_pwrkey": PIN_MODEM_PWRKEY,
-        "pin_modem_tx": PIN_MODEM_TX,
-        "pin_modem_rx": PIN_MODEM_RX,
-        "modem_uart_id": MODEM_UART_ID,
-        "modem_baudrate": MODEM_BAUDRATE,
-        "modem_uart_timeout_ms": MODEM_UART_TIMEOUT_MS,
-        "modem_pwrkey_pulse_ms": MODEM_PWRKEY_PULSE_MS,
-        "modem_boot_wait_sec": MODEM_BOOT_WAIT_SEC,
+        "board_profile": profile_key,
+        "pin_modem_power": profile["pin_modem_power"],
+        "pin_modem_reset": profile["pin_modem_reset"],
+        "pin_modem_pwrkey": profile["pin_modem_pwrkey"],
+        "pin_modem_tx": profile["pin_modem_tx"],
+        "pin_modem_rx": profile["pin_modem_rx"],
+        "modem_uart_id": profile["modem_uart_id"],
+        "modem_baudrate": profile["modem_baudrate"],
+        "modem_uart_timeout_ms": profile["modem_uart_timeout_ms"],
+        "modem_pwrkey_pulse_ms": profile["modem_pwrkey_pulse_ms"],
+        "modem_boot_wait_sec": profile["modem_boot_wait_sec"],
         "modem_cmd_timeout_ms": MODEM_CMD_TIMEOUT_MS,
         "modem_sms_timeout_ms": MODEM_SMS_TIMEOUT_MS,
         "modem_sim_pin": MODEM_SIM_PIN,
@@ -91,7 +114,7 @@ def get_default_config() -> dict:
         "inbox_check_interval_sec": INBOX_CHECK_INTERVAL_SEC,
         "heartbeat_interval_sec": HEARTBEAT_INTERVAL_SEC,
         "watchdog_timeout_sec": WATCHDOG_TIMEOUT_SEC,
-        "pin_boot_button": PIN_BOOT_BUTTON,
+        "pin_boot_button": profile["pin_boot_button"],
         "button_long_press_ms": BUTTON_LONG_PRESS_MS,
         "button_debounce_ms": BUTTON_DEBOUNCE_MS,
         "provisioning_timeout_sec": PROVISIONING_TIMEOUT_SEC,
@@ -107,7 +130,42 @@ def get_default_config() -> dict:
 
 def load_config(config_path: str = "config.json") -> dict:
     """Load configuration with overrides from config_local.py, config.local.py, or config.json if available."""
-    cfg = get_default_config()
+    # First detect if a specific board_profile is requested
+    detected_profile = DEFAULT_BOARD_PROFILE
+
+    try:
+        import config_local  # type: ignore[import-not-found]
+
+        if hasattr(config_local, "BOARD_PROFILE"):
+            detected_profile = getattr(config_local, "BOARD_PROFILE")  # noqa: B009
+        elif hasattr(config_local, "board_profile"):
+            detected_profile = getattr(config_local, "board_profile")  # noqa: B009
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    try:
+        with open("config.local.py") as f:
+            code = f.read()
+        local_scope = {}
+        exec(code, local_scope)  # noqa: S102
+        if "BOARD_PROFILE" in local_scope:
+            detected_profile = local_scope["BOARD_PROFILE"]
+        elif "board_profile" in local_scope:
+            detected_profile = local_scope["board_profile"]
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    try:
+        with open(config_path, "r") as f:
+            overrides = json.load(f)
+            if isinstance(overrides, dict):
+                for k, v in overrides.items():
+                    if k.lower() == "board_profile" and isinstance(v, str):
+                        detected_profile = v
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    cfg = get_default_config(detected_profile)
 
     # Attempt 1: Load overrides from config_local module if present
     try:

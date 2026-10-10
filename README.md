@@ -36,7 +36,7 @@ Features:
 - **Zero Install / PWA**: Runs in Google Chrome on Android or Desktop; installable to home screen.
 - **WiFi Setup**: Triggers on-device 2.4 GHz WiFi scan, displays RSSI signal strength, and verifies connection credentials.
 - **API Setup**: Configures Snippen Booking API endpoint and token securely.
-- **Live Diagnostics**: Telemetry cards for assigned IP address, WiFi RSSI, cellular 4G signal (CSQ), and firmware version.
+- **Live Diagnostics**: Telemetry cards for assigned IP address, WiFi RSSI, cellular 4G signal (CSQ), firmware version, and hardware board profile.
 - **Simulator Mode**: Built-in simulator toggle for instant preview and testing in any browser without hardware.
 
 ---

@@ -74,6 +74,7 @@ const telIp = document.getElementById('tel-ip');
 const telWifiRssi = document.getElementById('tel-wifi-rssi');
 const telCellular = document.getElementById('tel-cellular');
 const telVersion = document.getElementById('tel-version');
+const telBoardProfile = document.getElementById('tel-board-profile');
 
 const cardConsole = document.getElementById('card-console');
 const operationsStatusPill = document.getElementById('operations-status-pill');
@@ -248,6 +249,9 @@ function updateTelemetry(stat) {
   }
   if (stat.firmware_version) {
     telVersion.textContent = `v${stat.firmware_version}`;
+  }
+  if (stat.board_profile && telBoardProfile) {
+    telBoardProfile.textContent = stat.board_profile;
   }
   if (stat.live_operations !== undefined && stat.live_operations !== isLiveOperationsRunning) {
     updateOperationsState(Boolean(stat.live_operations));

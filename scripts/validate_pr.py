@@ -61,6 +61,26 @@ def get_current_version(repo_root: Path) -> str:
     return match.group(1).strip()
 
 
+def check_firmware_version_sync(repo_root: Path, expected_version: str) -> str | None:
+    """Ensure firmware/version.py FIRMWARE_VERSION is synchronized with package version."""
+    firmware_version_file = repo_root / "firmware" / "version.py"
+    if not firmware_version_file.exists():
+        return None
+
+    content = firmware_version_file.read_text(encoding="utf-8")
+    match = re.search(r'FIRMWARE_VERSION\s*=\s*["\']([^"\']+)["\']', content)
+    if not match:
+        raise ValueError(f"Could not find FIRMWARE_VERSION string in {firmware_version_file}")
+
+    fw_ver = match.group(1).strip()
+    if fw_ver != expected_version:
+        raise ValueError(
+            f"Firmware version mismatch: firmware/version.py ({fw_ver}) != src/snippen_sms/__init__.py ({expected_version})"
+        )
+    print(f"✅ Firmware version synchronized: {fw_ver}")
+    return fw_ver
+
+
 def validate_semver(version_str: str) -> Version:
     """Verify version string conforms to semantic versioning."""
     try:
@@ -215,6 +235,8 @@ def main() -> int:
         version_str = get_current_version(repo_root)
         current_version = validate_semver(version_str)
         print(f"Current package version: {current_version}")
+
+        check_firmware_version_sync(repo_root, version_str)
 
         latest_tag = get_latest_git_tag(repo_root)
         check_version_bump(current_version, latest_tag)
