@@ -240,18 +240,15 @@ class GatewayApp:
                 import ota
 
                 client = ota.OTAClient(config=self.config)
-                if not client.ensure_wifi():
-                    return {"cmd": "CHECK_OTA", "status": "error", "message": "Wi-Fi not connected"}
                 url = payload.get("url") if isinstance(payload, dict) else None
                 force = bool(payload.get("force")) if isinstance(payload, dict) else False
-                bundle = client.download_bundle(url=url)
-                valid, msg = ota.validate_bundle(bundle, force=force)
+                res = client.check_for_update(url=url, force=force)
                 return {
                     "cmd": "CHECK_OTA",
-                    "status": "ok" if valid else "notice",
-                    "version": bundle.get("version"),
-                    "update_available": valid,
-                    "message": msg,
+                    "status": "ok" if res.get("update_available") else "notice",
+                    "version": res.get("version"),
+                    "update_available": res.get("update_available"),
+                    "message": res.get("message"),
                 }
             except Exception as exc:  # noqa: BLE001
                 return {"cmd": "CHECK_OTA", "status": "error", "message": str(exc)}
