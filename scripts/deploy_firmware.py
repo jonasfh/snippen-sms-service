@@ -83,23 +83,23 @@ def deploy_firmware(
         return 1
 
     files_to_deploy = [
+        "ble_config.py",
         "boot.py",
-        "version.py",
-        "logger.py",
+        "button.py",
         "config.py",
+        "logger.py",
+        "main.py",
         "modem.py",
+        "ota.py",
         "sms_encoding.py",
         "snippen_api.py",
-        "button.py",
-        "ble_config.py",
-        "wifi.py",
+        "test_api.py",
         "test_ble_provisioning.py",
         "test_button.py",
         "test_modem.py",
-        "test_api.py",
         "test_wifi.py",
-        "ota.py",
-        "main.py",
+        "version.py",
+        "wifi.py",
     ]
 
     if include_config:
