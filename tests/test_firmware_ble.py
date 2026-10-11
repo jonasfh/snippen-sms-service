@@ -480,3 +480,89 @@ def test_ble_server_notify_status_includes_version_and_profile(
     status_data = json.loads(status_bytes.decode("utf-8"))
     assert status_data["firmware_version"] == version.FIRMWARE_VERSION
     assert status_data["board_profile"] == "lilygo_t_call_a7670e"
+
+
+def test_ble_ota_update_command(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify ota_update command via BLE initiates OTA workflow (Issue #130)."""
+    import ble_config
+    import main
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    app = main.GatewayApp(config={"wifi_ssid": "TestSSID"}, ble_server=server)
+    app.setup()
+
+    perform_calls: list[dict] = []
+
+    class FakeOTAClient:
+        def __init__(self, config: dict | None = None) -> None:
+            self.config = config
+
+        def perform_ota(
+            self, url: str | None = None, force: bool = False, restart: bool = True
+        ) -> bool:
+            perform_calls.append({"url": url, "force": force, "restart": restart})
+            return True
+
+    import ota
+
+    monkeypatch.setattr(ota, "OTAClient", FakeOTAClient)
+
+    # 1. Test ota_update command
+    res = app.on_ble_command(
+        "ota_update", {"force": True, "url": "https://example.com/bundle.json"}
+    )
+    assert res["status"] == "ok"
+    assert res["cmd"] == "ota_update"
+    assert len(perform_calls) == 1
+    assert perform_calls[0]["force"] is True
+    assert perform_calls[0]["url"] == "https://example.com/bundle.json"
+
+    # 2. Test START_OTA alias
+    res2 = app.on_ble_command("START_OTA", {})
+    assert res2["status"] == "ok"
+    assert len(perform_calls) == 2
+
+    # 3. Test error handling when perform_ota fails
+    def fail_perform(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Download timeout")
+
+    monkeypatch.setattr(FakeOTAClient, "perform_ota", fail_perform)
+    res_err = app.on_ble_command("ota_update", {})
+    assert res_err["status"] == "error"
+    assert "Download timeout" in res_err["message"]
+
+
+def test_ble_check_ota_command(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify check_ota and ota_check commands via BLE (Issue #130)."""
+    import ble_config
+    import main
+
+    mock_ble = MockBLE()
+    server = ble_config.BLEConfigServer(ble=mock_ble)
+    app = main.GatewayApp(config={"wifi_ssid": "TestSSID"}, ble_server=server)
+    app.setup()
+
+    class FakeOTAClient:
+        def __init__(self, config: dict | None = None) -> None:
+            pass
+
+        def check_for_update(self, url: str | None = None, force: bool = False) -> dict:
+            return {
+                "update_available": True,
+                "version": "0.32.0",
+                "message": "New version available",
+            }
+
+    import ota
+
+    monkeypatch.setattr(ota, "OTAClient", FakeOTAClient)
+
+    res = app.on_ble_command("ota_check", {})
+    assert res["status"] == "ok"
+    assert res["version"] == "0.32.0"
+    assert res["update_available"] is True

@@ -287,12 +287,17 @@ The standalone cellular gateway includes an integrated, fail-safe Over-The-Air (
    - At power-on or reset, `boot.py` inspects `ota_pending.json`.
    - On first boot after update (`boot_attempts == 0`), increments `boot_attempts` to 1.
    - If the device crashes, hits an unhandled exception, or is reset by the hardware watchdog before `main.py` confirms stability, the next boot sees `boot_attempts >= 1`.
-   - `boot.py` immediately initiates automatic rollback: restores all files from `<file>.bak`, cleans up `.new` artifacts, purges `ota_pending.json`, and boots the known-stable previous firmware version.
+   - `boot.py` immediately initiates automatic rollback: restores all files from `<file>.bak`, cleans up `.new` artifacts, purges `ota_pending.json`, records the failed version in `ota_failed.json` (boot-loop guard), and boots the known-stable previous firmware version.
 6. **Health Confirmation (`firmware/main.py`)**:
    - Once `main.py` runs stably for 30 seconds (`ota_stability_timeout_sec`), `ota.confirm_healthy()` is invoked.
-   - Deletes all `.bak` backup files and clears `ota_pending.json`, officially marking the upgrade as permanent.
-7. **Companion App & BLE Control**:
-   - The Web Configurator companion app can trigger OTA checks (`CHECK_OTA`) and OTA deployment (`START_OTA`) wirelessly over BLE GATT, returning real-time status and telemetry (`ota_pending`).
+   - Deletes all `.bak` backup files, clears `ota_pending.json`, and clears `ota_failed.json`, officially marking the upgrade as permanent.
+7. **Boot Check Trigger & Boot-Loop Guard (`firmware/main.py` & `firmware/config.py`)**:
+   - When `ota_check_on_boot: true` (default in production), the gateway automatically checks for newer releases on GitHub as soon as Wi-Fi connects after boot.
+   - If a newer release exists, the gateway performs OTA and restarts seamlessly.
+   - If a version previously failed and was rolled back, the boot-loop guard blocks automatic retry for that version unless explicitly overridden with `force=True`.
+8. **Companion App & BLE Control**:
+   - The Web Configurator companion app can trigger OTA checks (`CHECK_OTA`) and OTA deployment (`ota_update` / `START_OTA`) wirelessly over BLE GATT, returning real-time status and telemetry (`ota_pending`).
+   - The Web UI automatically checks GitHub Releases in the browser and displays a banner when updates are ready.
 
 #### OTA Troubleshooting & Recovery
 
@@ -300,6 +305,7 @@ The standalone cellular gateway includes an integrated, fail-safe Over-The-Air (
 | :--- | :--- | :--- |
 | **Download fails with HTTP 302** | GitHub release redirect | `ota.OTAClient` follows redirects automatically up to 3 hops. Verify Wi-Fi internet access. |
 | **Upgrade rejected with "not newer"** | Bundle version <= current version | Build new release with bumped SemVer or use `force=True` for manual diagnostic reflashing. |
+| **Upgrade skipped by boot-loop guard** | Version recently failed / rolled back | Fix issue in a new release tag or override with `force=True` via BLE or command. |
 | **Device rolls back on reboot** | Crash or watchdog reset before 30s | Device booted into Safe Mode and restored from `.bak`. Inspect `/logs` via BLE or serial console. |
 | **Configuration reset after OTA** | Should never occur | Sensitive files (`config.json`, `config_local.py`) are strictly blacklisted from the bundle and staging engine. |
 

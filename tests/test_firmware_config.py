@@ -47,6 +47,7 @@ def test_get_default_config() -> None:
     assert cfg["call_reply_caller_enabled"] is True
     assert "{caller}" in cfg["call_notify_admin_text"]
     assert "92830575" in cfg["call_reply_caller_text"]
+    assert cfg["ota_check_on_boot"] is True
 
 
 def test_load_config_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

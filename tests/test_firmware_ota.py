@@ -25,10 +25,14 @@ from tests.mocks.micropython_mocks import MicroPythonEnvironment, MockResponse
 def mpy_env() -> Generator[MicroPythonEnvironment]:
     env = MicroPythonEnvironment()
     env.install()
+    Path("ota_failed.json").unlink(missing_ok=True)
+    Path("ota_pending.json").unlink(missing_ok=True)
     sys.modules.pop("ota", None)
     sys.modules.pop("boot", None)
     sys.modules.pop("main", None)
     yield env
+    Path("ota_failed.json").unlink(missing_ok=True)
+    Path("ota_pending.json").unlink(missing_ok=True)
     env.uninstall()
     sys.modules.pop("ota", None)
     sys.modules.pop("boot", None)
@@ -449,3 +453,26 @@ def test_ota_client_resolve_bundle_url(mpy_env: MicroPythonEnvironment) -> None:
         client_default.resolve_bundle_url("http://custom.com/bundle.json")
         == "http://custom.com/bundle.json"
     )
+
+
+def test_check_for_update_boot_loop_guard(
+    mpy_env: MicroPythonEnvironment, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify check_for_update flags update_available=False if version recently failed (Issue #130)."""
+    monkeypatch.chdir(tmp_path)
+    import ota
+
+    ota.record_failed_version("0.32.0", reason="boot_rollback")
+
+    mpy_env.mock_urequests.get_handler = lambda *args, **kwargs: MockResponse(
+        status_code=200, json_data={"tag_name": "v0.32.0"}
+    )
+
+    client = ota.OTAClient(config={"wifi_ssid": "TestSSID"})
+    res = client.check_for_update()
+    assert res["update_available"] is False
+    assert "boot-loop guard" in res["message"]
+
+    # force=True overrides
+    res_forced = client.check_for_update(force=True)
+    assert res_forced["update_available"] is True

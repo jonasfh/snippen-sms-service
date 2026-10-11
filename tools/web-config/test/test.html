@@ -234,6 +234,19 @@
         await client.disconnect();
       });
 
+      await runTest('MockSnippenBLEClient supports checkOta and startOta', async () => {
+        const client = new MockSnippenBLEClient();
+        await client.connect();
+        const checkRes = await client.checkOta();
+        assert(checkRes.status === 'ok', 'checkOta status should be ok');
+        assert(checkRes.update_available === true, 'update_available should be true');
+
+        const startRes = await client.startOta();
+        assert(startRes.status === 'ok', 'startOta status should be ok');
+        assert(startRes.cmd === 'ota_update', 'startOta should send ota_update command');
+        await client.disconnect();
+      });
+
       summaryEl.textContent = `All tests completed: ${passed} passed, ${failed} failed.`;
       summaryEl.style.background = failed === 0 ? '#14532d' : '#7f1d1d';
     }

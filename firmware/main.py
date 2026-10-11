@@ -115,6 +115,7 @@ class GatewayApp:
         self.last_call_notification: dict[str, float] = {}
         self.ota_verified = False
         self.ota_boot_time = time.time()
+        self.boot_ota_checked = False
 
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
         """Switch gateway into BLE provisioning mode (Issue #59, #60, #87)."""
@@ -235,7 +236,7 @@ class GatewayApp:
                 self.logger.clear()
             return {"cmd": "CLEAR_LOGS", "status": "ok"}
 
-        if cmd == "CHECK_OTA":
+        if cmd in ("CHECK_OTA", "OTA_CHECK", "ota_check"):
             try:
                 import ota
 
@@ -244,26 +245,27 @@ class GatewayApp:
                 force = bool(payload.get("force")) if isinstance(payload, dict) else False
                 res = client.check_for_update(url=url, force=force)
                 return {
-                    "cmd": "CHECK_OTA",
+                    "cmd": cmd,
                     "status": "ok" if res.get("update_available") else "notice",
                     "version": res.get("version"),
                     "update_available": res.get("update_available"),
                     "message": res.get("message"),
                 }
             except Exception as exc:  # noqa: BLE001
-                return {"cmd": "CHECK_OTA", "status": "error", "message": str(exc)}
+                return {"cmd": cmd, "status": "error", "message": str(exc)}
 
-        if cmd == "START_OTA":
+        if cmd in ("START_OTA", "OTA_UPDATE", "ota_update"):
             try:
                 import ota
 
                 client = ota.OTAClient(config=self.config)
                 url = payload.get("url") if isinstance(payload, dict) else None
                 force = bool(payload.get("force")) if isinstance(payload, dict) else False
+                print(f"[main] OTA update requested via BLE (cmd: {cmd})...")
                 client.perform_ota(url=url, force=force, restart=True)
-                return {"cmd": "START_OTA", "status": "ok", "message": "OTA update in progress"}
+                return {"cmd": cmd, "status": "ok", "message": "OTA update in progress"}
             except Exception as exc:  # noqa: BLE001
-                return {"cmd": "START_OTA", "status": "error", "message": str(exc)}
+                return {"cmd": cmd, "status": "error", "message": str(exc)}
 
         return {"cmd": cmd, "status": "ok"}
 
@@ -617,6 +619,32 @@ class GatewayApp:
                 except Exception as exc:  # noqa: BLE001
                     print(f"[main] Modem signal query error during heartbeat: {exc}")
 
+    def check_boot_ota(self) -> bool:
+        """Check for newer release on boot after Wi-Fi is connected (Issue #130)."""
+        if not self.config.get("ota_check_on_boot", True):
+            return False
+        print(
+            "[main] Wi-Fi connected. Sjekker etter firmware-oppdatering ved oppstart (ota_check_on_boot=True)..."
+        )
+        try:
+            import ota
+
+            client = ota.OTAClient(config=self.config)
+            res = client.check_for_update()
+            if res.get("update_available"):
+                target_ver = res.get("version", "unknown")
+                print(
+                    f"[main] Ny firmware-versjon v{target_ver} tilgjengelig ved oppstart! Igangsetter OTA-oppdatering..."
+                )
+                client.perform_ota(restart=True)
+                return True
+            print(
+                f"[main] Oppstartsjekk fullført: Ingen oppdatering ({res.get('message', 'oppdatert')})."
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main] Warning: Feil under oppstartsjekk for OTA: {exc}")
+        return False
+
     def tick(self) -> None:
         """Execute one iteration of the gateway event loop."""
         self.cycle_count += 1
@@ -661,6 +689,9 @@ class GatewayApp:
                     self.wifi_backoff_sec = min(60, self.wifi_backoff_sec * 2)
         elif wifi is not None and wifi.is_connected():
             self.wifi_backoff_sec = 5
+            if not self.boot_ota_checked and not self.is_provisioning_mode:
+                self.boot_ota_checked = True
+                self.check_boot_ota()
 
         # Check for incoming voice calls (Issue #113) and SMS URC notifications (Issue #115)
         self.poll_incoming_calls()

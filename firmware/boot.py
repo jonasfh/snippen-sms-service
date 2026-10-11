@@ -215,6 +215,7 @@ def is_modem_online(cfg: dict | None = None) -> bool:
 
 
 OTA_PENDING_FILE = "ota_pending.json"
+OTA_FAILED_FILE = "ota_failed.json"
 
 
 def rollback_ota(ota_data: dict | None = None) -> bool:
@@ -225,6 +226,24 @@ def rollback_ota(ota_data: dict | None = None) -> bool:
                 ota_data = json.load(f)
         except Exception:  # noqa: BLE001
             ota_data = {}
+
+    target_version = ota_data.get("version") if isinstance(ota_data, dict) else None
+    if target_version:
+        try:
+            with open(OTA_FAILED_FILE, "w") as f:
+                json.dump(
+                    {
+                        "failed_version": target_version,
+                        "reason": "boot_rollback",
+                        "time": time.time(),
+                    },
+                    f,
+                )
+            print(
+                f"[boot] Recorded failed version v{target_version} to {OTA_FAILED_FILE} (boot-loop guard)."
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[boot] Warning: Failed to record failed version to {OTA_FAILED_FILE}: {exc}")
 
     files = ota_data.get("files") if isinstance(ota_data, dict) else None
     if not files:

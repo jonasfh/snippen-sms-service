@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.22] - 2026-10-11
+
+### Added
+- Firmware OTA Fase 4: Trigging av oppgradering via BLE Web UI og oppstartsjekk (`#130`):
+  - Innført konfigurasjonsnøkkelen `ota_check_on_boot: bool` i `firmware/config.py` (standard `True` for produksjon).
+  - Implementert automatisk OTA-oppstartsjekk i `firmware/main.py`: ved oppstart, så snart Wi-Fi er tilkoblet, sjekkes nyeste release-tag på GitHub og OTA igangsettes automatisk dersom oppdatering foreligger.
+  - Implementert robust guard mot boot-loops i `firmware/boot.py` og `firmware/ota.py`: feilet versjon loggføres i `ota_failed.json` ved Safe Mode rollback, og fremtidige automatiske oppgraderinger til samme versjon blokkeres med mindre de overstyres eksplisitt med `force=True`.
+  - Støtte for `ota_update`-kommandoen i `firmware/ble_config.py` og `firmware/main.py` over BLE GATT (`CHAR_COMMAND`), med sanntidslogging over `CHAR_LOGS` og kontrollert omstart etter vellykket oppgradering.
+  - Oppdatert BLE Web UI (`tools/web-config`): automatisk sjekk mot GitHub Releases API i nettleseren, varselbanner ved nyere versjon, tydelig «🚀 Oppgrader firmware»-knapp under telemetri og sanntidsvisning av fremdrift og omstart.
+  - Omfattende enhets- og kontraktstester i `tests/test_firmware_ble.py`, `tests/test_firmware_main.py`, `tests/test_firmware_boot.py`, `tests/test_firmware_ota.py` og `tests/test_web_config_contract.py`.
+
 ## [0.31.21] - 2026-10-11
 
 ### Added

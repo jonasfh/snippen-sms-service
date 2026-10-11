@@ -98,7 +98,14 @@ Web Bluetooth er en W3C-standard som støttes direkte i Chromium-baserte nettles
    - Hver eneste utgående og innkommende SMS, samt periodiske HTTP-kall, strømmes live til konsollvinduet.
    - Du kan pause drift når som helst med **«⏸ Pause drift»**, filtrere logglinjene med søkefeltet, eller trykke **«📋 Kopier»** for å dele loggen.
 
-### Steg 6: Lagre og koble fra
+### Steg 6: Firmware OTA Oppgradering
+Web Configuratoren støtter trådløs oppdatering av gatewayens programvare over Wi-Fi:
+1. **Automatisk sjekk mot GitHub**: Når du er tilkoblet enheten over Bluetooth, sammenligner nettleseren automatisk enhetens rapporterte `firmware_version` mot nyeste release på GitHub.
+2. **Varselbanner**: Dersom en nyere firmware-versjon er tilgjengelig, vises et fremtredende blått varselbanner med teksten `🔔 Ny firmware tilgjengelig: vX.Y.Z` og en knapp **«🚀 Oppgrader firmware»**.
+3. **Igangsetting**: Trykk på **«🚀 Oppgrader firmware»** (eller bruk kortet *Firmware OTA Oppdatering*). Enheten laster ned bundelen over Wi-Fi, verifiserer sjekksummer atomisk, og starter kontrollert på nytt.
+4. **Feilsikring**: Enheten har en innebygd Safe Mode med automatisk rollback dersom den nye programvaren krasjer ved oppstart, samt en boot-loop guard som forhindrer gjentatte feilede oppdateringsforsøk.
+
+### Steg 7: Lagre og koble fra
 1. Når konfigurasjonen er bekreftet og testet, trykk på knappen nederst: **«🚀 Lagre og Koble fra»**.
 2. De nye innstillingene lagres permanent til `config.json` på ESP32-ens flashminne.
 3. Lilygo-kortet slår av BLE-annonseringen og fortsetter normal autonom bakgrunnsdrift.

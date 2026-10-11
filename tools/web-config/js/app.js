@@ -59,6 +59,7 @@ const apiToken = document.getElementById('api-token');
 const btnToggleApiToken = document.getElementById('btn-toggle-api-token');
 const pollInterval = document.getElementById('poll-interval');
 const inboxInterval = document.getElementById('inbox-interval');
+const otaCheckOnBoot = document.getElementById('ota-check-on-boot');
 
 const cardCalls = document.getElementById('card-calls');
 const callForwardingNumber = document.getElementById('call-forwarding-number');
@@ -84,6 +85,10 @@ const btnStartOta = document.getElementById('btn-start-ota');
 const spinnerStartOta = document.getElementById('spinner-start-ota');
 const otaFeedback = document.getElementById('ota-feedback');
 const otaFeedbackText = document.getElementById('ota-feedback-text');
+const otaBanner = document.getElementById('ota-banner');
+const otaBannerVersion = document.getElementById('ota-banner-version');
+const otaBannerInstalled = document.getElementById('ota-banner-installed');
+const btnBannerUpgrade = document.getElementById('btn-banner-upgrade');
 
 const cardConsole = document.getElementById('card-console');
 const operationsStatusPill = document.getElementById('operations-status-pill');
@@ -218,6 +223,9 @@ async function loadActiveConfig() {
     if (cfg.inbox_check_interval_sec && inboxInterval) {
       inboxInterval.value = cfg.inbox_check_interval_sec;
     }
+    if (cfg.ota_check_on_boot !== undefined && otaCheckOnBoot) {
+      otaCheckOnBoot.checked = Boolean(cfg.ota_check_on_boot);
+    }
     if (cfg.call_forwarding_number !== undefined) {
       callForwardingNumber.value = cfg.call_forwarding_number;
     }
@@ -258,6 +266,7 @@ function updateTelemetry(stat) {
   }
   if (stat.firmware_version) {
     telVersion.textContent = `v${stat.firmware_version}`;
+    checkGitHubRelease(stat.firmware_version);
   }
   if (stat.board_profile && telBoardProfile) {
     telBoardProfile.textContent = stat.board_profile;
@@ -522,6 +531,9 @@ btnApplyExit.addEventListener('click', async () => {
   if (inboxInterval) {
     payload.inbox_check_interval_sec = parseInt(inboxInterval.value, 10) || 30;
   }
+  if (otaCheckOnBoot) {
+    payload.ota_check_on_boot = otaCheckOnBoot.checked;
+  }
 
   // Only send password if entered
   if (password) {
@@ -635,6 +647,55 @@ if (btnStartOta) {
     } catch (err) {
       spinnerStartOta.classList.remove('show');
       showOtaFeedback(`Feil under OTA-oppdatering: ${err.message}`, 'error');
+    }
+  });
+}
+
+function parseSemver(v) {
+  return (v || '0.0.0').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+}
+
+function isNewerVersion(latest, current) {
+  const [lMaj = 0, lMin = 0, lPat = 0] = parseSemver(latest);
+  const [cMaj = 0, cMin = 0, cPat = 0] = parseSemver(current);
+  if (lMaj !== cMaj) return lMaj > cMaj;
+  if (lMin !== cMin) return lMin > cMin;
+  return lPat > cPat;
+}
+
+let hasCheckedGitHub = false;
+
+async function checkGitHubRelease(installedVersion) {
+  if (!installedVersion || hasCheckedGitHub) return;
+  hasCheckedGitHub = true;
+  try {
+    const resp = await fetch('https://api.github.com/repos/jonasfh/snippen-sms-service/releases/latest');
+    if (!resp.ok) return;
+    const release = await resp.json();
+    const tagName = (release.tag_name || release.name || '').trim();
+    const latestVer = tagName.replace(/^v/i, '');
+    const cleanInstalled = installedVersion.trim().replace(/^v/i, '');
+
+    if (isNewerVersion(latestVer, cleanInstalled)) {
+      if (otaBanner) {
+        if (otaBannerVersion) otaBannerVersion.textContent = `v${latestVer}`;
+        if (otaBannerInstalled) otaBannerInstalled.textContent = `v${cleanInstalled}`;
+        otaBanner.style.display = 'flex';
+      }
+      if (btnStartOta) btnStartOta.style.display = 'inline-flex';
+    }
+  } catch (err) {
+    console.warn('[OTA] Kunne ikke hente nyeste release fra GitHub:', err);
+  }
+}
+
+if (btnBannerUpgrade) {
+  btnBannerUpgrade.addEventListener('click', () => {
+    if (cardOta) {
+      cardOta.scrollIntoView({ behavior: 'smooth' });
+    }
+    if (btnStartOta) {
+      btnStartOta.click();
     }
   });
 }
