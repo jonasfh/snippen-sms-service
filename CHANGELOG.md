@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.21] - 2026-10-11
+
+### Added
+- Firmware OTA Fase 3: MicroPython OTA-klient med staging og automatisk rollback (`#129`):
+  - Implementert OTA-motor i `firmware/ota.py` (`OTAClient`) med automatisk Wi-Fi-tilkobling, nedlasting av `firmware_bundle.json` over Wi-Fi med støtte for HTTP 301/302-omdirigeringer.
+  - Implementert full validering av bundlestruktur, SemVer-versjonssjekk og in-memory SHA-256 integritetssjekk av alle filer før noen endringer gjøres på flash.
+  - Implementert staging til `<fil>.new` med umiddelbar verifisering mot flash-filsystemet.
+  - Sikkerhetskopiering av eksisterende produksjonsfiler til `<fil>.bak` og atomisk bytte til aktiv fil.
+  - Eksplisitt sikring mot overskriving av sensitive konfigurasjonsfiler (`config.json`, `config_local.py`, osv.) og banetraversering.
+  - Feilsikker oppstart og automatisk rollback i `firmware/boot.py`: deteksjon av `ota_pending.json` og gjenoppretting fra `.bak` ved krasj eller watchdog-reset før stabilitet er bekreftet.
+  - Bekreftelse av sunn firmware i `firmware/main.py` etter 30 sekunders stabil drift med sletting av `.bak`-filer.
+  - Støtte for `CHECK_OTA` og `START_OTA` kommandoer over BLE GATT.
+  - Enhetstester for OTA i `tests/test_firmware_ota.py` og oppdatert `DEV_README.md`.
+
 ## [0.31.20] - 2026-10-11
 
 ### Added

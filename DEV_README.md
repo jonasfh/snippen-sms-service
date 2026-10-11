@@ -238,16 +238,16 @@ To enable LilyGO boards to upgrade firmware over Wi-Fi with minimal resource ove
 
 - **Single HTTPS Request**: Eliminates the overhead of 10+ separate TLS handshakes on memory-constrained microcontrollers by delivering all files in one payload.
 - **Security & File Filtering**:
-  - **Included Production Files**: `boot.py`, `main.py`, `modem.py`, `wifi.py`, `ble_config.py`, `button.py`, `config.py`, `logger.py`, `sms_encoding.py`, `snippen_api.py`, `version.py`.
+  - **Included Production Files**: `boot.py`, `main.py`, `modem.py`, `wifi.py`, `ble_config.py`, `button.py`, `config.py`, `logger.py`, `ota.py`, `sms_encoding.py`, `snippen_api.py`, `version.py`.
   - **Excluded Files**: Sensitive local files (`config.json`, `config_local.py`, `config.local.py`, `*local*.py`), templates (`config.example.py`), test/diagnostic scripts (`test_*.py`), and Python cache artifacts (`__pycache__`).
 - **Bundle Format**:
   ```json
   {
-    "version": "0.31.20",
-    "tag": "v0.31.20",
-    "created_at": "2026-10-11T01:05:00Z",
-    "total_files": 11,
-    "total_bytes": 144305,
+    "version": "0.31.21",
+    "tag": "v0.31.21",
+    "created_at": "2026-10-11T08:00:00Z",
+    "total_files": 12,
+    "total_bytes": 165174,
     "files": {
       "boot.py": {
         "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
@@ -263,7 +263,46 @@ To enable LilyGO boards to upgrade firmware over Wi-Fi with minimal resource ove
   }
   ```
 - **Integrity Verification**: Each individual file contains a SHA-256 checksum for post-write flash verification, and the bundle itself is verified against its entry in `checksums.txt`.
-- **ESP32 Memory Constraints**: Total bundle payload size (~150 KB) and single-file sizes (max ~35 KB) are kept well within ESP32 RAM buffering limits.
+- **ESP32 Memory Constraints**: Total bundle payload size (~165 KB) and single-file sizes (max ~35 KB) are kept well within ESP32 RAM buffering limits.
+
+### MicroPython OTA Engine & Safe Rollback (`firmware/ota.py` & `firmware/boot.py`)
+
+The standalone cellular gateway includes an integrated, fail-safe Over-The-Air (OTA) client engine designed for zero-risk upgrades without the possibility of bricking the remote device:
+
+1. **Pre-flight & Wi-Fi Check**:
+   - Ensures Wi-Fi connection is established using credentials from `config.json` before attempting download.
+   - Streams/fetches `firmware_bundle.json` directly from GitHub Releases or configured `ota_bundle_url` / `ota_repo`, supporting HTTP 301/302 redirects.
+2. **In-Memory Integrity & Version Verification**:
+   - Validates bundle structure, metadata, and version strictly against current `FIRMWARE_VERSION` (prevents downgrade unless explicitly forced).
+   - Validates that sensitive files (`config.json`, `config_local.py`, `*local*.py`) and path traversal strings (`..`, `/`) are not present.
+   - Calculates SHA-256 checksums for **all** bundled files in memory before modifying a single file on flash storage.
+3. **Staging (`<file>.new`) & Flash Verification**:
+   - Each file is initially written to a staging file with the `.new` suffix (e.g. `main.py.new`).
+   - Immediately reads back the written bytes from flash and re-verifies the SHA-256 hash. If any mismatch or write error occurs, all `.new` files are purged and the live system remains untouched.
+4. **Atomic Activation & Backup (`<file>.bak`)**:
+   - Existing production files are backed up to `<file>.bak` (e.g. `main.py.bak`).
+   - Atomically swaps `<file>.new` into place via `os.rename()`.
+   - Writes `ota_pending.json` tracking the pending version and `boot_attempts: 0`.
+5. **Fail-safe Boot & Automatic Safe Mode Rollback (`firmware/boot.py`)**:
+   - At power-on or reset, `boot.py` inspects `ota_pending.json`.
+   - On first boot after update (`boot_attempts == 0`), increments `boot_attempts` to 1.
+   - If the device crashes, hits an unhandled exception, or is reset by the hardware watchdog before `main.py` confirms stability, the next boot sees `boot_attempts >= 1`.
+   - `boot.py` immediately initiates automatic rollback: restores all files from `<file>.bak`, cleans up `.new` artifacts, purges `ota_pending.json`, and boots the known-stable previous firmware version.
+6. **Health Confirmation (`firmware/main.py`)**:
+   - Once `main.py` runs stably for 30 seconds (`ota_stability_timeout_sec`), `ota.confirm_healthy()` is invoked.
+   - Deletes all `.bak` backup files and clears `ota_pending.json`, officially marking the upgrade as permanent.
+7. **Companion App & BLE Control**:
+   - The Web Configurator companion app can trigger OTA checks (`CHECK_OTA`) and OTA deployment (`START_OTA`) wirelessly over BLE GATT, returning real-time status and telemetry (`ota_pending`).
+
+#### OTA Troubleshooting & Recovery
+
+| Issue | Likely Cause | Resolution |
+| :--- | :--- | :--- |
+| **Download fails with HTTP 302** | GitHub release redirect | `ota.OTAClient` follows redirects automatically up to 3 hops. Verify Wi-Fi internet access. |
+| **Upgrade rejected with "not newer"** | Bundle version <= current version | Build new release with bumped SemVer or use `force=True` for manual diagnostic reflashing. |
+| **Device rolls back on reboot** | Crash or watchdog reset before 30s | Device booted into Safe Mode and restored from `.bak`. Inspect `/logs` via BLE or serial console. |
+| **Configuration reset after OTA** | Should never occur | Sensitive files (`config.json`, `config_local.py`) are strictly blacklisted from the bundle and staging engine. |
+
 
 ## CI/CD Workflows
 

@@ -9,6 +9,16 @@ try:
 except ImportError:
     import time
 
+try:
+    import ujson as json
+except ImportError:
+    import json
+
+try:
+    import uos as os
+except ImportError:
+    import os
+
 from machine import UART, Pin
 
 try:
@@ -204,10 +214,98 @@ def is_modem_online(cfg: dict | None = None) -> bool:
     return False
 
 
+OTA_PENDING_FILE = "ota_pending.json"
+
+
+def rollback_ota(ota_data: dict | None = None) -> bool:
+    """Restore all active firmware files from their .bak backups (Safe Mode / Rollback)."""
+    if ota_data is None:
+        try:
+            with open(OTA_PENDING_FILE, "r") as f:
+                ota_data = json.load(f)
+        except Exception:  # noqa: BLE001
+            ota_data = {}
+
+    files = ota_data.get("files") if isinstance(ota_data, dict) else None
+    if not files:
+        try:
+            files = [f[:-4] for f in os.listdir() if f.endswith(".bak")]
+        except Exception:  # noqa: BLE001
+            files = []
+
+    restored = 0
+    for filename in files:
+        bak_file = f"{filename}.bak"
+        new_file = f"{filename}.new"
+
+        try:
+            os.remove(new_file)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+        try:
+            os.stat(bak_file)
+            try:
+                os.remove(filename)
+            except Exception:  # noqa: BLE001, S110
+                pass
+            os.rename(bak_file, filename)
+            restored += 1
+            print(f"[boot] Restored {filename} from {bak_file}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[boot] Warning: Could not restore {filename}: {exc}")
+
+    try:
+        os.remove(OTA_PENDING_FILE)
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    print(f"[boot] Automatic rollback completed. Restored {restored} files.")
+    return True
+
+
+def check_and_handle_ota_pending() -> bool:
+    """Inspect OTA status at boot. Trigger rollback if previous boot failed."""
+    try:
+        try:
+            with open(OTA_PENDING_FILE, "r") as f:
+                ota_data = json.load(f)
+        except Exception:  # noqa: BLE001
+            return False
+
+        if not isinstance(ota_data, dict) or not ota_data.get("pending"):
+            return False
+
+        attempts = ota_data.get("boot_attempts", 0)
+        max_attempts = ota_data.get("max_attempts", 1)
+        target_version = ota_data.get("version", "unknown")
+
+        if attempts >= max_attempts:
+            print(
+                f"[boot] CRITICAL: OTA update to v{target_version} crashed or was watchdog-reset before confirmation!"
+            )
+            print("[boot] Initiating automatic Safe Mode rollback from .bak files...")
+            return rollback_ota(ota_data)
+
+        # Increment boot attempt count
+        print(f"[boot] OTA pending verification (attempt {attempts + 1}/{max_attempts}).")
+        ota_data["boot_attempts"] = attempts + 1
+        try:
+            with open(OTA_PENDING_FILE, "w") as f:
+                json.dump(ota_data, f)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[boot] Warning: Failed to update boot_attempts: {exc}")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[boot] Error during OTA pending check: {exc}")
+        return False
+
+
 def boot() -> bool:
     """Run hardware boot sequence."""
     _start_wdt_feed_timer()
     print("[boot] Lilygo T-Call A7670E starting boot sequence...")
+    check_and_handle_ota_pending()
     try:
         config = load_config()
         if is_modem_online(config):
