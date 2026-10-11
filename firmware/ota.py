@@ -480,6 +480,72 @@ class OTAClient:
 
         raise RuntimeError(f"Too many HTTP redirects (exceeded {max_redirects})")
 
+    def check_for_update(self, url: str | None = None, force: bool = False) -> dict:
+        """Check if firmware update is available, using GitHub API for fast check if applicable."""
+        if not self.ensure_wifi():
+            raise RuntimeError("Could not establish Wi-Fi connection for OTA")
+
+        if gc is not None:
+            gc.collect()
+
+        target_url = self.resolve_bundle_url(url)
+        repo = self.config.get("ota_repo", "jonasfh/snippen-sms-service")
+
+        # Fast path for GitHub repository releases: query lightweight GitHub Releases API (~1s)
+        if ("github.com" in target_url and "releases/latest" in target_url) or not url:
+            api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+            headers = {
+                "Accept": "application/json",
+                "User-Agent": f"snippen-ota/{FIRMWARE_VERSION}",
+            }
+            token = self.config.get("ota_github_token") or self.config.get("github_token")
+            if token:
+                headers["Authorization"] = f"token {token}"
+
+            res = None
+            try:
+                print(f"[ota] Checking latest release from GitHub API ({api_url})...")
+                res = requests.get(api_url, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    tag = (
+                        data.get("tag_name")
+                        or data.get("tag")
+                        or data.get("version")
+                        or data.get("name")
+                        or ""
+                    )
+                    target_ver = tag.strip().lstrip("vV")
+                    newer = is_newer_version(target_ver, FIRMWARE_VERSION)
+                    valid = newer or force
+                    msg = (
+                        f"New version {target_ver} available"
+                        if valid
+                        else f"Target version {target_ver} is not newer than current version {FIRMWARE_VERSION}"
+                    )
+                    return {
+                        "update_available": valid,
+                        "version": target_ver,
+                        "message": msg,
+                    }
+            except Exception as exc:
+                print(f"[ota] GitHub API check failed: {exc}. Falling back to bundle download.")
+            finally:
+                if res is not None and hasattr(res, "close"):
+                    try:
+                        res.close()
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+
+        # Fallback or custom bundle URL: download bundle and validate manifest
+        bundle = self.download_bundle(url=target_url)
+        valid, msg = validate_bundle(bundle, force=force)
+        return {
+            "update_available": valid,
+            "version": bundle.get("version"),
+            "message": msg,
+        }
+
     def perform_ota(
         self,
         url: str | None = None,

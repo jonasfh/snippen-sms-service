@@ -347,10 +347,10 @@ export class SnippenBLEClient extends EventTarget {
    * @param {object} [options={}]
    * @param {string} [options.url]
    * @param {boolean} [options.force]
-   * @param {number} [timeoutMs=30000]
+   * @param {number} [timeoutMs=45000]
    * @returns {Promise<object>}
    */
-  async checkOta(options = {}, timeoutMs = 30000) {
+  async checkOta(options = {}, timeoutMs = 45000) {
     const payload = typeof options === 'object' && options !== null ? { cmd: 'CHECK_OTA', ...options } : { cmd: 'CHECK_OTA' };
     return await this.sendCommand(payload, timeoutMs);
   }
@@ -358,10 +358,10 @@ export class SnippenBLEClient extends EventTarget {
   /**
    * Instruct gateway to download and apply OTA update.
    * @param {string|object} [options='']
-   * @param {number} [timeoutMs=60000]
+   * @param {number} [timeoutMs=120000]
    * @returns {Promise<object>}
    */
-  async startOta(options = '', timeoutMs = 60000) {
+  async startOta(options = '', timeoutMs = 120000) {
     let payload = { cmd: 'START_OTA' };
     if (typeof options === 'string' && options) {
       payload.url = options;
