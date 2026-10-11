@@ -459,7 +459,7 @@ class GatewayApp:
                 return 0
 
             print(f"[main] Fetched {len(messages)} pending outbound SMS from Snippen Booking.")
-            statuses: list[dict] = []
+            sent_count = 0
             for msg in messages:
                 raw_id = msg.get("id") or msg.get("external_id")
                 msg_id = str(raw_id) if raw_id is not None else ""
@@ -470,26 +470,28 @@ class GatewayApp:
                 success, ref_or_err = self.modem.send_sms(recipient, body)
                 if success:
                     print(f"[main] Outbound SMS #{msg_id} delivered (ref: {ref_or_err}).")
-                    statuses.append(
-                        {
-                            "external_id": msg_id,
-                            "status": "sent",
-                            "modem_message_id": str(ref_or_err) if ref_or_err else "OK",
-                        }
-                    )
+                    status_entry = {
+                        "external_id": msg_id,
+                        "status": "sent",
+                        "modem_message_id": str(ref_or_err) if ref_or_err else "OK",
+                    }
                 else:
                     print(f"[main] Outbound SMS #{msg_id} transmission failed: {ref_or_err}")
-                    statuses.append(
-                        {
-                            "external_id": msg_id,
-                            "status": "failed",
-                            "error_message": str(ref_or_err),
-                        }
-                    )
+                    status_entry = {
+                        "external_id": msg_id,
+                        "status": "failed",
+                        "error_message": str(ref_or_err),
+                    }
 
-            if statuses:
-                self.api_client.report_outbox_status(statuses)
-            return len(messages)
+                # Report delivery status immediately per message to avoid duplicate transmission on power loss (Issue #137)
+                try:
+                    self.api_client.report_outbox_status([status_entry])
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[main] Warning: Failed to report status for SMS #{msg_id}: {exc}")
+
+                sent_count += 1
+
+            return sent_count
         except Exception as exc:  # noqa: BLE001
             print(f"[main] Error polling outbox: {exc}")
             return 0

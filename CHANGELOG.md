@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.23] - 2026-10-11
+
+### Fixed
+- Umiddelbar enkelt-kvittering av utgående SMS under outbox-behandling (`#137`):
+  - Endret `poll_outbox()` i `firmware/main.py` til å rapportere status tilbake til Snippen Booking (`POST /sms/outbox/status`) umiddelbart per melding, i stedet for å samle opp statusene i en liste og rapportere samlet etter hele batchen.
+  - Forhindrer dupliserte SMS-utsendelser til gjester ved strømbrudd eller uventet omstart midt i en meldingsbatch (tidligere sendte meldinger er allerede registrert som `sent` i Snippen Booking).
+  - Skjermer mot nettverksglitch ved å fange opp og logge eventuelle statusrapporteringsfeil per melding uten å avbryte behandlingen av gjenstående meldinger i batchen.
+  - Lagt til enhetstester i `tests/test_firmware_main.py` for umiddelbar per-melding statusrapportering og feilhåndtering.
+
 ## [0.31.22] - 2026-10-11
 
 ### Added
