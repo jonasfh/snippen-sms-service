@@ -344,21 +344,31 @@ export class SnippenBLEClient extends EventTarget {
 
   /**
    * Query gateway for OTA firmware updates.
+   * @param {object} [options={}]
+   * @param {string} [options.url]
+   * @param {boolean} [options.force]
    * @param {number} [timeoutMs=30000]
    * @returns {Promise<object>}
    */
-  async checkOta(timeoutMs = 30000) {
-    return await this.sendCommand({ cmd: 'CHECK_OTA' }, timeoutMs);
+  async checkOta(options = {}, timeoutMs = 30000) {
+    const payload = typeof options === 'object' && options !== null ? { cmd: 'CHECK_OTA', ...options } : { cmd: 'CHECK_OTA' };
+    return await this.sendCommand(payload, timeoutMs);
   }
 
   /**
    * Instruct gateway to download and apply OTA update.
-   * @param {string} [url]
+   * @param {string|object} [options='']
    * @param {number} [timeoutMs=60000]
    * @returns {Promise<object>}
    */
-  async startOta(url = '', timeoutMs = 60000) {
-    return await this.sendCommand({ cmd: 'START_OTA', url }, timeoutMs);
+  async startOta(options = '', timeoutMs = 60000) {
+    let payload = { cmd: 'START_OTA' };
+    if (typeof options === 'string' && options) {
+      payload.url = options;
+    } else if (typeof options === 'object' && options !== null) {
+      payload = { ...payload, ...options };
+    }
+    return await this.sendCommand(payload, timeoutMs);
   }
 
   _handleStatusNotification(event) {

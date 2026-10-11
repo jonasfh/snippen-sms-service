@@ -63,6 +63,8 @@ def test_ble_commands_synchronized() -> None:
         "STOP_OPERATIONS",
         "GET_LOGS",
         "CLEAR_LOGS",
+        "CHECK_OTA",
+        "START_OTA",
     ]
     for cmd in expected_commands:
         assert f"'{cmd}'" in js_content or f'"{cmd}"' in js_content, (
