@@ -600,7 +600,10 @@ if (btnCheckOta) {
     try {
       spinnerCheckOta.classList.add('show');
       showOtaFeedback('Sjekker etter oppdateringer over Wi-Fi...', 'info');
-      const res = await client.checkOta();
+      const customUrl = document.getElementById('input-ota-url')?.value.trim();
+      const payload = {};
+      if (customUrl) payload.url = customUrl;
+      const res = await client.checkOta(payload);
       spinnerCheckOta.classList.remove('show');
       if (res && res.update_available) {
         showOtaFeedback(`Ny versjon tilgjengelig: v${res.version}! (${res.message || 'Klar til oppdatering'})`, 'success');
@@ -624,7 +627,10 @@ if (btnStartOta) {
     try {
       spinnerStartOta.classList.add('show');
       showOtaFeedback('OTA-oppdatering startet... Gateway laster ned og installerer.', 'info');
-      await client.startOta();
+      const customUrl = document.getElementById('input-ota-url')?.value.trim();
+      const payload = {};
+      if (customUrl) payload.url = customUrl;
+      await client.startOta(payload);
       showOtaFeedback('Oppdatering igangsatt! Gateway restarter...', 'success');
     } catch (err) {
       spinnerStartOta.classList.remove('show');

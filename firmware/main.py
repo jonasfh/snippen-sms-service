@@ -240,8 +240,12 @@ class GatewayApp:
                 import ota
 
                 client = ota.OTAClient(config=self.config)
-                bundle = client.download_bundle()
-                valid, msg = ota.validate_bundle(bundle)
+                if not client.ensure_wifi():
+                    return {"cmd": "CHECK_OTA", "status": "error", "message": "Wi-Fi not connected"}
+                url = payload.get("url") if isinstance(payload, dict) else None
+                force = bool(payload.get("force")) if isinstance(payload, dict) else False
+                bundle = client.download_bundle(url=url)
+                valid, msg = ota.validate_bundle(bundle, force=force)
                 return {
                     "cmd": "CHECK_OTA",
                     "status": "ok" if valid else "notice",
@@ -258,7 +262,8 @@ class GatewayApp:
 
                 client = ota.OTAClient(config=self.config)
                 url = payload.get("url") if isinstance(payload, dict) else None
-                client.perform_ota(url=url, restart=True)
+                force = bool(payload.get("force")) if isinstance(payload, dict) else False
+                client.perform_ota(url=url, force=force, restart=True)
                 return {"cmd": "START_OTA", "status": "ok", "message": "OTA update in progress"}
             except Exception as exc:  # noqa: BLE001
                 return {"cmd": "START_OTA", "status": "error", "message": str(exc)}

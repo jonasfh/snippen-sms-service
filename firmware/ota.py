@@ -411,7 +411,7 @@ class OTAClient:
         if cfg_url:
             return cfg_url
         repo = self.config.get("ota_repo", "jonasfh/snippen-sms-service")
-        return f"https://raw.githubusercontent.com/{repo}/main/dist/firmware_bundle.json"
+        return f"https://github.com/{repo}/releases/latest/download/firmware_bundle.json"
 
     def download_bundle(self, url: str | None = None, max_redirects: int = 3) -> dict:
         """Download firmware_bundle.json from URL with HTTP redirect support."""
@@ -419,6 +419,7 @@ class OTAClient:
             raise RuntimeError("HTTP requests module unavailable")
 
         target_url = self.resolve_bundle_url(url)
+        repo = self.config.get("ota_repo", "jonasfh/snippen-sms-service")
         headers = {
             "Accept": "application/json",
             "User-Agent": f"snippen-ota/{FIRMWARE_VERSION}",
@@ -436,11 +437,28 @@ class OTAClient:
             try:
                 res = requests.get(cur_url, headers=headers)
                 if res.status_code in (301, 302, 303, 307, 308):
-                    loc = res.headers.get("Location") or res.headers.get("location")
+                    loc = None
+                    if hasattr(res, "headers") and res.headers:
+                        for k, v in res.headers.items():
+                            if k.lower() == "location":
+                                loc = v
+                                break
                     if not loc:
                         raise RuntimeError(f"Redirect {res.status_code} missing Location header")
-                    cur_url = loc
+
+                    if loc.startswith("/"):
+                        proto, rest = cur_url.split("://", 1)
+                        host = rest.split("/")[0]
+                        cur_url = f"{proto}://{host}{loc}"
+                    else:
+                        cur_url = loc
+
                     redirect_count += 1
+                    # Strip Authorization if redirected away from github repo to S3 pre-signed storage
+                    if "Authorization" in headers and not cur_url.startswith(
+                        f"https://github.com/{repo}"
+                    ):
+                        headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
                     continue
 
                 if res.status_code != 200:

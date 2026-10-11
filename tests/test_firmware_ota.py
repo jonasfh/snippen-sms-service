@@ -423,3 +423,29 @@ def test_main_app_ble_ota_commands(
     res_start = app.on_ble_command("START_OTA", {})
     assert res_start["cmd"] == "START_OTA"
     assert res_start["status"] == "ok"
+
+
+def test_ota_client_resolve_bundle_url(mpy_env: MicroPythonEnvironment) -> None:
+    import ota
+
+    client_default = ota.OTAClient(config={})
+    assert (
+        client_default.resolve_bundle_url()
+        == "https://github.com/jonasfh/snippen-sms-service/releases/latest/download/firmware_bundle.json"
+    )
+
+    client_custom_repo = ota.OTAClient(config={"ota_repo": "custom/repo"})
+    assert (
+        client_custom_repo.resolve_bundle_url()
+        == "https://github.com/custom/repo/releases/latest/download/firmware_bundle.json"
+    )
+
+    client_custom_url = ota.OTAClient(
+        config={"ota_bundle_url": "http://192.168.1.50:8080/bundle.json"}
+    )
+    assert client_custom_url.resolve_bundle_url() == "http://192.168.1.50:8080/bundle.json"
+
+    assert (
+        client_default.resolve_bundle_url("http://custom.com/bundle.json")
+        == "http://custom.com/bundle.json"
+    )
