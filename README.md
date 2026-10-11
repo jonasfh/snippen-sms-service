@@ -30,6 +30,7 @@ A lightweight, dedicated two-way SMS gateway service designed for the **Snippen*
 Configure and monitor the Lilygo ESP32 SMS Gateway wirelessly over Bluetooth Low Energy (BLE) directly from your smartphone or PC browser without installing native apps:
 
 🌐 **[Launch Web Configurator (GitHub Pages)](https://jonasfh.github.io/snippen-sms-service/)**
+💻 **Run locally:** `python3 -m http.server 8080 --directory tools/web-config` (`http://localhost:8080`)
 📖 **[Web Configurator User Guide](docs/BLE_WEB_CONFIG.md)**
 
 Features:

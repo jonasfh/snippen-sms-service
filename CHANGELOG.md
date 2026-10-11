@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Bekreftelse av sunn firmware i `firmware/main.py` etter 30 sekunders stabil drift med sletting av `.bak`-filer.
   - Støtte for `CHECK_OTA` og `START_OTA` kommandoer over BLE GATT.
   - Enhetstester for OTA i `tests/test_firmware_ota.py` og oppdatert `DEV_README.md`.
+  - Oppdatert dokumentasjon i `docs/BLE_WEB_CONFIG.md`, `docs/README_LILYGO.md`, `DEV_README.md` og `README.md` med instruksjoner for å starte lokal webserver for Web Configuratoren (`python -m http.server 8080 --directory tools/web-config`) og teste firmware OTA lokalt.
 
 ## [0.31.20] - 2026-10-11
 

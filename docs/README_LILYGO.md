@@ -286,6 +286,16 @@ firmware/
 └── test_wifi.py       # Diagnosetest for WiFi-tilkobling
 ```
 
+### Web Bluetooth Konfigurator (`tools/web-config/`)
+
+For provisjonering, overvåking og OTA-oppdatering over Bluetooth Low Energy (BLE), benytt Web Bluetooth-applikasjonen:
+* **Produksjon (GitHub Pages):** [https://jonasfh.github.io/snippen-sms-service/](https://jonasfh.github.io/snippen-sms-service/)
+* **Lokal server for utvikling og testing:**
+  ```bash
+  python3 -m http.server 8080 --directory tools/web-config
+  ```
+  Åpne `http://localhost:8080` i Chrome eller Edge. Se full guide i **[docs/BLE_WEB_CONFIG.md](file:///workspaces/snippen-sms-service/docs/BLE_WEB_CONFIG.md)**.
+
 Se også **[docs/BLE_MANUAL_TESTING.md](file:///workspaces/snippen-sms-service/docs/BLE_MANUAL_TESTING.md)** for en komplett steg-for-steg guide til manuell testing via mobilapper som nRF Connect.
 
 ### Automatisert Deployment med `mpremote`

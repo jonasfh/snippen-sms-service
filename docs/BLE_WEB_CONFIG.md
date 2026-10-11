@@ -6,9 +6,42 @@
 
 ## 🌐 Tilgang og URL
 
+### Produksjon (GitHub Pages)
 Webappen er automatisk publisert på GitHub Pages og tilgjengelig over sikker HTTPS:
 
 🔗 **[https://jonasfh.github.io/snippen-sms-service/](https://jonasfh.github.io/snippen-sms-service/)**
+
+### Lokal utvikling og testing (Lokal webserver)
+
+For å teste lokale endringer i webgrensesnittet før de merges og deployes til GitHub Pages:
+
+1. **Start Pythons innebygde HTTP-server** fra rotkatalogen til repoet:
+   ```bash
+   python3 -m http.server 8080 --directory tools/web-config
+   ```
+2. **Åpne i nettleser på PC**:
+   Gå til **[http://localhost:8080/](http://localhost:8080/)** (eller `http://127.0.0.1:8080/`) i Google Chrome eller Microsoft Edge.
+   *(Merk: Web Bluetooth API krever en sikker kontekst. Chromium tillater automatisk Web Bluetooth på `localhost` og `http://127.0.0.1` uten krav om HTTPS).*
+
+3. **Koble til fra mobiltelefon over lokalt nettverk**:
+   Dersom du åpner fra en mobiltelefon på samme Wi-Fi-nettverk (f.eks. `http://192.168.x.x:8080`):
+   - Chromium tillater som standard kun Web Bluetooth på `localhost` eller over `https://`.
+   - **Løsning A (Anbefalt for mobil):** Koble telefonen til PC-en med USB, åpne `chrome://inspect` i Chrome på PC-en, og aktiver **Port forwarding** for port `8080` til `localhost:8080`. Da kan du åpne `http://localhost:8080` direkte i Chrome på telefonen.
+   - **Løsning B:** Åpne `chrome://flags` på telefonen, søk opp `#unsafely-treat-insecure-origin-as-secure`, legg til `http://<din-ip>:8080` og start Chrome på nytt.
+
+### Lokal testing av Firmware OTA over Wi-Fi
+
+Når den lokale webserveren kjører, kan du også generere og servere en lokal firmware-bundle for trådløs OTA-testing uten å vente på en GitHub-release:
+
+1. Bygg en lokal testbundle (f.eks. versjon `0.32.0`):
+   ```bash
+   python scripts/build_release.py --skip-package --version 0.32.0 --tag v0.32.0 --dist-dir tools/web-config --no-clean
+   ```
+2. I Web Configuratoren under kortet **Firmware OTA Oppdatering**, skriv inn URL-en i feltet *Egendefinert bundle-URL*:
+   ```text
+   http://<din-datamaskin-ip>:8080/firmware_bundle.json
+   ```
+3. Trykk **Sjekk oppdatering** og **Start OTA-oppdatering**.
 
 ---
 
