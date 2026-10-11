@@ -454,10 +454,17 @@ class MockBLE:
 class MockResponse:
     """Mock HTTP response object matching MicroPython urequests."""
 
-    def __init__(self, status_code: int = 200, json_data: Any = None, text: str = "") -> None:
+    def __init__(
+        self,
+        status_code: int = 200,
+        json_data: Any = None,
+        text: str = "",
+        headers: dict | None = None,
+    ) -> None:
         self.status_code = status_code
         self._json_data = json_data
         self.text = text
+        self.headers = headers or {}
         self.closed = False
 
     def json(self) -> Any:
@@ -515,6 +522,10 @@ class MicroPythonEnvironment:
         self.reset_called = False
 
     def install(self) -> None:
+        import binascii
+        import hashlib
+        import os
+
         MockPin.reset_registry()
         MockUART.reset_registry()
         MockWLAN.reset_registry()
@@ -571,6 +582,11 @@ class MicroPythonEnvironment:
         urequests_mod.post = self.mock_urequests.post  # type: ignore[attr-defined]
         sys.modules["urequests"] = urequests_mod
 
+        # Provide uos, uhashlib, ubinascii
+        sys.modules["uos"] = os
+        sys.modules["uhashlib"] = hashlib
+        sys.modules["ubinascii"] = binascii
+
     def uninstall(self) -> None:
         sys.modules.pop("machine", None)
         sys.modules.pop("network", None)
@@ -578,6 +594,9 @@ class MicroPythonEnvironment:
         sys.modules.pop("ubluetooth", None)
         sys.modules.pop("utime", None)
         sys.modules.pop("urequests", None)
+        sys.modules.pop("uos", None)
+        sys.modules.pop("uhashlib", None)
+        sys.modules.pop("ubinascii", None)
         MockPin.reset_registry()
         MockUART.reset_registry()
         MockWLAN.reset_registry()

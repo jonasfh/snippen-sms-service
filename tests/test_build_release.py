@@ -173,6 +173,7 @@ def test_build_firmware_bundle_real_firmware(tmp_path: Path):
         "logger.py",
         "main.py",
         "modem.py",
+        "ota.py",
         "sms_encoding.py",
         "snippen_api.py",
         "version.py",

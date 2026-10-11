@@ -113,6 +113,8 @@ class GatewayApp:
         self.wifi_backoff_sec = 5
         self.consecutive_modem_failures = 0
         self.last_call_notification: dict[str, float] = {}
+        self.ota_verified = False
+        self.ota_boot_time = time.time()
 
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
         """Switch gateway into BLE provisioning mode (Issue #59, #60, #87)."""
@@ -233,6 +235,34 @@ class GatewayApp:
                 self.logger.clear()
             return {"cmd": "CLEAR_LOGS", "status": "ok"}
 
+        if cmd == "CHECK_OTA":
+            try:
+                import ota
+
+                client = ota.OTAClient(config=self.config)
+                bundle = client.download_bundle()
+                valid, msg = ota.validate_bundle(bundle)
+                return {
+                    "cmd": "CHECK_OTA",
+                    "status": "ok" if valid else "notice",
+                    "version": bundle.get("version"),
+                    "update_available": valid,
+                    "message": msg,
+                }
+            except Exception as exc:  # noqa: BLE001
+                return {"cmd": "CHECK_OTA", "status": "error", "message": str(exc)}
+
+        if cmd == "START_OTA":
+            try:
+                import ota
+
+                client = ota.OTAClient(config=self.config)
+                url = payload.get("url") if isinstance(payload, dict) else None
+                client.perform_ota(url=url, restart=True)
+                return {"cmd": "START_OTA", "status": "ok", "message": "OTA update in progress"}
+            except Exception as exc:  # noqa: BLE001
+                return {"cmd": "START_OTA", "status": "error", "message": str(exc)}
+
         return {"cmd": cmd, "status": "ok"}
 
     def get_telemetry_status(self) -> dict:
@@ -244,7 +274,14 @@ class GatewayApp:
             "wifi_ssid": self.config.get("wifi_ssid", ""),
             "firmware_version": FIRMWARE_VERSION,
             "board_profile": self.config.get("board_profile", "lilygo_t_call_a7670e"),
+            "ota_pending": False,
         }
+        try:
+            import ota
+
+            status["ota_pending"] = ota.is_pending()
+        except Exception:  # noqa: BLE001, S110
+            pass
         try:
             import network
 
@@ -644,6 +681,22 @@ class GatewayApp:
         if now - self.last_heartbeat >= hb_interval:
             self.heartbeat()
             self.last_heartbeat = now
+
+        # OTA health confirmation after stability timeout (Issue #129)
+        if not self.ota_verified:
+            stability_sec = self.config.get("ota_stability_timeout_sec", 30)
+            if now - self.ota_boot_time >= stability_sec:
+                self.ota_verified = True
+                try:
+                    import ota
+
+                    if ota.is_pending():
+                        print(
+                            f"[main] Firmware stable after {stability_sec}s. Confirming OTA update..."
+                        )
+                        ota.confirm_healthy()
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[main] Warning: Error during OTA health confirmation: {exc}")
 
     def run(self, max_cycles: int | None = None) -> None:
         """Run the main event loop."""
