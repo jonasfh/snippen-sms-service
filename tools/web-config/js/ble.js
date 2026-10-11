@@ -342,6 +342,25 @@ export class SnippenBLEClient extends EventTarget {
     return await this.sendCommand({ cmd: 'CLEAR_LOGS' }, timeoutMs);
   }
 
+  /**
+   * Query gateway for OTA firmware updates.
+   * @param {number} [timeoutMs=30000]
+   * @returns {Promise<object>}
+   */
+  async checkOta(timeoutMs = 30000) {
+    return await this.sendCommand({ cmd: 'CHECK_OTA' }, timeoutMs);
+  }
+
+  /**
+   * Instruct gateway to download and apply OTA update.
+   * @param {string} [url]
+   * @param {number} [timeoutMs=60000]
+   * @returns {Promise<object>}
+   */
+  async startOta(url = '', timeoutMs = 60000) {
+    return await this.sendCommand({ cmd: 'START_OTA', url }, timeoutMs);
+  }
+
   _handleStatusNotification(event) {
     let rawText = '';
     try {

@@ -75,6 +75,15 @@ const telWifiRssi = document.getElementById('tel-wifi-rssi');
 const telCellular = document.getElementById('tel-cellular');
 const telVersion = document.getElementById('tel-version');
 const telBoardProfile = document.getElementById('tel-board-profile');
+const telOta = document.getElementById('tel-ota');
+
+const cardOta = document.getElementById('card-ota');
+const btnCheckOta = document.getElementById('btn-check-ota');
+const spinnerCheckOta = document.getElementById('spinner-check-ota');
+const btnStartOta = document.getElementById('btn-start-ota');
+const spinnerStartOta = document.getElementById('spinner-start-ota');
+const otaFeedback = document.getElementById('ota-feedback');
+const otaFeedbackText = document.getElementById('ota-feedback-text');
 
 const cardConsole = document.getElementById('card-console');
 const operationsStatusPill = document.getElementById('operations-status-pill');
@@ -172,7 +181,7 @@ function updateConnectionState(state, deviceName = '') {
 }
 
 function setCardsEnabled(enabled) {
-  const cards = [cardWifi, cardApi, cardCalls, cardTelemetry, cardConsole, actionBar];
+  const cards = [cardWifi, cardApi, cardCalls, cardTelemetry, cardOta, cardConsole, actionBar];
   cards.forEach((el) => {
     if (el) {
       el.style.opacity = enabled ? '1' : '0.5';
@@ -252,6 +261,15 @@ function updateTelemetry(stat) {
   }
   if (stat.board_profile && telBoardProfile) {
     telBoardProfile.textContent = stat.board_profile;
+  }
+  if (stat.ota_pending !== undefined && telOta) {
+    if (stat.ota_pending) {
+      telOta.textContent = 'Venter på bekreftelse (Pending)';
+      telOta.className = 'metric-val highlight';
+    } else {
+      telOta.textContent = 'Ingen ventende';
+      telOta.className = 'metric-val';
+    }
   }
   if (stat.live_operations !== undefined && stat.live_operations !== isLiveOperationsRunning) {
     updateOperationsState(Boolean(stat.live_operations));
@@ -570,6 +588,50 @@ logFilterInput.addEventListener('input', (e) => {
   filterQuery = e.target.value.trim().toLowerCase();
   renderFilteredLogs();
 });
+
+function showOtaFeedback(msg, type = 'info') {
+  if (!otaFeedback || !otaFeedbackText) return;
+  otaFeedback.className = `feedback-box show ${type}`;
+  otaFeedbackText.textContent = msg;
+}
+
+if (btnCheckOta) {
+  btnCheckOta.addEventListener('click', async () => {
+    try {
+      spinnerCheckOta.classList.add('show');
+      showOtaFeedback('Sjekker etter oppdateringer over Wi-Fi...', 'info');
+      const res = await client.checkOta();
+      spinnerCheckOta.classList.remove('show');
+      if (res && res.update_available) {
+        showOtaFeedback(`Ny versjon tilgjengelig: v${res.version}! (${res.message || 'Klar til oppdatering'})`, 'success');
+        if (btnStartOta) btnStartOta.style.display = 'inline-flex';
+      } else {
+        showOtaFeedback(res?.message || 'Ingen ny firmware-oppdatering tilgjengelig.', 'info');
+        if (btnStartOta) btnStartOta.style.display = 'none';
+      }
+    } catch (err) {
+      spinnerCheckOta.classList.remove('show');
+      showOtaFeedback(`Feil under sjekk av oppdatering: ${err.message}`, 'error');
+    }
+  });
+}
+
+if (btnStartOta) {
+  btnStartOta.addEventListener('click', async () => {
+    if (!confirm('Er du sikker på at du vil starte OTA-oppdatering? Gatewayen vil laste ned, verifisere og starte på nytt.')) {
+      return;
+    }
+    try {
+      spinnerStartOta.classList.add('show');
+      showOtaFeedback('OTA-oppdatering startet... Gateway laster ned og installerer.', 'info');
+      await client.startOta();
+      showOtaFeedback('Oppdatering igangsatt! Gateway restarter...', 'success');
+    } catch (err) {
+      spinnerStartOta.classList.remove('show');
+      showOtaFeedback(`Feil under OTA-oppdatering: ${err.message}`, 'error');
+    }
+  });
+}
 
 // Initialise
 initClient();

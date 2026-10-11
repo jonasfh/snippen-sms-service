@@ -176,3 +176,30 @@ def test_telemetry_board_profile_and_version_in_web_config() -> None:
     assert "tel-board-profile" in app_js_content
     assert "stat.board_profile" in app_js_content
     assert "stat.firmware_version" in app_js_content
+
+
+def test_telemetry_ota_status_and_update_controls_in_web_config() -> None:
+    """Verify that Web UI index.html, ble.js, and app.js support OTA status and commands (Issue #129)."""
+    html_path = REPO_ROOT / "tools" / "web-config" / "index.html"
+    app_js_path = REPO_ROOT / "tools" / "web-config" / "js" / "app.js"
+    ble_js_path = REPO_ROOT / "tools" / "web-config" / "js" / "ble.js"
+
+    html_content = html_path.read_text(encoding="utf-8")
+    app_js_content = app_js_path.read_text(encoding="utf-8")
+    ble_js_content = ble_js_path.read_text(encoding="utf-8")
+
+    # DOM elements in index.html
+    assert 'id="tel-ota"' in html_content
+    assert 'id="card-ota"' in html_content
+    assert 'id="btn-check-ota"' in html_content
+    assert 'id="btn-start-ota"' in html_content
+
+    # Logic in app.js
+    assert "telOta" in app_js_content
+    assert "stat.ota_pending" in app_js_content
+    assert "client.checkOta" in app_js_content
+    assert "client.startOta" in app_js_content
+
+    # Client methods in ble.js
+    assert "async checkOta" in ble_js_content
+    assert "async startOta" in ble_js_content
