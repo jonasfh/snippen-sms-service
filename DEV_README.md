@@ -303,6 +303,24 @@ The standalone cellular gateway includes an integrated, fail-safe Over-The-Air (
 | **Device rolls back on reboot** | Crash or watchdog reset before 30s | Device booted into Safe Mode and restored from `.bak`. Inspect `/logs` via BLE or serial console. |
 | **Configuration reset after OTA** | Should never occur | Sensitive files (`config.json`, `config_local.py`) are strictly blacklisted from the bundle and staging engine. |
 
+### Web Configurator Development & Local Server (`tools/web-config/`)
+
+To develop or test the Web Bluetooth Configurator interface locally without deploying to GitHub Pages:
+
+1. **Start the local HTTP server**:
+   ```bash
+   python -m http.server 8080 --directory tools/web-config
+   ```
+2. **Access in browser**:
+   Navigate to `http://localhost:8080/` in Google Chrome or Microsoft Edge. Web Bluetooth is natively supported on `localhost` without requiring HTTPS.
+3. **Local OTA testing**:
+   When testing Over-The-Air firmware updates locally against the physical board, generate a test bundle:
+   ```bash
+   python scripts/build_release.py --skip-package --version 0.32.0 --tag v0.32.0 --dist-dir tools/web-config --no-clean
+   ```
+   Then provide `http://<host-ip>:8080/firmware_bundle.json` in the custom bundle URL field of the Web Configurator.
+
+
 
 ## CI/CD Workflows
 
