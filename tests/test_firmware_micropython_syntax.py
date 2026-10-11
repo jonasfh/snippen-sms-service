@@ -34,6 +34,10 @@ def get_mpy_cross_cmd() -> list[str]:
     if venv_mpy.exists():
         return [str(venv_mpy)]
 
+    devcontainer_mpy = Path("/home/vscode/.venv/bin/mpy-cross")
+    if devcontainer_mpy.exists():
+        return [str(devcontainer_mpy)]
+
     # Check as python module: python -m mpy_cross
     try:
         import mpy_cross  # noqa: F401

@@ -457,6 +457,7 @@ def test_ble_server_notify_status_includes_version_and_profile(
     """Verify telemetry status reporting exposes firmware_version and board_profile (Issue #127)."""
     import ble_config
     import main
+    import version
 
     mock_ble = MockBLE()
     server = ble_config.BLEConfigServer(ble=mock_ble)
@@ -468,7 +469,7 @@ def test_ble_server_notify_status_includes_version_and_profile(
 
     status = app.get_telemetry_status()
     assert "firmware_version" in status
-    assert status["firmware_version"] == "0.31.19"
+    assert status["firmware_version"] == version.FIRMWARE_VERSION
     assert status["board_profile"] == "lilygo_t_call_a7670e"
 
     server.start()
@@ -477,5 +478,5 @@ def test_ble_server_notify_status_includes_version_and_profile(
 
     status_bytes = mock_ble.gatts_read(server.handle_status)
     status_data = json.loads(status_bytes.decode("utf-8"))
-    assert status_data["firmware_version"] == "0.31.19"
+    assert status_data["firmware_version"] == version.FIRMWARE_VERSION
     assert status_data["board_profile"] == "lilygo_t_call_a7670e"
