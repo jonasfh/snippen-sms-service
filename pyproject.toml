@@ -47,6 +47,7 @@ pythonpath = [".", "src"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
+exclude = [".agents"]
 
 [tool.ruff.lint.per-file-ignores]
 "firmware/*" = ["FURB188"]

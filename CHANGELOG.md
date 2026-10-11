@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.20] - 2026-10-11
+
+### Added
+- Firmware OTA Fase 2: Pakking av `firmware_bundle.json` i GitHub release-pipeline (`#128`):
+  - Utvidet `scripts/build_release.py` med funksjonen `build_firmware_bundle()` som samler alle produksjonsfiler fra `firmware/` (`boot.py`, `main.py`, `modem.py`, `wifi.py`, `ble_config.py`, `button.py`, `config.py`, `logger.py`, `sms_encoding.py`, `snippen_api.py`, `version.py`).
+  - Implementert automatisk filtrering av sensitive, lokale og midlertidige filer (`config.json`, `config_local.py`, `config.local.py`, `*local*.py`, `config.example.py`, `test_*.py`, `__pycache__`).
+  - Bygget enhetlig JSON-struktur med metadata (`version`, `tag`, `created_at`, `total_files`, `total_bytes`) og ordbok over filer med tilhørende SHA-256 heksadesimal sjekksum, filstørrelse og filinnhold.
+  - Integrert sjekksumberegning for selve `firmware_bundle.json` i `dist/checksums.txt`.
+  - Oppdatert release-pipeline i `.github/workflows/deploy.yml` for eksplisitt versjons-/tagoverføring og automatisk publisering av `firmware_bundle.json` til GitHub Releases.
+  - Lagt til enhetstester i `tests/test_build_release.py` for bundle-generering, filfiltrering, sjekksumintegritet og ESP32 minnebegrensninger.
+
 ## [0.31.19] - 2026-10-10
 
 ### Added

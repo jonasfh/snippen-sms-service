@@ -32,6 +32,7 @@ snippen-sms-service/
 │   ├── test_modem.py         # On-device cellular modem and SIM memory diagnostic test
 │   └── test_wifi.py          # On-device WiFi connection test
 ├── scripts/                  # Development & formatting utilities
+│   ├── build_release.py      # Release packaging, firmware bundle generator & checksum utility
 │   ├── deploy_firmware.py    # Automated firmware deployment via mpremote
 │   ├── format.py             # Whitespace & file formatting tool
 │   ├── test_api_ping.py      # Host runner for API authentication ping
@@ -231,6 +232,39 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
   - **Setting Board Profile**: Specify `"board_profile": "lilygo_t_call_a7670e"` in `config.json` or `config_local.py`.
   - **Telemetry Exposure**: Active `firmware_version` and `board_profile` are reported in real-time via `get_telemetry_status()` over BLE GATT and displayed on the Web Configurator (`tools/web-config`).
 
+### Firmware OTA Packaging (`firmware_bundle.json`)
+
+To enable LilyGO boards to upgrade firmware over Wi-Fi with minimal resource overhead, the release pipeline bundles all production MicroPython files into a single, unified JSON release artifact (`firmware_bundle.json`):
+
+- **Single HTTPS Request**: Eliminates the overhead of 10+ separate TLS handshakes on memory-constrained microcontrollers by delivering all files in one payload.
+- **Security & File Filtering**:
+  - **Included Production Files**: `boot.py`, `main.py`, `modem.py`, `wifi.py`, `ble_config.py`, `button.py`, `config.py`, `logger.py`, `sms_encoding.py`, `snippen_api.py`, `version.py`.
+  - **Excluded Files**: Sensitive local files (`config.json`, `config_local.py`, `config.local.py`, `*local*.py`), templates (`config.example.py`), test/diagnostic scripts (`test_*.py`), and Python cache artifacts (`__pycache__`).
+- **Bundle Format**:
+  ```json
+  {
+    "version": "0.31.20",
+    "tag": "v0.31.20",
+    "created_at": "2026-10-11T01:05:00Z",
+    "total_files": 11,
+    "total_bytes": 144305,
+    "files": {
+      "boot.py": {
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "size": 6730,
+        "content": "# ... UTF-8 code content ..."
+      },
+      "main.py": {
+        "sha256": "...",
+        "size": 29061,
+        "content": "# ... UTF-8 code content ..."
+      }
+    }
+  }
+  ```
+- **Integrity Verification**: Each individual file contains a SHA-256 checksum for post-write flash verification, and the bundle itself is verified against its entry in `checksums.txt`.
+- **ESP32 Memory Constraints**: Total bundle payload size (~150 KB) and single-file sizes (max ~35 KB) are kept well within ESP32 RAM buffering limits.
+
 ## CI/CD Workflows
 
 - **PR Validator (`.github/workflows/pr-validator.yml`)**:
@@ -241,5 +275,5 @@ The standalone cellular gateway runs MicroPython on the Lilygo T-Call A7670E ESP
 - **Deploy & Release Tagging (`.github/workflows/deploy.yml`)**:
   - Triggers on push to `main` (merges).
   - Automatically tags release with `v<version>` if the tag does not already exist.
-  - Builds `.whl` and `.tar.gz` distributions with `python scripts/build_release.py` and calculates `checksums.txt`.
-  - Publishes a formal GitHub Release attaching all build distributions and checksums.
+  - Builds `.whl` and `.tar.gz` package distributions, generates `firmware_bundle.json`, and calculates SHA-256 hashes in `checksums.txt` using `python scripts/build_release.py`.
+  - Publishes a formal GitHub Release attaching all build distributions, `firmware_bundle.json`, and `checksums.txt`.

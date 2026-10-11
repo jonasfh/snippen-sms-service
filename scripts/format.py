@@ -15,6 +15,7 @@ from pathlib import Path
 IGNORED_DIRS = {
     ".git",
     ".venv",
+    ".agents",
     "__pycache__",
     "build",
     "dist",
