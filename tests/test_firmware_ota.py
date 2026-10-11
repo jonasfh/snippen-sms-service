@@ -476,3 +476,60 @@ def test_check_for_update_boot_loop_guard(
     # force=True overrides
     res_forced = client.check_for_update(force=True)
     assert res_forced["update_available"] is True
+
+
+def test_clean_staged_files(
+    mpy_env: MicroPythonEnvironment, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify clean_staged_files removes leftover .new files."""
+    monkeypatch.chdir(tmp_path)
+    import ota
+
+    (tmp_path / "main.py.new").write_text("dummy")
+    (tmp_path / "ota.py.new").write_text("dummy")
+    (tmp_path / "normal.py").write_text("keep")
+
+    removed = ota.clean_staged_files()
+    assert removed == 2
+    assert not (tmp_path / "main.py.new").exists()
+    assert not (tmp_path / "ota.py.new").exists()
+    assert (tmp_path / "normal.py").exists()
+
+
+def test_stage_and_validate_bundle_feeds_watchdog(
+    mpy_env: MicroPythonEnvironment, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify validate_bundle, stage_bundle, and apply_staged_update call feed_wdt."""
+    monkeypatch.chdir(tmp_path)
+    import ota
+
+    content = "print('hello')\n"
+    bundle = {
+        "version": "9.9.9",
+        "files": {
+            "test_app.py": {
+                "content": content,
+                "sha256": ota.calculate_sha256(content),
+                "size": len(content),
+            }
+        },
+    }
+
+    feed_count = [0]
+
+    def mock_feed():
+        feed_count[0] += 1
+
+    valid, _ = ota.validate_bundle(bundle, feed_wdt=mock_feed)
+    assert valid is True
+    assert feed_count[0] >= 1
+
+    stage_feed_count = [0]
+    staged = ota.stage_bundle(bundle, feed_wdt=lambda: stage_feed_count.append(1))
+    assert len(staged) == 1
+    assert len(stage_feed_count) > 0
+
+    apply_feed_count = [0]
+    success = ota.apply_staged_update(bundle, staged, feed_wdt=lambda: apply_feed_count.append(1))
+    assert success is True
+    assert len(apply_feed_count) > 0

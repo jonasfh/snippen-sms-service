@@ -241,6 +241,8 @@ class GatewayApp:
                 import ota
 
                 client = ota.OTAClient(config=self.config)
+                if hasattr(client, "wdt"):
+                    client.wdt = self.wdt
                 url = payload.get("url") if isinstance(payload, dict) else None
                 force = bool(payload.get("force")) if isinstance(payload, dict) else False
                 res = client.check_for_update(url=url, force=force)
@@ -259,9 +261,32 @@ class GatewayApp:
                 import ota
 
                 client = ota.OTAClient(config=self.config)
+                if hasattr(client, "wdt"):
+                    client.wdt = self.wdt
                 url = payload.get("url") if isinstance(payload, dict) else None
                 force = bool(payload.get("force")) if isinstance(payload, dict) else False
                 print(f"[main] OTA update requested via BLE (cmd: {cmd})...")
+                # 1. Pre-notify central over BLE so companion app knows request was accepted
+                if self.ble_server is not None and hasattr(
+                    self.ble_server, "notify_command_response"
+                ):
+                    try:
+                        self.ble_server.notify_command_response(
+                            {"cmd": cmd, "status": "ok", "message": "OTA update in progress"}
+                        )
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+
+                # 2. Allow 300ms for BLE notification packet to be transmitted over RF
+                time.sleep(0.3)
+
+                # 3. Stop BLE server to eliminate 2.4 GHz radio coexistence collisions during Wi-Fi download
+                if self.ble_server is not None and self.ble_server.is_running:
+                    try:
+                        self.ble_server.stop()
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[main] Warning: Failed to stop BLE before OTA: {exc}")
+
                 client.perform_ota(url=url, force=force, restart=True)
                 return {"cmd": cmd, "status": "ok", "message": "OTA update in progress"}
             except Exception as exc:  # noqa: BLE001
@@ -394,7 +419,12 @@ class GatewayApp:
         # Initialize hardware watchdog (Issue #53)
         enable_wdt = self.config.get("enable_watchdog", True)
         if enable_wdt and machine is not None and hasattr(machine, "WDT"):
-            wdt_timeout = self.config.get("watchdog_timeout_ms", 60000)
+            wdt_timeout = self.config.get("watchdog_timeout_ms") or self.config.get(
+                "wdt_timeout_ms"
+            )
+            if not wdt_timeout:
+                wdt_timeout = self.config.get("watchdog_timeout_sec", 60) * 1000
+            wdt_timeout = max(30000, int(wdt_timeout))
             try:
                 self.wdt = machine.WDT(timeout=wdt_timeout)
                 print(f"[main] Hardware watchdog enabled ({wdt_timeout}ms timeout).")
@@ -638,6 +668,8 @@ class GatewayApp:
                 print(
                     f"[main] Ny firmware-versjon v{target_ver} tilgjengelig ved oppstart! Igangsetter OTA-oppdatering..."
                 )
+                if hasattr(client, "wdt"):
+                    client.wdt = self.wdt
                 client.perform_ota(restart=True)
                 return True
             print(
