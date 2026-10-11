@@ -495,3 +495,109 @@ def test_boot_ota_retry_guard_prevents_infinite_loop(
     # Confirm healthy clears failed record
     ota.clear_failed_version()
     assert ota.get_failed_version() is None
+
+
+def test_poll_outbox_reports_status_immediately_per_message(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify each outbound message status is reported immediately after sending (Issue #137)."""
+    import main
+    import wifi
+
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    app = main.GatewayApp(
+        config={
+            "wifi_ssid": "TestSSID",
+            "snippen_api_token": "valid_token",
+            "outbox_batch_limit": 5,
+        }
+    )
+
+    reported_statuses: list[list[dict]] = []
+
+    class MockApiClient:
+        def fetch_outbox(self, limit: int = 5) -> list[dict]:
+            return [
+                {"id": 101, "recipient": "+4791111111", "body": "Melding 1"},
+                {"id": 102, "recipient": "+4792222222", "body": "Melding 2"},
+                {"id": 103, "recipient": "+4793333333", "body": "Melding 3"},
+            ]
+
+        def report_outbox_status(self, statuses: list[dict]) -> bool:
+            reported_statuses.append(statuses)
+            return True
+
+    send_sms_calls: list[tuple[str, str]] = []
+
+    class MockModem:
+        def send_sms(self, recipient: str, body: str) -> tuple[bool, str]:
+            send_sms_calls.append((recipient, body))
+            if recipient == "+4792222222":
+                return False, "NO CARRIER"
+            return True, f"REF_{len(send_sms_calls)}"
+
+    app.api_client = MockApiClient()
+    app.modem = MockModem()
+
+    processed_count = app.poll_outbox()
+
+    assert processed_count == 3
+    assert len(send_sms_calls) == 3
+
+    # Must be reported immediately after each SMS (3 calls, each with exactly 1 status)
+    assert len(reported_statuses) == 3
+
+    # Message 1 delivered successfully
+    assert reported_statuses[0] == [
+        {"external_id": "101", "status": "sent", "modem_message_id": "REF_1"}
+    ]
+
+    # Message 2 transmission failed
+    assert reported_statuses[1] == [
+        {"external_id": "102", "status": "failed", "error_message": "NO CARRIER"}
+    ]
+
+    # Message 3 delivered successfully
+    assert reported_statuses[2] == [
+        {"external_id": "103", "status": "sent", "modem_message_id": "REF_3"}
+    ]
+
+
+def test_poll_outbox_resilient_when_reporting_fails(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify loop continues even if reporting a single status raises an exception (Issue #137)."""
+    import main
+    import wifi
+
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    app = main.GatewayApp(config={"wifi_ssid": "TestSSID", "snippen_api_token": "valid_token"})
+
+    reported_statuses: list[list[dict]] = []
+
+    class MockApiClient:
+        def fetch_outbox(self, limit: int = 5) -> list[dict]:
+            return [
+                {"id": 201, "recipient": "+4791111111", "body": "Test 1"},
+                {"id": 202, "recipient": "+4792222222", "body": "Test 2"},
+            ]
+
+        def report_outbox_status(self, statuses: list[dict]) -> bool:
+            if statuses[0]["external_id"] == "201":
+                raise RuntimeError("Network glitch")
+            reported_statuses.append(statuses)
+            return True
+
+    class MockModem:
+        def send_sms(self, recipient: str, body: str) -> tuple[bool, str]:
+            return True, "OK"
+
+    app.api_client = MockApiClient()
+    app.modem = MockModem()
+
+    processed_count = app.poll_outbox()
+    assert processed_count == 2
+    assert len(reported_statuses) == 1
+    assert reported_statuses[0][0]["external_id"] == "202"
