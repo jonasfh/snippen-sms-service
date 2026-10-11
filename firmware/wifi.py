@@ -144,6 +144,17 @@ def test_connection(ssid: str, password: str = "", timeout_sec: int = 15) -> dic
     }
 
 
+def _has_valid_ip(wlan: object) -> bool:
+    """Return True if WLAN interface has acquired a valid non-zero IP from DHCP."""
+    try:
+        if hasattr(wlan, "ifconfig"):
+            ip = wlan.ifconfig()[0]
+            return bool(ip and ip != "0.0.0.0")
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
 def connect_wifi(ssid: str, password: str = "", timeout_sec: int = 20) -> bool:
     """Connect to configured WiFi network for active gateway operation."""
     wlan = get_wlan()
@@ -154,17 +165,19 @@ def connect_wifi(ssid: str, password: str = "", timeout_sec: int = 20) -> bool:
         print("[wifi] Error: No WiFi SSID configured.")
         return False
 
-    if wlan.isconnected():
+    if wlan.isconnected() and _has_valid_ip(wlan):
         print(f"[wifi] Already connected. IP: {wlan.ifconfig()[0]}")
         return True
 
     print(f"[wifi] Connecting to '{ssid}'...")
     wlan.connect(ssid, password)
     start = time.time()
-    while not wlan.isconnected() and (time.time() - start) < timeout_sec:
-        time.sleep(1)
+    while (not wlan.isconnected() or not _has_valid_ip(wlan)) and (
+        time.time() - start
+    ) < timeout_sec:
+        time.sleep(0.5)
 
-    if wlan.isconnected():
+    if wlan.isconnected() and _has_valid_ip(wlan):
         print(f"[wifi] Connected successfully! IP: {wlan.ifconfig()[0]}")
         return True
 
@@ -173,12 +186,12 @@ def connect_wifi(ssid: str, password: str = "", timeout_sec: int = 20) -> bool:
 
 
 def is_connected() -> bool:
-    """Check if WiFi station interface is active and connected."""
+    """Check if WiFi station interface is active, connected, and has an IP assigned."""
     if network is None:
         return False
     try:
         wlan = network.WLAN(network.STA_IF)
-        return wlan.isconnected()
+        return bool(wlan.isconnected() and _has_valid_ip(wlan))
     except Exception:  # noqa: BLE001
         return False
 

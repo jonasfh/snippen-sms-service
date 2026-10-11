@@ -94,6 +94,26 @@ def test_wifi_test_connection_empty_ssid(mpy_env: MicroPythonEnvironment) -> Non
     assert res["connected"] is False
 
 
+def test_wifi_is_connected_requires_valid_ip(mpy_env: MicroPythonEnvironment) -> None:
+    import network
+    import wifi
+
+    wlan = network.WLAN(network.STA_IF)
+
+    # When connected with valid IP
+    wlan._is_connected = True
+    wlan.ifconfig(("192.168.1.100", "255.255.255.0", "192.168.1.1", "8.8.8.8"))
+    assert wifi.is_connected() is True
+
+    # When connected but IP is still 0.0.0.0 (DHCP pending)
+    wlan.ifconfig(("0.0.0.0", "0.0.0.0", "0.0.0.0", "0.0.0.0"))
+    assert wifi.is_connected() is False
+
+    # When not connected
+    wlan._is_connected = False
+    assert wifi.is_connected() is False
+
+
 def test_save_config_persists_to_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import config
 

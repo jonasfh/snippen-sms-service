@@ -255,8 +255,27 @@ def rollback_ota(status: dict | None = None) -> bool:
     return True
 
 
+def clean_staged_files() -> int:
+    """Remove leftover .new files from previous interrupted updates."""
+    cleaned = 0
+    try:
+        for f in os.listdir():
+            if f.endswith(".new"):
+                try:
+                    os.remove(f)
+                    cleaned += 1
+                except Exception:  # noqa: BLE001, S110
+                    pass
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return cleaned
+
+
 def validate_bundle(
-    bundle: dict, current_version: str | None = None, force: bool = False
+    bundle: dict,
+    current_version: str | None = None,
+    force: bool = False,
+    feed_wdt: object | None = None,
 ) -> tuple[bool, str]:
     """Validate structure, version, file paths, and in-memory SHA-256 checksums."""
     if not isinstance(bundle, dict):
@@ -285,6 +304,8 @@ def validate_bundle(
         return False, "Bundle contains no files"
 
     for filename, file_info in files.items():
+        if callable(feed_wdt):
+            feed_wdt()
         if not isinstance(filename, str) or not isinstance(file_info, dict):
             return False, f"Invalid entry for file: {filename}"
 
@@ -325,14 +346,18 @@ def validate_bundle(
     return True, "Valid"
 
 
-def stage_bundle(bundle: dict) -> list[str]:
+def stage_bundle(bundle: dict, feed_wdt: object | None = None) -> list[str]:
     """Write each bundle file to <filename>.new and verify on-flash SHA-256."""
     files = bundle.get("files", {})
     staged: list[str] = []
     current_stage_path = None
 
+    clean_staged_files()
+
     try:
         for filename, file_info in files.items():
+            if callable(feed_wdt):
+                feed_wdt()
             stage_path = f"{filename}.new"
             current_stage_path = stage_path
             content = file_info["content"]
@@ -340,6 +365,9 @@ def stage_bundle(bundle: dict) -> list[str]:
 
             with open(stage_path, "w") as f:
                 f.write(content)
+
+            if callable(feed_wdt):
+                feed_wdt()
 
             # Read back from flash and verify integrity
             with open(stage_path, "r") as f:
@@ -350,6 +378,9 @@ def stage_bundle(bundle: dict) -> list[str]:
                 raise RuntimeError(
                     f"Post-write flash verification failed for {stage_path}: hash mismatch"
                 )
+
+            if callable(feed_wdt):
+                feed_wdt()
 
             staged.append(stage_path)
             current_stage_path = None
@@ -369,7 +400,9 @@ def stage_bundle(bundle: dict) -> list[str]:
         raise RuntimeError(f"OTA staging failed: {exc}") from exc
 
 
-def apply_staged_update(bundle: dict, staged_paths: list[str]) -> bool:
+def apply_staged_update(
+    bundle: dict, staged_paths: list[str], feed_wdt: object | None = None
+) -> bool:
     """Backup active files to .bak, atomically swap .new to active, and set ota_pending."""
     files = bundle.get("files", {})
     new_version = bundle.get("version", "unknown")
@@ -390,6 +423,8 @@ def apply_staged_update(bundle: dict, staged_paths: list[str]) -> bool:
 
     try:
         for filename in file_list:
+            if callable(feed_wdt):
+                feed_wdt()
             stage_path = f"{filename}.new"
             bak_path = f"{filename}.bak"
 
@@ -417,6 +452,9 @@ def apply_staged_update(bundle: dict, staged_paths: list[str]) -> bool:
             else:
                 os.rename(stage_path, filename)
 
+            if callable(feed_wdt):
+                feed_wdt()
+
             print(f"[ota] Activated {filename} (backup at {bak_path})")
 
         print(f"[ota] Update to v{new_version} applied successfully. Pending verification.")
@@ -430,8 +468,22 @@ def apply_staged_update(bundle: dict, staged_paths: list[str]) -> bool:
 class OTAClient:
     """Over-The-Air firmware updater coordinating Wi-Fi download and safe flashing."""
 
-    def __init__(self, config: dict | None = None) -> None:
+    def __init__(self, config: dict | None = None, wdt: object | None = None) -> None:
         self.config = config if config is not None else load_config()
+        self.wdt = wdt
+
+    def feed_watchdog(self) -> None:
+        """Feed hardware watchdog and run garbage collection during long OTA operations."""
+        if self.wdt is not None and hasattr(self.wdt, "feed"):
+            try:
+                self.wdt.feed()
+            except Exception:  # noqa: BLE001, S110
+                pass
+        if gc is not None:
+            try:
+                gc.collect()
+            except Exception:  # noqa: BLE001, S110
+                pass
 
     def ensure_wifi(self) -> bool:
         """Connect to Wi-Fi if currently disconnected."""
@@ -478,7 +530,9 @@ class OTAClient:
         while redirect_count <= max_redirects:
             res = None
             try:
+                self.feed_watchdog()
                 res = requests.get(cur_url, headers=headers)
+                self.feed_watchdog()
                 if res.status_code in (301, 302, 303, 307, 308):
                     loc = None
                     if hasattr(res, "headers") and res.headers:
@@ -507,10 +561,9 @@ class OTAClient:
                 if res.status_code != 200:
                     raise RuntimeError(f"HTTP error {res.status_code} fetching bundle")
 
-                if gc is not None:
-                    gc.collect()
-
+                self.feed_watchdog()
                 data = res.json()
+                self.feed_watchdog()
                 if not isinstance(data, dict):
                     raise TypeError("Response payload is not valid JSON dictionary")
                 return data
@@ -525,11 +578,11 @@ class OTAClient:
 
     def check_for_update(self, url: str | None = None, force: bool = False) -> dict:
         """Check if firmware update is available, using GitHub API for fast check if applicable."""
+        self.feed_watchdog()
         if not self.ensure_wifi():
             raise RuntimeError("Could not establish Wi-Fi connection for OTA")
 
-        if gc is not None:
-            gc.collect()
+        self.feed_watchdog()
 
         target_url = self.resolve_bundle_url(url)
         repo = self.config.get("ota_repo", "jonasfh/snippen-sms-service")
@@ -548,7 +601,9 @@ class OTAClient:
             res = None
             try:
                 print(f"[ota] Checking latest release from GitHub API ({api_url})...")
+                self.feed_watchdog()
                 res = requests.get(api_url, headers=headers)
+                self.feed_watchdog()
                 if res.status_code == 200:
                     data = res.json()
                     tag = (
@@ -591,8 +646,10 @@ class OTAClient:
                         pass
 
         # Fallback or custom bundle URL: download bundle and validate manifest
+        self.feed_watchdog()
         bundle = self.download_bundle(url=target_url)
-        valid, msg = validate_bundle(bundle, force=force)
+        self.feed_watchdog()
+        valid, msg = validate_bundle(bundle, force=force, feed_wdt=self.feed_watchdog)
         return {
             "update_available": valid,
             "version": bundle.get("version"),
@@ -606,23 +663,25 @@ class OTAClient:
         restart: bool = True,
     ) -> bool:
         """Execute complete OTA workflow: connect Wi-Fi, download, validate, stage, and apply."""
+        self.feed_watchdog()
         if not self.ensure_wifi():
             raise RuntimeError("Could not establish Wi-Fi connection for OTA")
 
-        if gc is not None:
-            gc.collect()
-
+        self.feed_watchdog()
         bundle = self.download_bundle(url)
+        self.feed_watchdog()
 
-        valid, err = validate_bundle(bundle, force=force)
+        valid, err = validate_bundle(bundle, force=force, feed_wdt=self.feed_watchdog)
         if not valid:
             raise ValueError(f"Bundle validation failed: {err}")
 
         print(f"[ota] Validated firmware bundle v{bundle['version']}. Staging files...")
-        staged = stage_bundle(bundle)
+        staged = stage_bundle(bundle, feed_wdt=self.feed_watchdog)
+        self.feed_watchdog()
 
         print("[ota] Applying staged files...")
-        success = apply_staged_update(bundle, staged)
+        success = apply_staged_update(bundle, staged, feed_wdt=self.feed_watchdog)
+        self.feed_watchdog()
 
         if success and restart and machine is not None and hasattr(machine, "reset"):
             print("[ota] Rebooting device into updated firmware...")

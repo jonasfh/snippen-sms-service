@@ -207,6 +207,15 @@ def test_telemetry_ota_status_and_update_controls_in_web_config() -> None:
     assert "async checkOta" in ble_js_content
     assert "async startOta" in ble_js_content
 
+    # Mock client methods in ble.js for offline testing
+    mock_class_match = re.search(
+        r"class MockSnippenBLEClient[\s\S]*?\{([\s\S]*?)\n\}", ble_js_content
+    )
+    assert mock_class_match is not None
+    mock_body = mock_class_match.group(1)
+    assert "async checkOta" in mock_body
+    assert "async startOta" in mock_body
+
 
 def test_ota_check_on_boot_and_banner_contract() -> None:
     """Verify that Web UI supports ota_check_on_boot, OTA banner, and GitHub releases check (Issue #130)."""

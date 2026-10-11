@@ -663,6 +663,21 @@ export class MockSnippenBLEClient extends EventTarget {
     return res.lines || [];
   }
 
+  async checkOta(options = {}, timeoutMs = 45000) {
+    const payload = typeof options === 'object' && options !== null ? { cmd: 'CHECK_OTA', ...options } : { cmd: 'CHECK_OTA' };
+    return await this.sendCommand(payload, timeoutMs);
+  }
+
+  async startOta(options = '', timeoutMs = 120000) {
+    let payload = { cmd: 'ota_update' };
+    if (typeof options === 'string' && options) {
+      payload.url = options;
+    } else if (typeof options === 'object' && options !== null) {
+      payload = { ...payload, ...options };
+    }
+    return await this.sendCommand(payload, timeoutMs);
+  }
+
   async clearLogs() {
     return await this.sendCommand({ cmd: 'CLEAR_LOGS' });
   }
