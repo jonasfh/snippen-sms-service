@@ -150,7 +150,7 @@ def _has_valid_ip(wlan: object) -> bool:
         if hasattr(wlan, "ifconfig"):
             ip = wlan.ifconfig()[0]
             return bool(ip and ip != "0.0.0.0")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110
         pass
     return False
 
