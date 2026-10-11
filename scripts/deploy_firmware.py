@@ -84,6 +84,7 @@ def deploy_firmware(
 
     files_to_deploy = [
         "boot.py",
+        "version.py",
         "logger.py",
         "config.py",
         "modem.py",
@@ -97,6 +98,7 @@ def deploy_firmware(
         "test_modem.py",
         "test_api.py",
         "test_wifi.py",
+        "ota.py",
         "main.py",
     ]
 
