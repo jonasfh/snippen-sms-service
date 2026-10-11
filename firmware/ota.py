@@ -528,7 +528,7 @@ class OTAClient:
                         "version": target_ver,
                         "message": msg,
                     }
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 print(f"[ota] GitHub API check failed: {exc}. Falling back to bundle download.")
             finally:
                 if res is not None and hasattr(res, "close"):
