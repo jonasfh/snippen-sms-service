@@ -22,8 +22,12 @@ from tests.mocks.micropython_mocks import MicroPythonEnvironment, MockUART
 def mpy_env() -> Generator[MicroPythonEnvironment]:
     env = MicroPythonEnvironment()
     env.install()
+    Path("ota_failed.json").unlink(missing_ok=True)
+    Path("ota_pending.json").unlink(missing_ok=True)
     sys.modules.pop("main", None)
     yield env
+    Path("ota_failed.json").unlink(missing_ok=True)
+    Path("ota_pending.json").unlink(missing_ok=True)
     env.uninstall()
     sys.modules.pop("main", None)
 
@@ -368,3 +372,126 @@ def test_gateway_app_poll_incoming_sms_integrated(mpy_env: MicroPythonEnvironmen
     # Second call should not trigger process_inbox since no new indication
     app.poll_incoming_sms()
     assert inbox_processed == 1
+
+
+def test_boot_ota_trigger_when_enabled(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify boot OTA update is triggered on Wi-Fi connect when ota_check_on_boot is True (Issue #130)."""
+    import main
+    import wifi
+
+    app = main.GatewayApp(
+        config={
+            "wifi_ssid": "TestSSID",
+            "snippen_api_token": "valid_token",
+            "ota_check_on_boot": True,
+        }
+    )
+    app.setup()
+
+    # Simulate Wi-Fi connected
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    check_calls: list[str] = []
+    perform_calls: list[bool] = []
+
+    class FakeOTAClient:
+        def __init__(self, config: dict | None = None) -> None:
+            pass
+
+        def check_for_update(self, url: str | None = None, force: bool = False) -> dict:
+            check_calls.append("checked")
+            return {"update_available": True, "version": "0.32.0", "message": "New version"}
+
+        def perform_ota(
+            self, url: str | None = None, force: bool = False, restart: bool = True
+        ) -> bool:
+            perform_calls.append(restart)
+            return True
+
+    import ota
+
+    monkeypatch.setattr(ota, "OTAClient", FakeOTAClient)
+
+    # First tick with Wi-Fi connected triggers boot OTA check
+    app.tick()
+    assert len(check_calls) == 1
+    assert len(perform_calls) == 1
+    assert app.boot_ota_checked is True
+
+    # Subsequent tick does not re-trigger boot OTA check
+    app.tick()
+    assert len(check_calls) == 1
+
+
+def test_boot_ota_trigger_disabled_when_false(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify boot OTA update check is skipped when ota_check_on_boot is False (Issue #130)."""
+    import main
+    import wifi
+
+    app = main.GatewayApp(
+        config={
+            "wifi_ssid": "TestSSID",
+            "snippen_api_token": "valid_token",
+            "ota_check_on_boot": False,
+        }
+    )
+    app.setup()
+
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    check_called = False
+
+    class FakeOTAClient:
+        def __init__(self, config: dict | None = None) -> None:
+            pass
+
+        def check_for_update(self, url: str | None = None, force: bool = False) -> dict:
+            nonlocal check_called
+            check_called = True
+            return {"update_available": True, "version": "0.32.0"}
+
+    import ota
+
+    monkeypatch.setattr(ota, "OTAClient", FakeOTAClient)
+
+    app.tick()
+    assert check_called is False
+    assert app.boot_ota_checked is True
+
+
+def test_boot_ota_retry_guard_prevents_infinite_loop(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify retry guard prevents auto-updating to a version that previously failed and rolled back (Issue #130)."""
+    import ota
+
+    # Simulate that v0.32.0 previously failed and was recorded
+    ota.record_failed_version("0.32.0", reason="boot_rollback")
+    assert ota.get_failed_version() == "0.32.0"
+
+    # Bundle validation without force should fail
+    sample_bundle = {
+        "version": "0.32.0",
+        "files": {
+            "main.py": {
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0,
+                "content": "",
+            }
+        },
+    }
+    valid, msg = ota.validate_bundle(sample_bundle, current_version="0.31.21", force=False)
+    assert valid is False
+    assert "boot-loop guard" in msg
+
+    # Bundle validation with force=True should bypass guard
+    valid_forced, _ = ota.validate_bundle(sample_bundle, current_version="0.31.21", force=True)
+    assert valid_forced is True
+
+    # Confirm healthy clears failed record
+    ota.clear_failed_version()
+    assert ota.get_failed_version() is None

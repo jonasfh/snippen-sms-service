@@ -75,6 +75,37 @@ FORBIDDEN_FILES = {
 }
 
 OTA_PENDING_FILE = "ota_pending.json"
+OTA_FAILED_FILE = "ota_failed.json"
+
+
+def record_failed_version(version: str, reason: str = "failed") -> None:
+    """Record a failed firmware version to prevent boot-loop retries (Issue #130)."""
+    try:
+        with open(OTA_FAILED_FILE, "w") as f:
+            json.dump({"failed_version": version, "reason": reason, "time": time.time()}, f)
+        print(f"[ota] Recorded failed firmware version {version} ({reason}).")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[ota] Warning: Failed to record failed version: {exc}")
+
+
+def get_failed_version() -> str | None:
+    """Retrieve previously failed firmware version if recorded (Issue #130)."""
+    try:
+        with open(OTA_FAILED_FILE, "r") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data.get("failed_version")
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return None
+
+
+def clear_failed_version() -> None:
+    """Clear failed version record (Issue #130)."""
+    try:
+        os.remove(OTA_FAILED_FILE)
+    except Exception:  # noqa: BLE001, S110
+        pass
 
 
 def calculate_sha256(data: bytes | str) -> str:
@@ -172,6 +203,7 @@ def confirm_healthy() -> bool:
         pass
 
     target_ver = status.get("version", "unknown")
+    clear_failed_version()
     print(f"[ota] Firmware v{target_ver} verified healthy. Removed {purged} backup files.")
     return True
 
@@ -180,6 +212,10 @@ def rollback_ota(status: dict | None = None) -> bool:
     """Restore all active files from their .bak backups."""
     if status is None:
         status = get_ota_status()
+
+    target_version = status.get("version") if isinstance(status, dict) else None
+    if target_version:
+        record_failed_version(target_version, reason="rollback")
 
     files = status.get("files", [])
     if not files:
@@ -235,6 +271,13 @@ def validate_bundle(
         return (
             False,
             f"Bundle version {new_version} is not newer than current {curr_version}",
+        )
+
+    failed_ver = get_failed_version()
+    if not force and failed_ver and new_version == failed_ver:
+        return (
+            False,
+            f"Bundle version {new_version} previously failed and was rolled back (boot-loop guard). Use force to retry.",
         )
 
     files = bundle.get("files")
@@ -517,6 +560,16 @@ class OTAClient:
                     )
                     target_ver = tag.strip().lstrip("vV")
                     newer = is_newer_version(target_ver, FIRMWARE_VERSION)
+                    failed_ver = get_failed_version()
+                    if not force and failed_ver and target_ver == failed_ver:
+                        return {
+                            "update_available": False,
+                            "version": target_ver,
+                            "message": (
+                                f"Target version {target_ver} previously failed and was rolled back "
+                                "(boot-loop guard). Use force to retry."
+                            ),
+                        }
                     valid = newer or force
                     msg = (
                         f"New version {target_ver} available"

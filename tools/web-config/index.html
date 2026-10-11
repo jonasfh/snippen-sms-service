@@ -169,6 +169,16 @@
           Hvor ofte enheten spør Snippen Booking etter nye utgående SMS. Innkommende SMS videresendes umiddelbart.
         </small>
       </div>
+
+      <div class="form-group" style="gap: 0.25rem;">
+        <label class="checkbox-label" for="ota-check-on-boot">
+          <input type="checkbox" id="ota-check-on-boot" checked>
+          <span>Automatisk oppdateringssjekk ved oppstart (OTA)</span>
+        </label>
+        <small style="font-size: 0.72rem; color: var(--text-muted); margin-left: 1.6rem;">
+          Sjekker om nyere release-tag finnes på GitHub når enheten starter og Wi-Fi er tilkoblet.
+        </small>
+      </div>
     </section>
 
     <!-- Card 4: Call Handling & Forwarding -->
@@ -266,6 +276,22 @@
           <span class="metric-val" id="tel-ota">Ingen ventende</span>
         </div>
       </div>
+
+      <!-- Notification banner when newer firmware is available (Issue #130) -->
+      <div id="ota-banner" class="ota-update-banner" style="display: none; margin-top: 1rem;">
+        <div class="ota-banner-content">
+          <span class="ota-banner-icon">🔔</span>
+          <div class="ota-banner-text">
+            <strong>Ny firmware tilgjengelig:</strong> <span id="ota-banner-version">--</span>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              Installert: <span id="ota-banner-installed">--</span>. Enheten kan oppgraderes over Wi-Fi.
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" id="btn-banner-upgrade" style="margin-left: auto;">
+          🚀 Oppgrader firmware
+        </button>
+      </div>
     </section>
 
     <!-- Card: Firmware OTA Update -->
@@ -297,7 +323,7 @@
         </button>
         <button type="button" class="btn btn-primary" id="btn-start-ota" style="display: none;">
           <span class="spinner" id="spinner-start-ota"></span>
-          <span>Start OTA-oppdatering</span>
+          <span>🚀 Oppgrader firmware</span>
         </button>
       </div>
 

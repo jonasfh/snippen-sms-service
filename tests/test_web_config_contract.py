@@ -65,6 +65,7 @@ def test_ble_commands_synchronized() -> None:
         "CLEAR_LOGS",
         "CHECK_OTA",
         "START_OTA",
+        "ota_update",
     ]
     for cmd in expected_commands:
         assert f"'{cmd}'" in js_content or f'"{cmd}"' in js_content, (
@@ -205,3 +206,31 @@ def test_telemetry_ota_status_and_update_controls_in_web_config() -> None:
     # Client methods in ble.js
     assert "async checkOta" in ble_js_content
     assert "async startOta" in ble_js_content
+
+
+def test_ota_check_on_boot_and_banner_contract() -> None:
+    """Verify that Web UI supports ota_check_on_boot, OTA banner, and GitHub releases check (Issue #130)."""
+    html_path = REPO_ROOT / "tools" / "web-config" / "index.html"
+    app_js_path = REPO_ROOT / "tools" / "web-config" / "js" / "app.js"
+    config_py_path = REPO_ROOT / "firmware" / "config.py"
+
+    html_content = html_path.read_text(encoding="utf-8")
+    app_js_content = app_js_path.read_text(encoding="utf-8")
+    config_py_content = config_py_path.read_text(encoding="utf-8")
+
+    # Firmware config contains ota_check_on_boot
+    assert "OTA_CHECK_ON_BOOT" in config_py_content
+    assert '"ota_check_on_boot"' in config_py_content
+
+    # HTML inputs and banner
+    assert 'id="ota-check-on-boot"' in html_content
+    assert 'id="ota-banner"' in html_content
+    assert 'id="ota-banner-version"' in html_content
+    assert 'id="btn-banner-upgrade"' in html_content
+
+    # JavaScript handling
+    assert "otaCheckOnBoot" in app_js_content
+    assert "otaBanner" in app_js_content
+    assert "checkGitHubRelease" in app_js_content
+    assert "isNewerVersion" in app_js_content
+    assert "api.github.com/repos/jonasfh/snippen-sms-service/releases/latest" in app_js_content

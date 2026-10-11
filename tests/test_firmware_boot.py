@@ -22,9 +22,13 @@ from tests.mocks.micropython_mocks import MicroPythonEnvironment
 def mpy_env() -> Generator[MicroPythonEnvironment]:
     env = MicroPythonEnvironment()
     env.install()
+    Path("ota_failed.json").unlink(missing_ok=True)
+    Path("ota_pending.json").unlink(missing_ok=True)
     # If boot was already imported, remove it so it can be cleanly imported
     sys.modules.pop("boot", None)
     yield env
+    Path("ota_failed.json").unlink(missing_ok=True)
+    Path("ota_pending.json").unlink(missing_ok=True)
     env.uninstall()
     sys.modules.pop("boot", None)
 
@@ -146,3 +150,19 @@ def test_start_wdt_feed_timer(mpy_env: MicroPythonEnvironment) -> None:
     assert boot.wdt_feed_timer.callback is not None
     boot.wdt_feed_timer.callback(boot.wdt_feed_timer)
     assert wdt.feed_count == initial_feeds + 1
+
+
+def test_boot_rollback_records_failed_version(mpy_env: MicroPythonEnvironment) -> None:
+    """Verify boot rollback records failed version to ota_failed.json (Issue #130)."""
+    import json
+
+    import boot
+
+    ota_data = {"version": "0.32.0", "files": ["main.py"]}
+    boot.rollback_ota(ota_data)
+
+    with open(boot.OTA_FAILED_FILE, "r") as f:
+        failed_data = json.load(f)
+
+    assert failed_data["failed_version"] == "0.32.0"
+    assert failed_data["reason"] == "boot_rollback"

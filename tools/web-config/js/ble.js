@@ -357,12 +357,13 @@ export class SnippenBLEClient extends EventTarget {
 
   /**
    * Instruct gateway to download and apply OTA update.
+   * Sends 'ota_update' command (backward compatible with 'START_OTA').
    * @param {string|object} [options='']
    * @param {number} [timeoutMs=120000]
    * @returns {Promise<object>}
    */
   async startOta(options = '', timeoutMs = 120000) {
-    let payload = { cmd: 'START_OTA' };
+    let payload = { cmd: 'ota_update' }; // alias: 'START_OTA'
     if (typeof options === 'string' && options) {
       payload.url = options;
     } else if (typeof options === 'object' && options !== null) {
@@ -611,6 +612,23 @@ export class MockSnippenBLEClient extends EventTarget {
     if (cmd === 'CLEAR_LOGS') {
       this.mockLogs = [];
       return { cmd: 'CLEAR_LOGS', status: 'ok' };
+    }
+    if (cmd === 'CHECK_OTA' || cmd === 'ota_check') {
+      return {
+        cmd,
+        status: 'ok',
+        update_available: true,
+        version: '0.32.0',
+        message: 'Ny firmware v0.32.0 tilgjengelig (Simulator)',
+      };
+    }
+    if (cmd === 'START_OTA' || cmd === 'ota_update') {
+      this._emitMockLog('[ota] Simulator: OTA-oppdatering startet over BLE...');
+      this._emitMockLog('[ota] Simulator: Laster ned firmware_bundle.json...');
+      this._emitMockLog('[ota] Simulator: Verifiserer SHA-256 og stager filer...');
+      this._emitMockLog('[ota] Simulator: Oppdatering fullført. Restarter...');
+      setTimeout(() => this.disconnect(), 1500);
+      return { cmd, status: 'ok', message: 'OTA update in progress' };
     }
     if (cmd === 'APPLY_AND_EXIT') {
       setTimeout(() => this.disconnect(), 100);

@@ -81,10 +81,11 @@ CALL_REPLY_CALLER_TEXT = (
 )
 CALL_NOTIFY_ADMIN_TEXT = "Ubesvart anrop til Snippen SMS-gateway fra {caller}."
 
-# Firmware OTA Settings (Issue #129)
+# Firmware OTA Settings (Issue #129, #130)
 OTA_REPO = "jonasfh/snippen-sms-service"
 OTA_BUNDLE_URL = ""
 OTA_STABILITY_TIMEOUT_SEC = 30
+OTA_CHECK_ON_BOOT = True
 
 
 def get_default_config(board_profile: str = DEFAULT_BOARD_PROFILE) -> dict:
@@ -133,6 +134,7 @@ def get_default_config(board_profile: str = DEFAULT_BOARD_PROFILE) -> dict:
         "ota_repo": OTA_REPO,
         "ota_bundle_url": OTA_BUNDLE_URL,
         "ota_stability_timeout_sec": OTA_STABILITY_TIMEOUT_SEC,
+        "ota_check_on_boot": OTA_CHECK_ON_BOOT,
     }
 
 
