@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Forhindret `[Errno 113] ECONNABORTED` ved oppstartssjekk ved å sikre i `firmware/wifi.py` at `wifi.is_connected()` og `wifi.connect_wifi()` krever gyldig tildelt IP-adresse fra DHCP før nettverkskall igangsettes.
   - Forhindret heng/frakobling i Web UI («Connection closed while command was pending») under BLE OTA ved å sende tidlig kvittering over BLE før nedlasting starter, samt rydde opp gamle avbrutte `.new`-filer før ny staging.
   - Lagt til `checkOta` og `startOta` hjelpemetoder på `MockSnippenBLEClient` i `tools/web-config/js/ble.js` for offline testkjøring i `test.html`.
+  - Lagt til valg for «Tving oppdatering» (force) i Web Config UI for å tillate reinstallasjon eller manuell overstyring av semver-versjonssjekk under test.
 
 ## [0.31.23] - 2026-10-11
 
