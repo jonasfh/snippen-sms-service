@@ -245,6 +245,43 @@ class GatewayApp:
                     client.wdt = self.wdt
                 url = payload.get("url") if isinstance(payload, dict) else None
                 force = bool(payload.get("force")) if isinstance(payload, dict) else False
+
+                # If caller resolved target version (e.g. companion web app), evaluate without
+                # blocking Wi-Fi HTTPS requests that drop 2.4 GHz BLE connection (Issue #130).
+                target_ver = (
+                    payload.get("version") or payload.get("target_version")
+                    if isinstance(payload, dict)
+                    else None
+                )
+                if target_ver and isinstance(target_ver, str):
+                    clean_target = target_ver.strip().lstrip("vV")
+                    failed_ver = ota.get_failed_version()
+                    if not force and failed_ver and clean_target == failed_ver:
+                        return {
+                            "cmd": cmd,
+                            "status": "notice",
+                            "version": clean_target,
+                            "update_available": False,
+                            "message": (
+                                f"Version {clean_target} previously failed and was rolled back "
+                                "(boot-loop guard). Use force to retry."
+                            ),
+                        }
+                    newer = ota.is_newer_version(clean_target, ota.FIRMWARE_VERSION)
+                    valid = newer or force
+                    msg = (
+                        f"New version {clean_target} available"
+                        if valid
+                        else f"Target version {clean_target} is not newer than current version {ota.FIRMWARE_VERSION}"
+                    )
+                    return {
+                        "cmd": cmd,
+                        "status": "ok" if valid else "notice",
+                        "version": clean_target,
+                        "update_available": valid,
+                        "message": msg,
+                    }
+
                 res = client.check_for_update(url=url, force=force)
                 return {
                     "cmd": cmd,

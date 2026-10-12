@@ -352,6 +352,36 @@ export class SnippenBLEClient extends EventTarget {
    */
   async checkOta(options = {}, timeoutMs = 45000) {
     const payload = typeof options === 'object' && options !== null ? { cmd: 'CHECK_OTA', ...options } : { cmd: 'CHECK_OTA' };
+
+    // In a browser environment, resolve latest release via browser fetch to avoid
+    // 2.4 GHz radio collisions caused by blocking TLS handshake on ESP32 (Issue #130).
+    if (!payload.version && typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      try {
+        const customUrl = payload.url || '';
+        let targetVer = '';
+        if (customUrl) {
+          const resp = await fetch(customUrl);
+          if (resp.ok) {
+            const bundle = await resp.json();
+            targetVer = (bundle.version || '').trim().replace(/^v/i, '');
+          }
+        } else {
+          const repo = payload.repo || 'jonasfh/snippen-sms-service';
+          const resp = await fetch(`https://api.github.com/repos/${repo}/releases/latest`);
+          if (resp.ok) {
+            const data = await resp.json();
+            const tag = (data.tag_name || data.name || '').trim();
+            targetVer = tag.replace(/^v/i, '');
+          }
+        }
+        if (targetVer) {
+          payload.version = targetVer;
+        }
+      } catch (err) {
+        console.warn('[BLE] Browser fetch for GitHub release failed, falling back to pure BLE check:', err);
+      }
+    }
+
     return await this.sendCommand(payload, timeoutMs);
   }
 
