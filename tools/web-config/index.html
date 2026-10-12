@@ -311,9 +311,16 @@
         Sjekk og installer ny firmware trådløst over Wi-Fi fra GitHub Releases med automatisk Safe Mode rollback.
       </p>
 
-      <div class="form-group" style="margin-top: 8px; margin-bottom: 12px;">
+      <div class="form-group" style="margin-top: 8px; margin-bottom: 8px;">
         <label for="input-ota-url" class="form-label" style="font-size: 0.8rem;">Egendefinert bundle-URL (valgfritt for lokal test):</label>
         <input type="url" id="input-ota-url" class="form-input" placeholder="Standard: GitHub Releases (latest)" />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="check-ota-force" style="cursor: pointer; width: 16px; height: 16px;" />
+        <label for="check-ota-force" class="form-label" style="margin-bottom: 0; font-size: 0.85rem; cursor: pointer;">
+          Tving oppdatering (tillat reinstallasjon av samme eller eldre versjon)
+        </label>
       </div>
 
       <div class="btn-row">

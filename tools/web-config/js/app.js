@@ -83,6 +83,7 @@ const btnCheckOta = document.getElementById('btn-check-ota');
 const spinnerCheckOta = document.getElementById('spinner-check-ota');
 const btnStartOta = document.getElementById('btn-start-ota');
 const spinnerStartOta = document.getElementById('spinner-start-ota');
+const checkOtaForce = document.getElementById('check-ota-force');
 const otaFeedback = document.getElementById('ota-feedback');
 const otaFeedbackText = document.getElementById('ota-feedback-text');
 const otaBanner = document.getElementById('ota-banner');
@@ -607,17 +608,27 @@ function showOtaFeedback(msg, type = 'info') {
   otaFeedbackText.textContent = msg;
 }
 
+if (checkOtaForce) {
+  checkOtaForce.addEventListener('change', () => {
+    if (checkOtaForce.checked && btnStartOta) {
+      btnStartOta.style.display = 'inline-flex';
+    }
+  });
+}
+
 if (btnCheckOta) {
   btnCheckOta.addEventListener('click', async () => {
     try {
       spinnerCheckOta.classList.add('show');
       showOtaFeedback('Sjekker etter oppdateringer...', 'info');
       const customUrl = document.getElementById('input-ota-url')?.value.trim();
+      const force = Boolean(checkOtaForce?.checked);
       const payload = {};
       if (customUrl) payload.url = customUrl;
+      if (force) payload.force = true;
       const res = await client.checkOta(payload);
       spinnerCheckOta.classList.remove('show');
-      if (res && res.update_available) {
+      if (res && (res.update_available || force)) {
         showOtaFeedback(`Ny versjon tilgjengelig: v${res.version}! (${res.message || 'Klar til oppdatering'})`, 'success');
         if (btnStartOta) btnStartOta.style.display = 'inline-flex';
         if (otaBanner) {
@@ -628,7 +639,7 @@ if (btnCheckOta) {
         }
       } else {
         showOtaFeedback(res?.message || 'Ingen ny firmware-oppdatering tilgjengelig.', 'info');
-        if (btnStartOta) btnStartOta.style.display = 'none';
+        if (btnStartOta && !checkOtaForce?.checked) btnStartOta.style.display = 'none';
       }
     } catch (err) {
       spinnerCheckOta.classList.remove('show');
@@ -646,8 +657,10 @@ if (btnStartOta) {
       spinnerStartOta.classList.add('show');
       showOtaFeedback('OTA-oppdatering startet... Gateway laster ned og installerer.', 'info');
       const customUrl = document.getElementById('input-ota-url')?.value.trim();
+      const force = Boolean(checkOtaForce?.checked);
       const payload = {};
       if (customUrl) payload.url = customUrl;
+      if (force) payload.force = true;
       await client.startOta(payload);
       showOtaFeedback('Oppdatering igangsatt! Gateway restarter...', 'success');
     } catch (err) {
