@@ -611,7 +611,7 @@ if (btnCheckOta) {
   btnCheckOta.addEventListener('click', async () => {
     try {
       spinnerCheckOta.classList.add('show');
-      showOtaFeedback('Sjekker etter oppdateringer over Wi-Fi...', 'info');
+      showOtaFeedback('Sjekker etter oppdateringer...', 'info');
       const customUrl = document.getElementById('input-ota-url')?.value.trim();
       const payload = {};
       if (customUrl) payload.url = customUrl;
@@ -620,6 +620,12 @@ if (btnCheckOta) {
       if (res && res.update_available) {
         showOtaFeedback(`Ny versjon tilgjengelig: v${res.version}! (${res.message || 'Klar til oppdatering'})`, 'success');
         if (btnStartOta) btnStartOta.style.display = 'inline-flex';
+        if (otaBanner) {
+          if (otaBannerVersion) otaBannerVersion.textContent = `v${res.version}`;
+          const installedVer = (telVersion?.textContent || '').trim().replace(/^v/i, '') || '';
+          if (otaBannerInstalled && installedVer) otaBannerInstalled.textContent = `v${installedVer}`;
+          otaBanner.style.display = 'flex';
+        }
       } else {
         showOtaFeedback(res?.message || 'Ingen ny firmware-oppdatering tilgjengelig.', 'info');
         if (btnStartOta) btnStartOta.style.display = 'none';

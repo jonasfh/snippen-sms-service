@@ -422,6 +422,16 @@ def test_main_app_ble_ota_commands(
     assert res_check["update_available"] is True
     assert res_check["version"] == "0.32.0"
 
+    # CHECK_OTA with version provided directly in payload (bypasses Wi-Fi HTTPS call)
+    res_payload_ver = app.on_ble_command("CHECK_OTA", {"version": "0.99.0"})
+    assert res_payload_ver["status"] == "ok"
+    assert res_payload_ver["update_available"] is True
+    assert res_payload_ver["version"] == "0.99.0"
+
+    res_payload_old = app.on_ble_command("CHECK_OTA", {"version": "0.1.0"})
+    assert res_payload_old["update_available"] is False
+    assert res_payload_old["status"] == "notice"
+
     # START_OTA command (with restart=False mocked to prevent machine.reset())
     monkeypatch.setattr("machine.reset", MagicMock())
     res_start = app.on_ble_command("START_OTA", {})
