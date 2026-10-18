@@ -601,3 +601,175 @@ def test_poll_outbox_resilient_when_reporting_fails(
     assert processed_count == 2
     assert len(reported_statuses) == 1
     assert reported_statuses[0][0]["external_id"] == "202"
+
+
+def test_poll_outbox_deduplication_cache(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify that previously sent messages are deduplicated and not re-sent via modem (Issue #32)."""
+    import main
+    import wifi
+
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    app = main.GatewayApp(config={"wifi_ssid": "TestSSID", "snippen_api_token": "valid_token"})
+
+    # Pre-seed recent_sent_ids with message ID 301 (sent in previous run/poll)
+    app.recent_sent_ids.append("301")
+
+    reported_statuses: list[list[dict]] = []
+
+    class MockApiClient:
+        def fetch_outbox(self, limit: int = 5) -> list[dict]:
+            return [
+                {"id": 301, "recipient": "+4791111111", "body": "Already sent"},
+                {"id": 302, "recipient": "+4792222222", "body": "New message"},
+            ]
+
+        def report_outbox_status(self, statuses: list[dict]) -> bool:
+            reported_statuses.append(statuses)
+            return True
+
+    modem_calls: list[tuple[str, str]] = []
+
+    class MockModem:
+        def send_sms(self, recipient: str, body: str) -> tuple[bool, str]:
+            modem_calls.append((recipient, body))
+            return True, "REF_302"
+
+    app.api_client = MockApiClient()
+    app.modem = MockModem()
+
+    processed_count = app.poll_outbox()
+
+    # Only 302 is newly processed by modem; 301 was deduplicated
+    assert processed_count == 1
+    assert len(modem_calls) == 1
+    assert modem_calls[0] == ("+4792222222", "New message")
+
+    # Both messages must have reported status back to Snippen Booking
+    # (301 re-reported with DEDUP_CACHE, 302 reported with REF_302)
+    assert len(reported_statuses) == 2
+    assert reported_statuses[0] == [
+        {"external_id": "301", "status": "sent", "modem_message_id": "DEDUP_CACHE"}
+    ]
+    assert reported_statuses[1] == [
+        {"external_id": "302", "status": "sent", "modem_message_id": "REF_302"}
+    ]
+    assert "302" in app.recent_sent_ids
+
+
+def test_poll_outbox_rate_limiter_suspends_sending(
+    mpy_env: MicroPythonEnvironment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify rate limiter circuit breaker halts outbox transmission without dropping messages (Issue #31)."""
+    import main
+    import wifi
+
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    app = main.GatewayApp(
+        config={
+            "wifi_ssid": "TestSSID",
+            "snippen_api_token": "valid_token",
+            "rate_limit_burst_max": 2,
+            "rate_limit_burst_window_sec": 60,
+        }
+    )
+
+    reported_statuses: list[list[dict]] = []
+
+    class MockApiClient:
+        def fetch_outbox(self, limit: int = 5) -> list[dict]:
+            return [
+                {"id": 401, "recipient": "+4791111111", "body": "Msg 1"},
+                {"id": 402, "recipient": "+4792222222", "body": "Msg 2"},
+                {"id": 403, "recipient": "+4793333333", "body": "Msg 3 (should be suspended)"},
+            ]
+
+        def report_outbox_status(self, statuses: list[dict]) -> bool:
+            reported_statuses.append(statuses)
+            return True
+
+    modem_calls: list[tuple[str, str]] = []
+
+    class MockModem:
+        def send_sms(self, recipient: str, body: str) -> tuple[bool, str]:
+            modem_calls.append((recipient, body))
+            return True, f"REF_{len(modem_calls)}"
+
+    app.api_client = MockApiClient()
+    app.modem = MockModem()
+
+    processed_count = app.poll_outbox()
+
+    # Exactly 2 messages processed before burst limit suspended further sends
+    assert processed_count == 2
+    assert len(modem_calls) == 2
+    assert len(reported_statuses) == 2
+    assert app.rate_limiter.is_circuit_open is True
+
+
+def test_incoming_call_rate_limiter(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    """Verify incoming call SMS alert and reply respect the rate limiter (Issue #31)."""
+    import main
+
+    app = main.GatewayApp(
+        config={
+            "call_notify_admin_enabled": True,
+            "call_reply_caller_enabled": True,
+            "call_forwarding_number": "+4792830575",
+            "rate_limit_burst_max": 1,
+            "rate_limit_burst_window_sec": 60,
+        }
+    )
+
+    sent_sms: list[str] = []
+
+    class MockModem:
+        def send_sms(self, recipient: str, text: str) -> tuple[bool, str]:
+            sent_sms.append(recipient)
+            return True, "OK"
+
+    app.modem = MockModem()
+
+    # Pre-trip rate limiter
+    app.rate_limiter.circuit_open_until = 9999999999.0
+    app.rate_limiter.last_trip_reason = "Manual test trip"
+
+    app.handle_incoming_call("+4799887766")
+
+    # Because circuit is open, no SMS alerts are sent
+    assert len(sent_sms) == 0
+
+
+def test_ble_command_reset_rate_limiter(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    """Verify RESET_RATE_LIMITER command resets circuit breaker over BLE (Issue #31)."""
+    import main
+
+    app = main.GatewayApp()
+    app.rate_limiter.circuit_open_until = 9999999999.0
+    app.rate_limiter.last_trip_reason = "Test trip"
+    assert app.rate_limiter.is_circuit_open is True
+
+    res = app.on_ble_command("RESET_RATE_LIMITER")
+    assert res["status"] == "ok"
+    assert app.rate_limiter.is_circuit_open is False
+
+
+def test_telemetry_reports_rate_limiter_status(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    """Verify get_telemetry_status includes rate limiter information (Issue #31)."""
+    import main
+
+    app = main.GatewayApp()
+    telemetry = app.get_telemetry_status()
+
+    assert "rate_limiter" in telemetry
+    assert telemetry["rate_limiter"]["circuit_open"] is False
+    assert telemetry["rate_limiter"]["history_count"] == 0

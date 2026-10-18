@@ -74,12 +74,12 @@ flowchart LR
 ## 4. Gjennomføringsplan (Fase 1 – 6)
 
 ### 🟢 Fase 1: Kodesikring i Firmware
-- [ ] **1.1 Løse #31 (Rate Limiting & Circuit Breaker)**:
+- [x] **1.1 Løse #31 (Rate Limiting & Circuit Breaker)**:
   - Implementere tidsvindu-basert sperre i `firmware/main.py` (maks 10 SMS per 5 min, maks 30 SMS per time).
   - Varsle og stoppe sending dersom grensene overskrides, med automatisk gjenopptagelse etter kjøleperiode.
-- [ ] **1.2 Forsterke #32 (Duplikatbeskyttelse i Firmware)**:
+- [x] **1.2 Forsterke #32 (Duplikatbeskyttelse i Firmware)**:
   - Legge til `recent_sent_ids` ring-buffer i `GatewayApp`. Dersom WordPress returnerer en ID som nylig er sendt over modemet, unngås ny modemsending og status rapporteres på nytt.
-- [ ] **1.3 Verifisering**:
+- [x] **1.3 Verifisering**:
   - Kjøre enhetstester (`pytest`) og sikre 100% grønne tester.
 
 ### 🟡 Fase 2: Klargjøring av SIM-kort og Maskinvare

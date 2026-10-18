@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from snippen_sms import __version__
 from snippen_sms.client import SnippenClient
@@ -781,6 +782,71 @@ def test_gateway_incoming_multipart_message_reassembly():
 
         # Database should contain 1 message
         assert service.storage.count_inbox() == 1
+
+        await service.stop()
+
+    asyncio.run(_test())
+
+
+def test_gateway_rate_limiter_suspends_outbox_processing():
+    """Test that outbox processing suspends when rate limiter trips, retaining pending messages."""
+
+    async def _test():
+        config = GatewayConfig(
+            database_path=":memory:",
+            rate_limit_enabled=True,
+            rate_limit_burst_max=2,
+            rate_limit_burst_window_seconds=60.0,
+        )
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+        await service.start()
+
+        # Enqueue 3 messages
+        service.enqueue_outbox(recipient="+4791", body="Msg 1")
+        service.enqueue_outbox(recipient="+4792", body="Msg 2")
+        service.enqueue_outbox(recipient="+4793", body="Msg 3")
+
+        processed = await service.process_outbox()
+        # Exactly 2 messages dispatched before burst limit tripped
+        assert len(processed) == 2
+        assert service.rate_limiter.is_circuit_open is True
+
+        # Third message remains pending in storage
+        pending = service.storage.get_pending_outbox()
+        assert len(pending) == 1
+        assert pending[0].recipient == "+4793"
+
+        # Deliberate reset restores processing
+        service.reset_rate_limiter()
+        assert service.rate_limiter.is_circuit_open is False
+
+        second_batch = await service.process_outbox()
+        assert len(second_batch) == 1
+        assert second_batch[0].recipient == "+4793"
+        assert len(service.storage.get_pending_outbox()) == 0
+
+        await service.stop()
+
+    asyncio.run(_test())
+
+
+def test_gateway_send_sms_rate_limiter_blocks():
+    """Test that send_sms enqueues as pending but does not dispatch when circuit is open."""
+
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        provider = InMemorySmsProvider()
+        service = GatewayService(config=config, provider=provider)
+        await service.start()
+
+        # Pre-trip circuit breaker
+        service.rate_limiter.circuit_open_until = time.time() + 100.0
+        service.rate_limiter.last_trip_reason = "Manual test trip"
+
+        msg = await service.send_sms(recipient="+4799", body="Blocked immediate")
+        assert msg.status == MessageStatus.PENDING
+        assert len(provider.sent_messages) == 0
 
         await service.stop()
 

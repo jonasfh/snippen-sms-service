@@ -69,6 +69,11 @@ try:
 except ImportError:
     setup_logger = None
 
+try:
+    from rate_limiter import SmsRateLimiter
+except ImportError:
+    SmsRateLimiter = None
+
 
 class GatewayApp:
     """MicroPython SMS Gateway coordinator."""
@@ -117,6 +122,38 @@ class GatewayApp:
         self.ota_boot_time = time.time()
         self.boot_ota_checked = False
 
+        # Outgoing Rate Limiter & Circuit Breaker (Issue #31)
+        if SmsRateLimiter is not None:
+            self.rate_limiter = SmsRateLimiter(
+                enabled=self.config.get("rate_limit_enabled", True),
+                max_burst=self.config.get("rate_limit_burst_max", 10),
+                burst_window_sec=self.config.get("rate_limit_burst_window_sec", 300),
+                max_hourly=self.config.get("rate_limit_hourly_max", 30),
+                hourly_window_sec=self.config.get("rate_limit_hourly_window_sec", 3600),
+                cooloff_sec=self.config.get("rate_limit_cooloff_sec", 600),
+            )
+        else:
+            self.rate_limiter = None
+
+        # Recent sent message cache to prevent duplicate delivery on repeated polling (Issue #32)
+        self.recent_sent_ids: list[str] = []
+        self.recent_sent_cache_size: int = self.config.get("recent_sent_cache_size", 100)
+
+    def _record_recent_sent(self, msg_id: str) -> None:
+        """Cache sent message ID to avoid duplicate transmission if status reporting is retried (Issue #32)."""
+        if not msg_id:
+            return
+        if msg_id in self.recent_sent_ids:
+            self.recent_sent_ids.remove(msg_id)
+        self.recent_sent_ids.append(msg_id)
+        if len(self.recent_sent_ids) > self.recent_sent_cache_size:
+            self.recent_sent_ids.pop(0)
+
+    def reset_rate_limiter(self) -> None:
+        """Deliberately restore outgoing SMS processing after rate limit suspension (Issue #31)."""
+        if self.rate_limiter is not None:
+            self.rate_limiter.reset()
+
     def enter_provisioning_mode(self, reason: str = "manual") -> None:
         """Switch gateway into BLE provisioning mode (Issue #59, #60, #87)."""
         if self.is_provisioning_mode:
@@ -157,8 +194,10 @@ class GatewayApp:
         self.config.update(new_config)
         save_config(new_config)
 
-    def on_ble_command(self, cmd: str, payload: dict) -> dict:
+    def on_ble_command(self, cmd: str, payload: dict | None = None) -> dict:
         """Callback when companion app sends a remote control command (Issue #60, #61)."""
+        if payload is None:
+            payload = {}
         print(f"[main] Command received via BLE: {cmd}")
         if cmd == "SCAN_WIFI":
             if wifi is not None:
@@ -215,6 +254,15 @@ class GatewayApp:
                 "status": "ok",
                 "live_operations": False,
                 "message": "Gateway operations paused for provisioning",
+            }
+
+        if cmd == "RESET_RATE_LIMITER":
+            self.reset_rate_limiter()
+            print("[main] Rate limiter circuit breaker manually reset over BLE (Issue #31).")
+            return {
+                "cmd": cmd,
+                "status": "ok",
+                "message": "Rate limiter and circuit breaker reset successfully",
             }
 
         if cmd == "GET_LOGS":
@@ -378,6 +426,13 @@ class GatewayApp:
             except Exception:  # noqa: BLE001, S110
                 pass
 
+        if self.rate_limiter is not None:
+            status["rate_limiter"] = {
+                "circuit_open": self.rate_limiter.is_circuit_open,
+                "history_count": len(self.rate_limiter.history),
+                "last_trip_reason": self.rate_limiter.last_trip_reason,
+            }
+
         return status
 
     def on_boot_button_press(self) -> None:
@@ -532,10 +587,40 @@ class GatewayApp:
                 msg_id = str(raw_id) if raw_id is not None else ""
                 recipient = msg.get("recipient", "")
                 body = msg.get("body", "")
+
+                # Issue #32: Check deduplication cache to prevent duplicate delivery on repeated polls
+                if msg_id and msg_id in self.recent_sent_ids:
+                    print(
+                        f"[main] Notice: Outbound SMS #{msg_id} was already sent recently (deduplicated). Re-reporting status."
+                    )
+                    status_entry = {
+                        "external_id": msg_id,
+                        "status": "sent",
+                        "modem_message_id": "DEDUP_CACHE",
+                    }
+                    try:
+                        self.api_client.report_outbox_status([status_entry])
+                    except Exception as exc:  # noqa: BLE001
+                        print(
+                            f"[main] Warning: Failed to re-report status for SMS #{msg_id}: {exc}"
+                        )
+                    continue
+
+                # Issue #31: Check rate limiter and circuit breaker before transmitting
+                if self.rate_limiter is not None:
+                    can_send, reason = self.rate_limiter.can_send()
+                    if not can_send:
+                        print(f"[main] WARNING: Outbound SMS #{msg_id} suspended: {reason}")
+                        break
+
                 print(f"[main] Transmitting outbound SMS #{msg_id} to {recipient}...")
 
                 success, ref_or_err = self.modem.send_sms(recipient, body)
                 if success:
+                    if self.rate_limiter is not None:
+                        self.rate_limiter.record_send()
+                    if msg_id:
+                        self._record_recent_sent(msg_id)
                     print(f"[main] Outbound SMS #{msg_id} delivered (ref: {ref_or_err}).")
                     status_entry = {
                         "external_id": msg_id,
@@ -580,43 +665,71 @@ class GatewayApp:
         notify_admin = self.config.get("call_notify_admin_enabled", True)
         admin_number = self.config.get("call_forwarding_number", "+4792830575")
         if notify_admin and admin_number and self.modem is not None:
-            template = self.config.get(
-                "call_notify_admin_text",
-                "Ubesvart anrop til Snippen SMS-gateway fra {caller}.",
-            )
-            display_caller = caller if caller else "skjult nummer"
-            admin_msg = template.replace("{caller}", display_caller)
-            print(f"[main] Sending call alert SMS to admin ({admin_number})...")
-            try:
-                ok_admin, err_admin = self.modem.send_sms(admin_number, admin_msg)
-                if ok_admin:
-                    print(f"[main] Admin call notification SMS sent successfully ({err_admin}).")
-                else:
-                    print(
-                        f"[main] Warning: Failed to send admin call notification SMS: {err_admin}"
-                    )
-            except Exception as exc:  # noqa: BLE001
-                print(f"[main] Error dispatching admin call alert SMS: {exc}")
+            if self.rate_limiter is not None:
+                can_send_admin, admin_lim_reason = self.rate_limiter.can_send()
+            else:
+                can_send_admin, admin_lim_reason = True, ""
+
+            if not can_send_admin:
+                print(
+                    f"[main] Call alert SMS to admin suspended by rate limiter: {admin_lim_reason}"
+                )
+            else:
+                template = self.config.get(
+                    "call_notify_admin_text",
+                    "Ubesvart anrop til Snippen SMS-gateway fra {caller}.",
+                )
+                display_caller = caller if caller else "skjult nummer"
+                admin_msg = template.replace("{caller}", display_caller)
+                print(f"[main] Sending call alert SMS to admin ({admin_number})...")
+                try:
+                    ok_admin, err_admin = self.modem.send_sms(admin_number, admin_msg)
+                    if ok_admin:
+                        if self.rate_limiter is not None:
+                            self.rate_limiter.record_send()
+                        print(
+                            f"[main] Admin call notification SMS sent successfully ({err_admin})."
+                        )
+                    else:
+                        print(
+                            f"[main] Warning: Failed to send admin call notification SMS: {err_admin}"
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[main] Error dispatching admin call alert SMS: {exc}")
 
         # 2. Automated SMS reply to caller
         reply_caller = self.config.get("call_reply_caller_enabled", True)
         if reply_caller and caller and self.modem is not None:
-            reply_text = self.config.get(
-                "call_reply_caller_text",
-                (
-                    "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
-                    "Send SMS eller ring leieansvarlig på 92830575."
-                ),
-            )
-            print(f"[main] Sending automated SMS reply to caller ({caller})...")
-            try:
-                ok_reply, err_reply = self.modem.send_sms(caller, reply_text)
-                if ok_reply:
-                    print(f"[main] Automated caller SMS reply sent successfully ({err_reply}).")
-                else:
-                    print(f"[main] Warning: Failed to send automated caller SMS reply: {err_reply}")
-            except Exception as exc:  # noqa: BLE001
-                print(f"[main] Error dispatching caller SMS reply: {exc}")
+            if self.rate_limiter is not None:
+                can_send_caller, caller_lim_reason = self.rate_limiter.can_send()
+            else:
+                can_send_caller, caller_lim_reason = True, ""
+
+            if not can_send_caller:
+                print(
+                    f"[main] Call reply SMS to caller suspended by rate limiter: {caller_lim_reason}"
+                )
+            else:
+                reply_text = self.config.get(
+                    "call_reply_caller_text",
+                    (
+                        "Dette nummeret er en automatisert SMS-sentral for Snippen Booking og tar ikke imot samtaler. "
+                        "Send SMS eller ring leieansvarlig på 92830575."
+                    ),
+                )
+                print(f"[main] Sending automated SMS reply to caller ({caller})...")
+                try:
+                    ok_reply, err_reply = self.modem.send_sms(caller, reply_text)
+                    if ok_reply:
+                        if self.rate_limiter is not None:
+                            self.rate_limiter.record_send()
+                        print(f"[main] Automated caller SMS reply sent successfully ({err_reply}).")
+                    else:
+                        print(
+                            f"[main] Warning: Failed to send automated caller SMS reply: {err_reply}"
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[main] Error dispatching caller SMS reply: {exc}")
 
     def poll_incoming_calls(self) -> None:
         """Check for incoming voice calls and handle them (Issue #113)."""

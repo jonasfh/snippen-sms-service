@@ -238,7 +238,7 @@ To enable LilyGO boards to upgrade firmware over Wi-Fi with minimal resource ove
 
 - **Single HTTPS Request**: Eliminates the overhead of 10+ separate TLS handshakes on memory-constrained microcontrollers by delivering all files in one payload.
 - **Security & File Filtering**:
-  - **Included Production Files**: `boot.py`, `main.py`, `modem.py`, `wifi.py`, `ble_config.py`, `button.py`, `config.py`, `logger.py`, `ota.py`, `sms_encoding.py`, `snippen_api.py`, `version.py`.
+  - **Included Production Files**: `boot.py`, `main.py`, `modem.py`, `wifi.py`, `ble_config.py`, `button.py`, `config.py`, `logger.py`, `ota.py`, `rate_limiter.py`, `sms_encoding.py`, `snippen_api.py`, `version.py`.
   - **Excluded Files**: Sensitive local files (`config.json`, `config_local.py`, `config.local.py`, `*local*.py`), templates (`config.example.py`), test/diagnostic scripts (`test_*.py`), and Python cache artifacts (`__pycache__`).
 - **Bundle Format**:
   ```json

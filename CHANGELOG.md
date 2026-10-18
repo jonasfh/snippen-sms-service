@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.25] - 2026-10-18
+
+### Added
+- Utgående rate limiting og circuit breaker-beskyttelse (`#31`):
+  - Implementert `SmsRateLimiter` i `firmware/rate_limiter.py` og `RateLimiter` i `src/snippen_sms/limiter.py` med konfigurerbar burst-grense (f.eks. maks 10 SMS per 5 minutter), timegrense (f.eks. maks 30 SMS per time) og automatisk circuit breaker cooloff (f.eks. 10 minutter).
+  - Skjermer mot utilsiktet meldingsflom, uendelige svarkjeder og softwarefeil ved å suspendere utgående sending uten å slette ventende meldinger.
+  - Beskyttelsen dekker all utgående SMS-transport (outbox, taleanropsvarsel til administrator og automatisk SMS-svar til innringer).
+  - Mulighet for eksplisitt tilbakestilling av circuit breaker via BLE-kommando (`RESET_RATE_LIMITER`) og API.
+  - Telemetrirapportering av rate limiter- og circuit breaker-status over BLE (`get_telemetry_status`).
+- Forsterket duplikatvern i firmware (`#32`):
+  - Innført avgrenset in-memory ring-buffer (`recent_sent_ids`) i `firmware/main.py` for nylig sendte meldings-ID-er.
+  - Forhindrer dobbeltsending til gjester dersom WordPress returnerer samme melding på nytt ved neste poll etter et midlertidig nettverksbortfall under statusrapportering; kvitteringen re-sendes til WordPress uten at modemet belastes på nytt.
+- Plan for produksjonssetting og sjekkliste (`docs/PRODUKSJONSSETTING.md`).
+
+### Tests
+- Omfattende enhetstester i `tests/test_firmware_rate_limiter.py`, `tests/test_limiter.py`, `tests/test_firmware_main.py` og `tests/test_gateway.py`.
+
 ## [0.31.24] - 2026-10-11
 
 ### Fixed

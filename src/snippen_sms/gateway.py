@@ -10,6 +10,7 @@ from typing import Any
 from snippen_sms.client import SnippenClient
 from snippen_sms.config import GatewayConfig
 from snippen_sms.context import BookingContextResolver
+from snippen_sms.limiter import RateLimiter
 from snippen_sms.models import Message, MessageDirection, MessageStatus
 from snippen_sms.providers import get_provider
 from snippen_sms.providers.base import IncomingMessage, SmsProvider
@@ -33,6 +34,7 @@ class GatewayService:
         client: SnippenClient | None = None,
         sync_service: SyncService | None = None,
         resolver: BookingContextResolver | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
         self.config = config or GatewayConfig()
         self.storage = storage or MessageStorage(self.config.database_path)
@@ -84,6 +86,18 @@ class GatewayService:
             )
         else:
             self.sync_service = None
+
+        if rate_limiter is not None:
+            self.rate_limiter = rate_limiter
+        else:
+            self.rate_limiter = RateLimiter(
+                enabled=self.config.rate_limit_enabled,
+                max_burst=self.config.rate_limit_burst_max,
+                burst_window_seconds=self.config.rate_limit_burst_window_seconds,
+                max_hourly=self.config.rate_limit_hourly_max,
+                hourly_window_seconds=self.config.rate_limit_hourly_window_seconds,
+                cooloff_seconds=self.config.rate_limit_cooloff_seconds,
+            )
 
         self._is_running = False
         self._stop_event = asyncio.Event()
@@ -148,6 +162,10 @@ class GatewayService:
                 else None
             ),
         }
+
+    def reset_rate_limiter(self) -> None:
+        """Deliberately restore normal operation after rate limit suspension (Issue #31)."""
+        self.rate_limiter.reset()
 
     def sync_with_snippen(self) -> dict[str, Any] | None:
         """Perform synchronization cycle with Snippen backend."""
@@ -238,9 +256,19 @@ class GatewayService:
             if msg.id is None:
                 continue
 
+            can_send, reason = self.rate_limiter.can_send()
+            if not can_send:
+                logger.warning(
+                    "Outbox SMS processing suspended by rate limiter for message ID %s: %s",
+                    msg.id,
+                    reason,
+                )
+                break
+
             try:
                 result = await self.provider.send_sms(recipient=msg.recipient, body=msg.body)
                 if result.success:
+                    self.rate_limiter.record_send()
                     updated = self.storage.update_message_status(
                         msg.id,
                         status=MessageStatus.SENT,
@@ -301,9 +329,17 @@ class GatewayService:
         )
         assert saved_msg.id is not None
 
+        can_send, reason = self.rate_limiter.can_send()
+        if not can_send:
+            logger.warning(
+                "Immediate SMS dispatch to %s suspended by rate limiter: %s", recipient, reason
+            )
+            return saved_msg
+
         try:
             result = await self.provider.send_sms(recipient=recipient, body=body)
             if result.success:
+                self.rate_limiter.record_send()
                 updated = self.storage.update_message_status(
                     saved_msg.id,
                     status=MessageStatus.SENT,
