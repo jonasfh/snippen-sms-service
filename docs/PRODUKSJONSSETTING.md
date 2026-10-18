@@ -82,20 +82,19 @@ flowchart LR
 - [x] **1.3 Verifisering**:
   - Kjøre enhetstester (`pytest`) og sikre 100% grønne tester.
 
-### 🟡 Fase 2: Klargjøring av SIM-kort og Maskinvare
-- [ ] **2.1 Permanent deaktivering av SIM PIN-kode**:
-  - Koble Lilygo til USB med aktiv strømforsyning.
-  - Deaktiver PIN via AT-kommando:
-    ```text
-    AT+CPIN="<din_pin>"
-    AT+CLCK="SC",0,"<din_pin>"
-    AT+CLCK="SC",2
-    ```
-    *(Verifiser at modemet returnerer `+CLCK: 0`)*.
-- [ ] **2.2 Maskinvaretest**:
-  - Kjøre `python scripts/test_modem_live.py` for å verifisere `CSQ > 12`, `CREG 0,1` og Telia 4G-registrering.
-- [ ] **2.3 Deploy av produksjonsfirmware**:
-  - Installere produksjonsfirmware via `python scripts/deploy_firmware.py deploy`.
+### 🟢 Fase 2: Klargjøring av SIM-kort og Maskinvare
+- [x] **2.1 Permanent deaktivering av SIM PIN-kode**:
+  - Lilygo tilkoblet USB (`/dev/ttyACM0`).
+  - Verifisert via `mpremote`: `AT+CPIN?` returnerte `READY`, og `AT+CLCK="SC",2` returnerte `+CLCK: 0` (PIN-lås permanent deaktivert, modemet kobler automatisk til nett ved strømbrudd/omstart).
+- [x] **2.2 Maskinvaretest**:
+  - Kjørt `python scripts/test_modem_live.py`:
+    - AT-handshake og initialisering: `OK`
+    - Modell: SimCom `A7670E-FASE`, IMEI: `869469087962137`
+    - Signalstyrke: RSSI `26` (-61 dBm) – *Utmerket*
+    - Mobiloperatør: Telia Norge (`24202`), 4G/LTE (Access tech 7)
+    - Nettverksregistrering: `CREG 0,1` (*Registered, home network*)
+- [x] **2.3 Deploy av produksjonsfirmware**:
+  - Installert produksjonsfirmware (`v0.31.26` inkludert `rate_limiter.py` og duplikatbeskyttelse) via `python scripts/deploy_firmware.py deploy`. Alle 18 filer synkronisert og maskinvarereset utført.
 
 ### 🟡 Fase 3: Provisjonering og Konfigurasjon
 - [ ] **3.1 Generere API Token i WordPress**:
