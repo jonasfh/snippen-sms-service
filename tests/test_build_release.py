@@ -174,6 +174,7 @@ def test_build_firmware_bundle_real_firmware(tmp_path: Path):
         "main.py",
         "modem.py",
         "ota.py",
+        "rate_limiter.py",
         "sms_encoding.py",
         "snippen_api.py",
         "version.py",

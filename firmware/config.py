@@ -87,6 +87,17 @@ OTA_BUNDLE_URL = ""
 OTA_STABILITY_TIMEOUT_SEC = 30
 OTA_CHECK_ON_BOOT = True
 
+# Rate Limiting & Circuit Breaker Settings (Issue #31)
+RATE_LIMIT_ENABLED = True
+RATE_LIMIT_BURST_MAX = 10
+RATE_LIMIT_BURST_WINDOW_SEC = 300
+RATE_LIMIT_HOURLY_MAX = 30
+RATE_LIMIT_HOURLY_WINDOW_SEC = 3600
+RATE_LIMIT_COOLOFF_SEC = 600
+
+# Duplicate Message Cache Settings (Issue #32)
+RECENT_SENT_CACHE_SIZE = 100
+
 
 def get_default_config(board_profile: str = DEFAULT_BOARD_PROFILE) -> dict:
     """Return dictionary of default system configuration for specified board profile."""
@@ -135,6 +146,13 @@ def get_default_config(board_profile: str = DEFAULT_BOARD_PROFILE) -> dict:
         "ota_bundle_url": OTA_BUNDLE_URL,
         "ota_stability_timeout_sec": OTA_STABILITY_TIMEOUT_SEC,
         "ota_check_on_boot": OTA_CHECK_ON_BOOT,
+        "rate_limit_enabled": RATE_LIMIT_ENABLED,
+        "rate_limit_burst_max": RATE_LIMIT_BURST_MAX,
+        "rate_limit_burst_window_sec": RATE_LIMIT_BURST_WINDOW_SEC,
+        "rate_limit_hourly_max": RATE_LIMIT_HOURLY_MAX,
+        "rate_limit_hourly_window_sec": RATE_LIMIT_HOURLY_WINDOW_SEC,
+        "rate_limit_cooloff_sec": RATE_LIMIT_COOLOFF_SEC,
+        "recent_sent_cache_size": RECENT_SENT_CACHE_SIZE,
     }
 
 

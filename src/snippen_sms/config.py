@@ -30,6 +30,12 @@ class GatewayConfig:
     booking_resolution_enabled: bool = True
     conversation_ttl_seconds: float = 7200.0
     multipart_timeout_seconds: float = 30.0
+    rate_limit_enabled: bool = True
+    rate_limit_burst_max: int = 10
+    rate_limit_burst_window_seconds: float = 300.0
+    rate_limit_hourly_max: int = 30
+    rate_limit_hourly_window_seconds: float = 3600.0
+    rate_limit_cooloff_seconds: float = 600.0
 
     @classmethod
     def from_env(cls) -> GatewayConfig:
@@ -42,6 +48,7 @@ class GatewayConfig:
         booking_res_env = (
             os.getenv("SNIPPEN_SMS_BOOKING_RESOLUTION_ENABLED", "true").strip().lower()
         )
+        rate_limit_env = os.getenv("SNIPPEN_SMS_RATE_LIMIT_ENABLED", "true").strip().lower()
 
         api_url = os.getenv("SNIPPEN_SMS_API_URL") or os.getenv("SNIPPEN_API_URL")
         api_token = os.getenv("SNIPPEN_SMS_API_TOKEN") or os.getenv("SNIPPEN_API_TOKEN")
@@ -73,4 +80,14 @@ class GatewayConfig:
             multipart_timeout_seconds=float(
                 os.getenv("SNIPPEN_SMS_MULTIPART_TIMEOUT_SECONDS", "30.0")
             ),
+            rate_limit_enabled=rate_limit_env in ("true", "1", "yes"),
+            rate_limit_burst_max=int(os.getenv("SNIPPEN_SMS_RATE_LIMIT_BURST_MAX", "10")),
+            rate_limit_burst_window_seconds=float(
+                os.getenv("SNIPPEN_SMS_RATE_LIMIT_BURST_WINDOW", "300.0")
+            ),
+            rate_limit_hourly_max=int(os.getenv("SNIPPEN_SMS_RATE_LIMIT_HOURLY_MAX", "30")),
+            rate_limit_hourly_window_seconds=float(
+                os.getenv("SNIPPEN_SMS_RATE_LIMIT_HOURLY_WINDOW", "3600.0")
+            ),
+            rate_limit_cooloff_seconds=float(os.getenv("SNIPPEN_SMS_RATE_LIMIT_COOLOFF", "600.0")),
         )

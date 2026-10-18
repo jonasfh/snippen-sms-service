@@ -91,6 +91,7 @@ def deploy_firmware(
         "main.py",
         "modem.py",
         "ota.py",
+        "rate_limiter.py",
         "sms_encoding.py",
         "snippen_api.py",
         "test_api.py",
