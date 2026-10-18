@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.26] - 2026-10-18
+
+### Verified
+- Produksjonsforberedelse og maskinvaretest på Lilygo T-Call A7670E (`#140`):
+  - Bekreftet at SIM-kortets PIN-lås er permanent deaktivert (`AT+CLCK="SC",2` returnerer `+CLCK: 0`, `AT+CPIN?` returnerer `READY`). Enheten kobler seg til mobilnettet automatisk uten PIN-kode etter strømbrudd eller omstart.
+  - Gjennomført vellykket maskinvarediagnostikk over USB (`scripts/test_modem_live.py`) med utmerket signalstyrke (RSSI 26 / -61 dBm) og registrert tilkobling til Telia 4G (`CREG 0,1`, `+COPS: 0,2,"24202",7`).
+  - Deployert og verifisert produksjonsfirmware på fysisk mikrokontroller.
+  - Oppdatert sjekkliste for produksjonssetting i `docs/PRODUKSJONSSETTING.md`.
+
 ## [0.31.25] - 2026-10-18
 
 ### Added
