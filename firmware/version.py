@@ -1,3 +1,3 @@
 """Firmware version definition for Snippen SMS Gateway."""
 
-FIRMWARE_VERSION = "0.31.27"
+FIRMWARE_VERSION = "1.0.0"

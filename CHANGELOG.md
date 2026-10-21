@@ -5,12 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.31.27] - 2026-10-21
+## [1.0.0] - 2026-10-21
+
+### Milestone - Offisiell produksjonssetting 🚀🎉
+Første offisielle produksjonsrelease (v1.0.0) av Snippen SMS Gateway på Lilygo T-Call A7670E! Enheten er satt i full operativ drift for Snippen Booking med toveis SMS-integrasjon mot Telia 4G-mobilnettet, BLE-basert lokal konfigurering, automatisk duplikatvern, rate limiting, automatisk OTA-oppdatering og robust feilhåndtering (`#141`). Gratulerer med en fantastisk milepæl!
 
 ### Fixed
 - BLE-konfigurasjon, Wi-Fi-skanning og web-grensesnitt (`#141`):
   - Rettet feilen «Unterminated string in JSON at position 511» ved å garantere at JSON-payloaden i BLE-karakteristikken for konfigurasjon aldri overstiger 480 bytes (under GATT 512-byte grensen), selv når det er definert lange egendefinerte meldinger.
-  - Skjermet API-token og passord i web-grensesnittet: `snippen_api_token` returneres nå alltid som en tom streng over BLE slik at hemmeligheter ikke eksponeres i nettleseren. Lagt til `autocomplete="new-password"` og eksplisitt tømming ved konfigurasjonsinnlasting for å hindre at nettleserens passordhvelv autofyller feltet. Oppdatert Service Worker cache (`v0.31.27`).
+  - Skjermet API-token og passord i web-grensesnittet: `snippen_api_token` returneres nå alltid som en tom streng over BLE slik at hemmeligheter ikke eksponeres i nettleseren. Lagt til `autocomplete="new-password"` og eksplisitt tømming ved konfigurasjonsinnlasting for å hindre at nettleserens passordhvelv autofyller feltet. Oppdatert Service Worker cache (`v1.0.0`).
   - Beskyttet eksisterende lagrede hemmeligheter: Tom eller manglende verdi for `snippen_api_token` og `wifi_password` ved BLE-skriving eller konfigurasjonslagring vil aldri overskrive eller slette allerede lagrede verdier på enheten.
   - Stabilisert Wi-Fi-skanning (`SCAN_WIFI`): Frakobler aktiv WLAN-forbindelse ubetinget før kanalsøk for å forhindre radio-deadlock mellom Wi-Fi og BLE på ESP32, og mater maskinvare-watchdog før og etter skann for å unngå `task_wdt`-feil.
   - Dynamisk oppdatering av REST API-klient: Hvis token eller URL endres via BLE, oppdateres den aktive instansen av `SnippenApiClient` i minnet umiddelbart uten behov for manuell omstart.
