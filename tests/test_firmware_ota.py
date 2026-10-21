@@ -40,13 +40,13 @@ def mpy_env() -> Generator[MicroPythonEnvironment]:
 
 
 def create_sample_bundle(
-    version: str = "0.32.0",
+    version: str = "1.1.0",
     files_content: dict[str, str] | None = None,
 ) -> dict:
     """Helper to generate a valid firmware bundle dictionary with calculated SHA-256."""
     if files_content is None:
         files_content = {
-            "main.py": "print('new main 0.32.0')\n",
+            "main.py": "print('new main 1.1.0')\n",
             "version.py": f'FIRMWARE_VERSION = "{version}"\n',
         }
 
@@ -99,7 +99,7 @@ def test_parse_semver_and_is_newer_version(mpy_env: MicroPythonEnvironment) -> N
 def test_validate_bundle_success(mpy_env: MicroPythonEnvironment) -> None:
     import ota
 
-    bundle = create_sample_bundle("0.32.0")
+    bundle = create_sample_bundle("1.1.0")
     valid, msg = ota.validate_bundle(bundle, current_version="0.31.20")
     assert valid is True
     assert msg == "Valid"
@@ -122,7 +122,7 @@ def test_validate_bundle_rejects_older_version(mpy_env: MicroPythonEnvironment) 
 def test_validate_bundle_checksum_mismatch(mpy_env: MicroPythonEnvironment) -> None:
     import ota
 
-    bundle = create_sample_bundle("0.32.0")
+    bundle = create_sample_bundle("1.1.0")
     bundle["files"]["main.py"]["sha256"] = (
         "0000000000000000000000000000000000000000000000000000000000000000"
     )
@@ -135,7 +135,7 @@ def test_validate_bundle_checksum_mismatch(mpy_env: MicroPythonEnvironment) -> N
 def test_validate_bundle_size_mismatch(mpy_env: MicroPythonEnvironment) -> None:
     import ota
 
-    bundle = create_sample_bundle("0.32.0")
+    bundle = create_sample_bundle("1.1.0")
     bundle["files"]["main.py"]["size"] = 99999
 
     valid, msg = ota.validate_bundle(bundle, current_version="0.31.20")
@@ -148,7 +148,7 @@ def test_validate_bundle_forbidden_files(mpy_env: MicroPythonEnvironment) -> Non
 
     for forbidden in ["config.json", "config_local.py", "config.local.py", "my_local.py"]:
         bundle = create_sample_bundle(
-            "0.32.0",
+            "1.1.0",
             files_content={forbidden: "SECRET = True\n"},
         )
         valid, msg = ota.validate_bundle(bundle, current_version="0.31.20")
@@ -160,7 +160,7 @@ def test_validate_bundle_path_traversal(mpy_env: MicroPythonEnvironment) -> None
     import ota
 
     bundle = create_sample_bundle(
-        "0.32.0",
+        "1.1.0",
         files_content={"../etc/passwd": "root:x:0:0\n"},
     )
     valid, msg = ota.validate_bundle(bundle, current_version="0.31.20")
@@ -175,7 +175,7 @@ def test_stage_bundle_success_and_cleanup_on_error(
     import ota
 
     bundle = create_sample_bundle(
-        "0.32.0",
+        "1.1.0",
         files_content={
             "app.py": "print('app v2')\n",
             "mod.py": "x = 42\n",
@@ -210,7 +210,7 @@ def test_apply_staged_update_atomic_swap(
     (tmp_path / "config.json").write_text('{"my_token": "secret123"}')
 
     bundle = create_sample_bundle(
-        "0.32.0",
+        "1.1.0",
         files_content={"main.py": "print('new main 0.32')\n"},
     )
 
@@ -234,7 +234,7 @@ def test_apply_staged_update_atomic_swap(
     assert pending_file.exists()
     pending_data = json.loads(pending_file.read_text())
     assert pending_data["pending"] is True
-    assert pending_data["version"] == "0.32.0"
+    assert pending_data["version"] == "1.1.0"
     assert pending_data["boot_attempts"] == 0
     assert "main.py" in pending_data["files"]
 
@@ -247,7 +247,7 @@ def test_confirm_healthy(
 
     (tmp_path / "main.py.bak").write_text("print('backup')\n")
     (tmp_path / "ota_pending.json").write_text(
-        json.dumps({"pending": True, "files": ["main.py"], "version": "0.32.0"})
+        json.dumps({"pending": True, "files": ["main.py"], "version": "1.1.0"})
     )
 
     assert ota.is_pending() is True
@@ -268,7 +268,7 @@ def test_rollback_ota(
     (tmp_path / "main.py.bak").write_text("working old main")
     (tmp_path / "main.py.new").write_text("leftover new")
     (tmp_path / "ota_pending.json").write_text(
-        json.dumps({"pending": True, "files": ["main.py"], "version": "0.32.0"})
+        json.dumps({"pending": True, "files": ["main.py"], "version": "1.1.0"})
     )
 
     res = ota.rollback_ota()
@@ -291,7 +291,7 @@ def test_boot_check_and_handle_ota_pending_first_boot(
     # Simulate fresh OTA staged (boot_attempts = 0)
     pending_file = tmp_path / "ota_pending.json"
     pending_file.write_text(
-        json.dumps({"pending": True, "boot_attempts": 0, "max_attempts": 1, "version": "0.32.0"})
+        json.dumps({"pending": True, "boot_attempts": 0, "max_attempts": 1, "version": "1.1.0"})
     )
 
     # First boot increments counter
@@ -317,7 +317,7 @@ def test_boot_check_and_handle_ota_pending_crash_triggers_rollback(
                 "pending": True,
                 "boot_attempts": 1,
                 "max_attempts": 1,
-                "version": "0.32.0",
+                "version": "1.1.0",
                 "files": ["main.py"],
             }
         )
@@ -333,7 +333,7 @@ def test_boot_check_and_handle_ota_pending_crash_triggers_rollback(
 def test_ota_client_download_with_redirect(mpy_env: MicroPythonEnvironment, tmp_path: Path) -> None:
     import ota
 
-    bundle = create_sample_bundle("0.32.0")
+    bundle = create_sample_bundle("1.1.0")
 
     def mock_get(url: str, headers: dict | None = None, **kwargs: object) -> MockResponse:
         if "github.com" in url:
@@ -350,7 +350,7 @@ def test_ota_client_download_with_redirect(mpy_env: MicroPythonEnvironment, tmp_
     downloaded = client.download_bundle(
         "https://github.com/jonasfh/snippen-sms-service/dist/firmware_bundle.json"
     )
-    assert downloaded["version"] == "0.32.0"
+    assert downloaded["version"] == "1.1.0"
     assert "main.py" in downloaded["files"]
 
 
@@ -361,7 +361,7 @@ def test_ota_client_perform_ota_full_workflow(
     import ota
 
     (tmp_path / "main.py").write_text("old main\n")
-    bundle = create_sample_bundle("0.32.0", {"main.py": "new main\n"})
+    bundle = create_sample_bundle("1.1.0", {"main.py": "new main\n"})
 
     mpy_env.mock_urequests.get_handler = lambda *args, **kwargs: MockResponse(
         status_code=200, json_data=bundle
@@ -389,7 +389,7 @@ def test_main_app_confirms_ota_after_stability(
     (tmp_path / "main.py").write_text("new active main")
     (tmp_path / "main.py.bak").write_text("old backup main")
     (tmp_path / "ota_pending.json").write_text(
-        json.dumps({"pending": True, "files": ["main.py"], "version": "0.32.0"})
+        json.dumps({"pending": True, "files": ["main.py"], "version": "1.1.0"})
     )
 
     app = main.GatewayApp(config={"ota_stability_timeout_sec": 10})
@@ -408,7 +408,7 @@ def test_main_app_ble_ota_commands(
     monkeypatch.chdir(tmp_path)
     import main
 
-    bundle = create_sample_bundle("0.32.0")
+    bundle = create_sample_bundle("1.1.0")
     mpy_env.mock_urequests.get_handler = lambda *args, **kwargs: MockResponse(
         status_code=200, json_data=bundle
     )
@@ -420,13 +420,13 @@ def test_main_app_ble_ota_commands(
     assert res_check["cmd"] == "CHECK_OTA"
     assert res_check["status"] == "ok"
     assert res_check["update_available"] is True
-    assert res_check["version"] == "0.32.0"
+    assert res_check["version"] == "1.1.0"
 
     # CHECK_OTA with version provided directly in payload (bypasses Wi-Fi HTTPS call)
-    res_payload_ver = app.on_ble_command("CHECK_OTA", {"version": "0.99.0"})
+    res_payload_ver = app.on_ble_command("CHECK_OTA", {"version": "1.2.0"})
     assert res_payload_ver["status"] == "ok"
     assert res_payload_ver["update_available"] is True
-    assert res_payload_ver["version"] == "0.99.0"
+    assert res_payload_ver["version"] == "1.2.0"
 
     res_payload_old = app.on_ble_command("CHECK_OTA", {"version": "0.1.0"})
     assert res_payload_old["update_available"] is False
@@ -472,10 +472,10 @@ def test_check_for_update_boot_loop_guard(
     monkeypatch.chdir(tmp_path)
     import ota
 
-    ota.record_failed_version("0.32.0", reason="boot_rollback")
+    ota.record_failed_version("1.1.0", reason="boot_rollback")
 
     mpy_env.mock_urequests.get_handler = lambda *args, **kwargs: MockResponse(
-        status_code=200, json_data={"tag_name": "v0.32.0"}
+        status_code=200, json_data={"tag_name": "v1.1.0"}
     )
 
     client = ota.OTAClient(config={"wifi_ssid": "TestSSID"})
