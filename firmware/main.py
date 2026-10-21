@@ -189,10 +189,22 @@ class GatewayApp:
             self.ble_server.stop()
 
     def on_ble_config_received(self, new_config: dict) -> None:
-        """Callback when companion app writes new configuration parameters (Issue #60, #61)."""
-        print(f"[main] Configuration received via BLE: {list(new_config.keys())}")
-        self.config.update(new_config)
-        save_config(new_config)
+        """Callback when companion app writes new configuration parameters (Issue #60, #61, #141)."""
+        cleaned_config = dict(new_config)
+        for cred_key in ("snippen_api_token", "wifi_password"):
+            if cred_key in cleaned_config and not str(cleaned_config[cred_key]).strip():
+                del cleaned_config[cred_key]
+
+        print(f"[main] Configuration received via BLE: {list(cleaned_config.keys())}")
+        self.config.update(cleaned_config)
+        save_config(cleaned_config)
+
+        # Update active REST API client dynamically if credentials or URL were changed
+        if self.api_client is not None:
+            if "snippen_api_token" in cleaned_config:
+                self.api_client.api_token = str(cleaned_config["snippen_api_token"]).strip()
+            if "snippen_api_base_url" in cleaned_config:
+                self.api_client.base_url = str(cleaned_config["snippen_api_base_url"]).rstrip("/")
 
     def on_ble_command(self, cmd: str, payload: dict | None = None) -> dict:
         """Callback when companion app sends a remote control command (Issue #60, #61)."""
@@ -200,18 +212,26 @@ class GatewayApp:
             payload = {}
         print(f"[main] Command received via BLE: {cmd}")
         if cmd == "SCAN_WIFI":
+            if self.wdt is not None and hasattr(self.wdt, "feed"):
+                self.wdt.feed()
             if wifi is not None:
                 print("[main] Initiating WiFi scan on request from companion app...")
                 networks = wifi.scan_networks()
+                if self.wdt is not None and hasattr(self.wdt, "feed"):
+                    self.wdt.feed()
                 print(f"[main] Returning {len(networks)} WiFi networks over BLE")
                 return {"cmd": "SCAN_WIFI", "status": "ok", "networks": networks}
             return {"cmd": "SCAN_WIFI", "status": "error", "message": "WiFi module unavailable"}
 
         if cmd == "TEST_WIFI":
+            if self.wdt is not None and hasattr(self.wdt, "feed"):
+                self.wdt.feed()
             ssid = payload.get("wifi_ssid") or self.config.get("wifi_ssid", "")
             password = payload.get("wifi_password") or self.config.get("wifi_password", "")
             if wifi is not None:
                 res = wifi.test_connection(ssid, password)
+                if self.wdt is not None and hasattr(self.wdt, "feed"):
+                    self.wdt.feed()
                 resp = {"cmd": "TEST_WIFI"}
                 resp.update(res)
                 return resp

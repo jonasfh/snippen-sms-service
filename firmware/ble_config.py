@@ -310,6 +310,11 @@ class BLEConfigServer:
             print(f"[ble] Error parsing JSON config write: {exc}")
             return
 
+        # Do not overwrite sensitive credentials if provided as empty string (Issue #141)
+        for cred_key in ("snippen_api_token", "wifi_password"):
+            if cred_key in payload and not str(payload[cred_key]).strip():
+                del payload[cred_key]
+
         print(f"[ble] Received configuration write: {list(payload.keys())}")
         if callable(self.on_config_received):
             self.on_config_received(payload)
@@ -341,10 +346,11 @@ class BLEConfigServer:
             self.notify_command_response(response, conn_handle=conn_handle)
 
     def update_config_characteristic(self, cfg: dict) -> None:
-        """Update read value of config characteristic with sensitive keys masked.
+        """Update read value of config characteristic with sensitive keys omitted.
 
-        Omit default long text templates when unchanged to ensure JSON payload remains
-        well below GATT 512-byte attribute limits (Issue #119).
+        Ensures JSON payload remains strictly below GATT 512-byte attribute limits (Issue #119, #141)
+        by omitting long custom templates if payload would exceed safe limits, and always
+        returning an empty string for snippen_api_token so secrets are never transmitted back.
         """
         ble = self._get_ble()
         if ble is None or self.handle_config is None:
@@ -353,7 +359,7 @@ class BLEConfigServer:
         safe_cfg = {
             "wifi_ssid": cfg.get("wifi_ssid", ""),
             "snippen_api_base_url": cfg.get("snippen_api_base_url", ""),
-            "snippen_api_token": mask_token(cfg.get("snippen_api_token", "")),
+            "snippen_api_token": "",
             "outbox_poll_interval_sec": cfg.get("outbox_poll_interval_sec", 5),
             "inbox_check_interval_sec": cfg.get("inbox_check_interval_sec", 5),
             "call_forwarding_number": cfg.get("call_forwarding_number", "+4792830575"),
@@ -364,16 +370,30 @@ class BLEConfigServer:
             "board_profile": cfg.get("board_profile", "lilygo_t_call_a7670e"),
         }
 
-        # Include custom text only if differing from default and non-empty
-        reply_caller = cfg.get("call_reply_caller_text", "")
-        if reply_caller and reply_caller != DEFAULT_CALL_REPLY_CALLER_TEXT:
-            safe_cfg["call_reply_caller_text"] = reply_caller[:200]
-
+        # Include custom text only if differing from default and fits safely within GATT buffer
         notify_admin = cfg.get("call_notify_admin_text", "")
         if notify_admin and notify_admin != DEFAULT_CALL_NOTIFY_ADMIN_TEXT:
             safe_cfg["call_notify_admin_text"] = notify_admin[:100]
 
+        reply_caller = cfg.get("call_reply_caller_text", "")
+        if reply_caller and reply_caller != DEFAULT_CALL_REPLY_CALLER_TEXT:
+            candidate = dict(safe_cfg)
+            candidate["call_reply_caller_text"] = reply_caller[:200]
+            try:
+                if len(json.dumps(candidate).encode("utf-8")) <= 480:
+                    safe_cfg["call_reply_caller_text"] = reply_caller[:200]
+            except Exception:  # noqa: BLE001, S110
+                pass
+
         json_data = json.dumps(safe_cfg)
+        try:
+            if len(json_data.encode("utf-8")) > 480:
+                safe_cfg.pop("call_reply_caller_text", None)
+                safe_cfg.pop("call_notify_admin_text", None)
+                json_data = json.dumps(safe_cfg)
+        except Exception:  # noqa: BLE001, S110
+            pass
+
         ble.gatts_write(self.handle_config, json_data)
 
     def notify_status(self, status: dict) -> None:

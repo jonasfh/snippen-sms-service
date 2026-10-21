@@ -279,9 +279,15 @@ def test_gateway_app_ble_server_lifecycle_and_commands(
     app.enter_provisioning_mode()
     assert app.ble_server.is_running is True
 
-    # Simulate BLE config write callback
-    app.on_ble_config_received({"wifi_ssid": "UpdatedSSID"})
+    # Simulate BLE config write callback with empty token (should retain existing)
+    app.config["snippen_api_token"] = "keep_this_token"
+    app.on_ble_config_received({"wifi_ssid": "UpdatedSSID", "snippen_api_token": ""})
     assert app.config["wifi_ssid"] == "UpdatedSSID"
+    assert app.config["snippen_api_token"] == "keep_this_token"
+
+    # Simulate BLE config write with new non-empty token
+    app.on_ble_config_received({"snippen_api_token": "new_token_456"})
+    assert app.config["snippen_api_token"] == "new_token_456"
 
     # Simulate BLE command APPLY_AND_EXIT
     res = app.on_ble_command("APPLY_AND_EXIT", {})

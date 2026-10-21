@@ -258,6 +258,9 @@ def save_config(updates: dict, config_path: str = "config.json") -> bool:
     for k, v in updates.items():
         k_lower = k.lower()
         if k_lower in valid_keys:
+            # Do not overwrite sensitive credentials if provided as empty string (Issue #141)
+            if k_lower in ("snippen_api_token", "wifi_password") and not str(v).strip():
+                continue
             existing[k_lower] = v
 
     # Write back to config file
