@@ -113,7 +113,7 @@
       <div class="form-group">
         <label for="wifi-password">WiFi Passord</label>
         <div class="input-wrapper">
-          <input type="password" id="wifi-password" placeholder="Passord for trådløst nettverk">
+          <input type="password" id="wifi-password" autocomplete="new-password" placeholder="Passord for trådløst nettverk">
           <button type="button" class="toggle-password-btn" id="btn-toggle-wifi-pw" title="Vis/skjul passord">
             👁️
           </button>
@@ -152,13 +152,13 @@
       <div class="form-group">
         <label for="api-token">API Bearer Token</label>
         <div class="input-wrapper">
-          <input type="password" id="api-token" placeholder="Bearer auth token">
+          <input type="password" id="api-token" autocomplete="new-password" placeholder="(Uendret hvis tomt)">
           <button type="button" class="toggle-password-btn" id="btn-toggle-api-token" title="Vis/skjul token">
             👁️
           </button>
         </div>
         <small style="font-size: 0.72rem; color: var(--text-muted);">
-          Eksisterende token vises maskert fra enheten av sikkerhetshensyn.
+          Av sikkerhetshensyn overføres ikke token tilbake til nettleseren. La feltet stå tomt for å beholde eksisterende token.
         </small>
       </div>
 

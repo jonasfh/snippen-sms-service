@@ -2,7 +2,7 @@
  * Snippen Gateway Configurator - Network-First Offline Service Worker (Issue #99)
  */
 
-const CACHE_NAME = 'snippen-config-v0.31.24-force';
+const CACHE_NAME = 'snippen-config-v0.31.27';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

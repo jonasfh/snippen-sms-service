@@ -215,8 +215,10 @@ async function loadActiveConfig() {
     if (cfg.snippen_api_base_url) {
       apiBaseUrl.value = cfg.snippen_api_base_url;
     }
-    if (cfg.snippen_api_token) {
-      apiToken.value = cfg.snippen_api_token;
+    // Never display sensitive credentials (API token, WiFi password) in the web UI (Issue #141)
+    apiToken.value = "";
+    if (wifiPassword) {
+      wifiPassword.value = "";
     }
     if (cfg.outbox_poll_interval_sec) {
       pollInterval.value = cfg.outbox_poll_interval_sec;

@@ -96,11 +96,11 @@ def test_ble_server_start_and_stop(mpy_env: MicroPythonEnvironment) -> None:
     assert mock_ble._resp_data is not None
     assert len(mock_ble._resp_data) <= 31
 
-    # Verify initial config characteristic value has masked token
+    # Verify initial config characteristic value has empty token (Issue #141)
     config_bytes = mock_ble.gatts_read(server.handle_config)
     config_data = json.loads(config_bytes.decode("utf-8"))
     assert config_data["wifi_ssid"] == "MyWiFi"
-    assert config_data["snippen_api_token"] == "se****99"
+    assert config_data["snippen_api_token"] == ""
     assert "sensitive" not in config_data["snippen_api_token"]
 
     server.stop()
@@ -170,12 +170,53 @@ def test_ble_server_config_write(mpy_env: MicroPythonEnvironment) -> None:
     assert received_config == new_cfg
     assert server.config["wifi_ssid"] == "NewOfficeWiFi"
 
-    # Verify characteristic is updated with masked token
+    # Verify characteristic is updated with empty token (Issue #141)
     read_back = json.loads(mock_ble.gatts_read(server.handle_config).decode("utf-8"))
     assert read_back["wifi_ssid"] == "NewOfficeWiFi"
-    assert read_back["snippen_api_token"] == "br****23"
+    assert read_back["snippen_api_token"] == ""
     assert read_back["call_forwarding_number"] == "+4792830575"
     assert read_back["call_reject_enabled"] is True
+
+
+def test_ble_server_config_write_empty_token_retains_existing(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    """Verify that writing empty credentials over BLE does not overwrite existing values (Issue #141)."""
+    import ble_config
+
+    mock_ble = MockBLE()
+    received_config: dict = {}
+
+    def on_cfg(cfg: dict) -> None:
+        nonlocal received_config
+        received_config = cfg
+
+    server = ble_config.BLEConfigServer(
+        ble=mock_ble,
+        config={
+            "wifi_ssid": "OldNet",
+            "snippen_api_token": "existing_secure_token",
+            "wifi_password": "existing_wifi_password",
+        },
+        on_config_received=on_cfg,
+    )
+    server.start()
+    mock_ble.simulate_connect(conn_handle=1)
+
+    # Web client sends empty token or empty password
+    write_cfg = {
+        "wifi_ssid": "NewNet",
+        "snippen_api_token": "",
+        "wifi_password": "   ",
+    }
+    mock_ble.simulate_write(server.handle_config, json.dumps(write_cfg))
+
+    # Empty token and password should not be passed to callback or overwrite server.config
+    assert "snippen_api_token" not in received_config
+    assert "wifi_password" not in received_config
+    assert server.config["snippen_api_token"] == "existing_secure_token"
+    assert server.config["wifi_password"] == "existing_wifi_password"
+    assert server.config["wifi_ssid"] == "NewNet"
 
 
 def test_ble_server_command_write_and_response(mpy_env: MicroPythonEnvironment) -> None:
@@ -380,6 +421,16 @@ def test_ble_server_config_payload_stays_under_gatt_limit(mpy_env: MicroPythonEn
     assert len(raw_custom) <= 500
     parsed_custom = json.loads(raw_custom.decode("utf-8"))
     assert parsed_custom["call_reply_caller_text"] == "Egendefinert svar til innringer."
+
+    # When user configures very long custom text and URL that would exceed 480 bytes,
+    # the GATT payload must still be <= 480 bytes and decode without JSON errors (Issue #141)
+    server.config["call_reply_caller_text"] = "A" * 300
+    server.config["call_notify_admin_text"] = "B" * 200
+    server.update_config_characteristic(server.config)
+    raw_long = mock_ble.gatts_read(server.handle_config)
+    assert len(raw_long) <= 480
+    parsed_long = json.loads(raw_long.decode("utf-8"))
+    assert parsed_long["wifi_ssid"] == "Snippen-WiFi-Network"
 
 
 def test_ble_server_command_oversized_response_truncation(mpy_env: MicroPythonEnvironment) -> None:

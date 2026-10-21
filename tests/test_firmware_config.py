@@ -166,3 +166,28 @@ def test_save_config_persists_board_profile(tmp_path: Path) -> None:
     assert success is True
     saved = json.loads(json_path.read_text(encoding="utf-8"))
     assert saved["board_profile"] == "lilygo_t_call_a7670e"
+
+
+def test_save_config_ignores_empty_sensitive_credentials(tmp_path: Path) -> None:
+    """Ensure empty credentials in updates do not overwrite existing stored credentials (Issue #141)."""
+    json_path = tmp_path / "config.json"
+    initial_data = {
+        "snippen_api_token": "my_secret_token_123",
+        "wifi_password": "super_wifi_password",
+        "wifi_ssid": "OldWiFi",
+    }
+    json_path.write_text(json.dumps(initial_data), encoding="utf-8")
+
+    # Update with empty token and whitespace password
+    updates = {
+        "wifi_ssid": "NewWiFi",
+        "snippen_api_token": "",
+        "wifi_password": "   ",
+    }
+    success = config.save_config(updates, str(json_path))
+    assert success is True
+
+    saved = json.loads(json_path.read_text(encoding="utf-8"))
+    assert saved["wifi_ssid"] == "NewWiFi"
+    assert saved["snippen_api_token"] == "my_secret_token_123"
+    assert saved["wifi_password"] == "super_wifi_password"
