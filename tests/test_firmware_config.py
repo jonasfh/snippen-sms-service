@@ -118,6 +118,14 @@ def test_board_profiles_catalog() -> None:
     assert profile["modem_uart_id"] == 1
     assert profile["modem_baudrate"] == 115200
 
+    assert "lilygo_t_a7670_r2" in config.BOARD_PROFILES
+    profile_r2 = config.BOARD_PROFILES["lilygo_t_a7670_r2"]
+    assert profile_r2["pin_modem_tx"] == 26
+    assert profile_r2["pin_modem_rx"] == 27
+    assert profile_r2["pin_modem_power"] == 12
+
+    assert "lilygo_t_a7670e_r2" in config.BOARD_PROFILES
+
 
 def test_get_default_config_board_profile() -> None:
     cfg = config.get_default_config()

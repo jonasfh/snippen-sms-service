@@ -88,15 +88,18 @@ mpremote connect /dev/ttyACM0 repl
 
 ---
 
-## 6. Verifisert Pinout (Lilygo T-Call A7670)
+## 6. Verifisert Pinout (Lilygo T-Call A7670 & T-A7670 R2)
 
-| Funksjon | GPIO-pin | Beskrivelse |
-| :--- | :--- | :--- |
-| **Modem VCC (Power)** | `GPIO 12` | Må settes `HIGH (1)` for å mate strømskinnen til modemet |
-| **Modem Reset** | `GPIO 5` | Aktiv lav internt, holdes `HIGH (1)` ved drift |
-| **Modem PWRKEY** | `GPIO 4` | Pulses `HIGH (1)` i 1,5 sek for å slå på modemet |
-| **ESP32 TX (Modem RX)**| `GPIO 26` | Seriedata ut fra ESP32 |
-| **ESP32 RX (Modem TX)**| `GPIO 25` | Seriedata inn til ESP32 |
+| Funksjon | T-Call A7670 | T-A7670 R2 | Beskrivelse |
+| :--- | :--- | :--- | :--- |
+| **Modem VCC (Power)** | `GPIO 12` | `GPIO 12` | Må settes `HIGH (1)` for å mate strømskinnen til modemet |
+| **Modem Reset** | `GPIO 5` | `GPIO 5` | Aktiv lav internt, holdes `HIGH (1)` ved drift |
+| **Modem PWRKEY** | `GPIO 4` | `GPIO 4` | Pulses `HIGH (1)` i 1,5 sek for å slå på modemet |
+| **ESP32 TX (Modem RX)**| `GPIO 26` | `GPIO 26` | Seriedata ut fra ESP32 |
+| **ESP32 RX (Modem TX)**| `GPIO 25` | `GPIO 27` | Seriedata inn til ESP32 (*merk forskjell på R2*) |
+| **BOOT-knapp** | `GPIO 0` | `GPIO 0` | Brukes for BLE-provisjoneringsmodus |
+
+I `config.json` angis brettprofil med `"board_profile": "lilygo_t_a7670_r2"` (eller `"lilygo_t_call_a7670e"` for eldre versjon).
 
 ---
 

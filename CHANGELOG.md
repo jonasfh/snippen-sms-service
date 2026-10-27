@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-10-27
+
+### Added
+- Støtte for Lilygo T-A7670 R2 maskinvareprofil (`#146`):
+  - Lagt til maskinvareprofilene `lilygo_t_a7670_r2` og `lilygo_t_a7670e_r2` i `firmware/config.py` med verifisert pinout (ESP32 TX GPIO 26, RX GPIO 27, Power GPIO 12, Reset GPIO 5, PWRKEY GPIO 4).
+  - Verifisert permanent deaktivering av SIM PIN-lås og stabil registrering på Telia 4G-mobilnettet (`AT+CREG: 0,1`, `AT+COPS: "24202",7`) på fysisk maskinvare.
+  - Oppdatert dokumentasjon i `docs/README_LILYGO.md` og `DEV_README.md`, samt enhetstester i `tests/test_firmware_config.py`.
+
 ## [1.0.0] - 2026-10-21
 
 ### Milestone - Offisiell produksjonssetting 🚀🎉
