@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-10-27
+
+### Added
+- Forbedret driftslogging for Wi-Fi, outbox-polling og API-feil i firmware (`#148`):
+  - Lagt til sanntidsrapportering av Wi-Fi-status og tildelt IP (eller gjenoppkobling/backoff) i periodisk heartbeat og umiddelbart ved fullført tilkobling.
+  - Loggfører eksplisitt årsak dersom outbox-polling hoppes over (f.eks. manglende Wi-Fi eller manglende API-token).
+  - Tydelig logg ved periodisk polling mot outbox-endepunktet og forbedret feilmelding med token-forhåndsvisning ved HTTP 401/403 eller nettverksfeil.
+  - Viser passordstatus (maskert vs. tomt passord) ved påbegynt tilkobling i `wifi.py`.
+
 ## [1.0.1] - 2026-10-27
 
 ### Added
