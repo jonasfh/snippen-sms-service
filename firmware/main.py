@@ -588,16 +588,28 @@ class GatewayApp:
             return 0
 
     def poll_outbox(self) -> int:
-        """Poll outbound SMS from Snippen Booking API and transmit over cellular modem (Issue #52)."""
-        if self.api_client is None or self.modem is None:
+        """Poll outbound SMS from Snippen Booking API and transmit over cellular modem (Issue #52, #148)."""
+        if self.api_client is None:
+            if self.cycle_count % 6 == 0:
+                print(
+                    "[main] Outbox poll hoppet over: REST API-klient ikke initialisert (mangler URL/token)."
+                )
+            return 0
+        if self.modem is None:
             return 0
         if wifi is not None and not wifi.is_connected():
+            if self.cycle_count % 6 == 0:
+                ssid = self.config.get("wifi_ssid", "")
+                print(f"[main] Outbox poll hoppet over: Wi-Fi ikke tilkoblet ('{ssid}').")
             return 0
 
         try:
             limit = self.config.get("outbox_batch_limit", 5)
             messages = self.api_client.fetch_outbox(limit=limit)
             if not messages:
+                if self.cycle_count % 6 == 0:
+                    base_url = getattr(self.api_client, "base_url", "API")
+                    print(f"[main] Pollet {base_url}/outbox: Ingen ventende SMS i kø.")
                 return 0
 
             print(f"[main] Fetched {len(messages)} pending outbound SMS from Snippen Booking.")
@@ -821,6 +833,27 @@ class GatewayApp:
                 except Exception as exc:  # noqa: BLE001
                     print(f"[main] Modem signal query error during heartbeat: {exc}")
 
+        # Wi-Fi health reporting (Issue #148)
+        if wifi is not None:
+            if wifi.is_connected():
+                try:
+                    import network
+
+                    wlan = network.WLAN(network.STA_IF)
+                    print(
+                        f"[main] Wi-Fi: Tilkoblet '{self.config.get('wifi_ssid', '')}' (IP: {wlan.ifconfig()[0]})"
+                    )
+                except Exception:
+                    print(f"[main] Wi-Fi: Tilkoblet '{self.config.get('wifi_ssid', '')}'")
+            else:
+                ssid = self.config.get("wifi_ssid", "")
+                if ssid:
+                    print(
+                        f"[main] Wi-Fi: Ikke tilkoblet (forsøker '{ssid}', backoff {self.wifi_backoff_sec}s)"
+                    )
+                else:
+                    print("[main] Wi-Fi: Ikke konfigurert (mangler SSID)")
+
     def check_boot_ota(self) -> bool:
         """Check for newer release on boot after Wi-Fi is connected (Issue #130)."""
         if not self.config.get("ota_check_on_boot", True):
@@ -892,6 +925,16 @@ class GatewayApp:
                     wifi.start_connect(ssid, pwd)
                     self.wifi_backoff_sec = min(60, self.wifi_backoff_sec * 2)
         elif wifi is not None and wifi.is_connected():
+            if self.wifi_backoff_sec > 5:
+                try:
+                    import network
+
+                    wlan = network.WLAN(network.STA_IF)
+                    print(
+                        f"[wifi] ✅ Tilkoblet '{self.config.get('wifi_ssid', '')}'! Tildelt IP: {wlan.ifconfig()[0]}"
+                    )
+                except Exception:
+                    print(f"[wifi] ✅ Tilkoblet '{self.config.get('wifi_ssid', '')}'!")
             self.wifi_backoff_sec = 5
             if not self.boot_ota_checked and not self.is_provisioning_mode:
                 self.boot_ota_checked = True

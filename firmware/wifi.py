@@ -202,9 +202,11 @@ def start_connect(ssid: str, password: str = "") -> bool:
     wlan = get_wlan()
     if wlan is None or not ssid:
         return False
-    if wlan.isconnected():
+    if wlan.isconnected() and _has_valid_ip(wlan):
         return True
     try:
+        masked_pwd = "****" if password else "<tomt passord!>"
+        print(f"[wifi] Starter bakgrunnstilkobling til '{ssid}' (passord: {masked_pwd})...")
         wlan.connect(ssid, password)
         return True
     except Exception as exc:  # noqa: BLE001

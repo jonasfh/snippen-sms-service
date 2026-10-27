@@ -72,16 +72,21 @@ class SnippenApiClient:
                     return data
                 return []
             if res.status_code in (401, 403):
+                token_preview = (
+                    f"{self.api_token[:4]}..."
+                    if len(self.api_token) >= 4
+                    else ("<tom>" if not self.api_token else self.api_token)
+                )
                 print(
-                    f"[snippen_api] Authentication rejected (HTTP {res.status_code}). Check API token."
+                    f"[snippen_api] Autentisering avvist (HTTP {res.status_code}) mot {url}. Token: {token_preview}"
                 )
             else:
-                print(f"[snippen_api] Unexpected outbox HTTP status: {res.status_code}")
+                print(f"[snippen_api] Uventet HTTP-status fra {url}: {res.status_code}")
             self.consecutive_errors += 1
             return []
         except Exception as exc:  # noqa: BLE001
             self.consecutive_errors += 1
-            print(f"[snippen_api] Failed to fetch outbox: {exc}")
+            print(f"[snippen_api] Feil ved henting fra outbox ({url}): {exc}")
             return []
         finally:
             if res is not None and hasattr(res, "close"):
