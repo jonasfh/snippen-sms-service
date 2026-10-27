@@ -843,7 +843,7 @@ class GatewayApp:
                     print(
                         f"[main] Wi-Fi: Tilkoblet '{self.config.get('wifi_ssid', '')}' (IP: {wlan.ifconfig()[0]})"
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     print(f"[main] Wi-Fi: Tilkoblet '{self.config.get('wifi_ssid', '')}'")
             else:
                 ssid = self.config.get("wifi_ssid", "")
@@ -933,7 +933,7 @@ class GatewayApp:
                     print(
                         f"[wifi] ✅ Tilkoblet '{self.config.get('wifi_ssid', '')}'! Tildelt IP: {wlan.ifconfig()[0]}"
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     print(f"[wifi] ✅ Tilkoblet '{self.config.get('wifi_ssid', '')}'!")
             self.wifi_backoff_sec = 5
             if not self.boot_ota_checked and not self.is_provisioning_mode:
