@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-11-01
+
+### Changed
+- Oppdatert `.devcontainer/devcontainer.json` og `snippen-sms-service.code-workspace` for konsistent Antigravity-oppsett på tvers av Snippen-repoene (`#150`):
+  - Bruker `${localWorkspaceFolderBasename}-gemini-data` Docker-volum for `/home/vscode/.gemini` slik at Antigravity-sesjoner lagres persistent.
+  - Monterer host `~/.gitconfig` som skrivebeskyttet `/etc/gitconfig` i containeren.
+  - Lagt til `../snippen-doorman-service` i `snippen-sms-service.code-workspace`.
+
 ## [1.0.2] - 2026-10-27
 
 ### Added
