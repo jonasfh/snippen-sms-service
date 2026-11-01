@@ -32,19 +32,30 @@ Hvis miljøet allerede finnes, men `monitor` melder at `pyserial` mangler, kjør
 `python -m pip install -e ".[dev]"` mens det aktuelle miljøet er aktivert. Alternativt
 kan bare denne pakken installeres med `python -m pip install pyserial`.
 
-### Serieport-rettigheter (Linux Host)
-Gi brukeren tilgang til serieportene:
+### Serieport-rettigheter (Linux-vert)
+På en ny Linux-PC må **Linux-brukeren på vertsmaskinen** legges til i `dialout`-gruppen. Kjør dette i en terminal på vertsmaskinen, ikke bare inne i dev-containeren:
 
 ```bash
-sudo usermod -aG dialout $USER
-newgrp dialout
+sudo usermod -aG dialout "$USER"
 ```
+
+Logg helt ut av Linux-brukeren og inn igjen (eller start PC-en på nytt) slik at gruppeendringen gjelder for VS Code. `newgrp dialout` oppdaterer bare den aktuelle terminaløkten og er vanligvis ikke nok dersom VS Code allerede kjører.
 
 ### Utvikling i Dev Container (Docker)
 For at containeren skal få tilgang til USB-serieporter dynamisk fra Linux-hosten:
-1. `.devcontainer/devcontainer.json` må ha `runArgs`: `["--privileged", "-v", "/dev:/dev"]`.
-2. Brukeren `vscode` må legges til i `dialout`-gruppen (`sudo usermod -aG dialout vscode`).
+1. `.devcontainer/devcontainer.json` deler `/dev` med containeren og legger container-brukeren `vscode` i `dialout` automatisk.
+2. Etter at du har logget inn igjen på vertsmaskinen, åpne prosjektet på nytt. Hvis containeren fortsatt mangler gruppetilgangen, kjør **Dev Containers: Rebuild Container** fra VS Code.
 3. `esptool`, `mpremote` og `pyserial` er inkludert i prosjektets `dev`-avhengigheter i `pyproject.toml`.
+
+Hvis `python scripts/deploy_firmware.py monitor` feiler med `Permission denied` for `/dev/ttyACM0` eller `/dev/ttyUSB0`, kontroller gruppene og portens eier:
+
+```bash
+# Kjør disse kommandoene i terminalen der deploy_firmware.py kjøres:
+id -nG
+ls -l /dev/ttyACM0
+```
+
+`id -nG` skal vise `dialout`, og serieporten skal normalt ha `dialout` som gruppe. Hvis `dialout` mangler i resultatet, følg vertstrinnene over og start VS Code/containeren på nytt. Bytt `/dev/ttyACM0` til porten som faktisk vises hos deg.
 
 ---
 
