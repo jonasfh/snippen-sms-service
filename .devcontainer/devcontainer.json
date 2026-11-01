@@ -11,7 +11,8 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python"
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python",
+        "python.terminal.activateEnvironment": true
       },
       "extensions": [
         "ms-python.python",
@@ -30,7 +31,7 @@
     "-v",
     "/dev:/dev"
   ],
-  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.gemini && sudo usermod -aG dialout vscode && python3 -m venv /home/vscode/.venv && /home/vscode/.venv/bin/pip install -e \".[dev]\"",
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.gemini && sudo usermod -aG dialout vscode && python3 -m venv /home/vscode/.venv && /home/vscode/.venv/bin/pip install -e \".[dev]\" && (grep -q '/home/vscode/.venv/bin/activate' ~/.bashrc || echo '[ -f /home/vscode/.venv/bin/activate ] && source /home/vscode/.venv/bin/activate' >> ~/.bashrc)",
   "remoteUser": "vscode",
   "mounts": [
     "source=${localWorkspaceFolderBasename}-gemini-data,target=/home/vscode/.gemini,type=volume",
