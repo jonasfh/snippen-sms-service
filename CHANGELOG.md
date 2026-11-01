@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-11-01
+
+### Changed
+- Oppdatert dokumentasjon og utviklermiljø for `pyproject.toml`-avhengigheter og automatisk aktivering av virtuelt miljø (`#152`):
+  - Dokumentert `python -m pip install -e ".[dev]"` i `DEV_README.md` og `docs/README_LILYGO.md`, og oppdatert feilmeldinger ved manglende `pyserial` i `scripts/deploy_firmware.py`.
+  - Aktivert `"python.terminal.activateEnvironment": true` og automatisk sourcing av `/home/vscode/.venv/bin/activate` i `~/.bashrc` i `.devcontainer/devcontainer.json`.
+
 ## [1.0.3] - 2026-11-01
 
 ### Changed

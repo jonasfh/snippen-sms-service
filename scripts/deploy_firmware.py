@@ -181,7 +181,10 @@ def hardware_reset_device(port: str | None) -> int:
     try:
         import serial
     except ImportError:
-        print("[reset] Error: pyserial is required for hardware reset. Run: pip install pyserial")
+        print(
+            "[reset] Error: pyserial is required for hardware reset. "
+            'Run: python -m pip install -e ".[dev]"'
+        )
         return 1
 
     try:
@@ -213,7 +216,8 @@ def monitor_device(port: str | None, baudrate: int = 115200, dry_run: bool = Fal
         import serial
     except ImportError:
         print(
-            "[monitor] Error: pyserial is required for serial monitoring. Run: pip install pyserial"
+            "[monitor] Error: pyserial is required for serial monitoring. "
+            'Run: python -m pip install -e ".[dev]"'
         )
         return 1
 

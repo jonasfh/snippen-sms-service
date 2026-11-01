@@ -104,12 +104,19 @@ For high-level system architecture, communication flows, and boundaries, see [do
 1. **Prerequisites**: Python 3.14+ and `pip`.
 2. **Environment & Dependencies**:
    - In **Dev Container**, the virtual environment is automatically set up at `/home/vscode/.venv` (outside the workspace root) to prevent collisions with host OS environments.
+     The `dev` extra from `pyproject.toml` is installed there, including tools such as `pyserial`.
+     VS Code selects this interpreter and activates it in new integrated terminals automatically.
+     If a terminal is not activated, select `/home/vscode/.venv/bin/python` with **Python: Select Interpreter**
+     and open a new terminal.
    - For local CLI development outside container:
      ```bash
      python -m venv ~/.venv
      source ~/.venv/bin/activate
-     pip install -e ".[dev]"
+     python -m pip install -e ".[dev]"
      ```
+   - To install dependencies into an already active environment, run `python -m pip install -e ".[dev]"`
+     from the project root. This installs the project and its development dependencies declared in
+     `pyproject.toml`; for example, `pyserial` is needed by firmware monitoring and hardware reset.
 3. **Testing, Linting, Formatting, Building & PR Validation**:
    ```bash
    # Run test suite

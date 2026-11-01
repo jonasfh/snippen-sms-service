@@ -15,16 +15,22 @@ LTE-modemet (A7670E) trekker brå strømpulser (transienter) på opptil **2A** u
 ## 2. Installasjon av verktøy (Ubuntu / Linux)
 
 ### Virtuelt miljø og pakker
-Sett opp et virtuelt Python-miljø og installer `esptool` og `mpremote`:
+Kjør kommandoene fra prosjektroten. Installer prosjektets avhengigheter fra
+`pyproject.toml` i et virtuelt miljø. Dev-ekstraet inkluderer blant annet
+`esptool`, `mpremote` og `pyserial` (som kreves for `monitor` og fysisk reset):
 
 ```bash
 # Opprett og aktiver et virtuelt miljø
-python3 -m venv env
-source env/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 
-# Installer esptool (flashing) og mpremote (REPL / filoverføring)
-pip install esptool mpremote
+# Installer prosjektet og alle utviklings-/firmwareverktøy fra pyproject.toml
+python -m pip install -e ".[dev]"
 ```
+
+Hvis miljøet allerede finnes, men `monitor` melder at `pyserial` mangler, kjør
+`python -m pip install -e ".[dev]"` mens det aktuelle miljøet er aktivert. Alternativt
+kan bare denne pakken installeres med `python -m pip install pyserial`.
 
 ### Serieport-rettigheter (Linux Host)
 Gi brukeren tilgang til serieportene:
