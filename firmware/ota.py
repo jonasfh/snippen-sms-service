@@ -143,14 +143,18 @@ def is_newer_version(latest_str: str, current_str: str) -> bool:
     return parse_semver(latest_str) > parse_semver(current_str)
 
 
-def copy_file(src: str, dst: str) -> None:
+def copy_file(src: str, dst: str, feed_wdt: object | None = None) -> None:
     """Copy file from src to dst in 512-byte blocks."""
     with open(src, "rb") as f_in, open(dst, "wb") as f_out:
+        blocks = 0
         while True:
             chunk = f_in.read(512)
             if not chunk:
                 break
             f_out.write(chunk)
+            blocks += 1
+            if blocks % 8 == 0 and callable(feed_wdt):
+                feed_wdt()
 
 
 def is_pending() -> bool:
@@ -363,17 +367,28 @@ def stage_bundle(bundle: dict, feed_wdt: object | None = None) -> list[str]:
             content = file_info["content"]
             expected_sha = str(file_info["sha256"]).strip().lower()
 
-            with open(stage_path, "w") as f:
-                f.write(content)
+            content_bytes = content.encode("utf-8") if isinstance(content, str) else content
+            with open(stage_path, "wb") as f:
+                offset = 0
+                total_len = len(content_bytes)
+                while offset < total_len:
+                    f.write(content_bytes[offset : offset + 4096])
+                    offset += 4096
+                    if callable(feed_wdt):
+                        feed_wdt()
 
-            if callable(feed_wdt):
-                feed_wdt()
+            # Read back from flash in chunks and verify integrity
+            chunks: list[bytes] = []
+            with open(stage_path, "rb") as f:
+                while True:
+                    chunk = f.read(4096)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    if callable(feed_wdt):
+                        feed_wdt()
 
-            # Read back from flash and verify integrity
-            with open(stage_path, "r") as f:
-                readback_content = f.read()
-
-            readback_sha = calculate_sha256(readback_content).lower()
+            readback_sha = calculate_sha256(b"".join(chunks)).lower()
             if readback_sha != expected_sha:
                 raise RuntimeError(
                     f"Post-write flash verification failed for {stage_path}: hash mismatch"
@@ -441,7 +456,7 @@ def apply_staged_update(
                     os.remove(bak_path)
                 except Exception:  # noqa: BLE001, S110
                     pass
-                copy_file(filename, bak_path)
+                copy_file(filename, bak_path, feed_wdt=feed_wdt)
 
                 # Atomically replace active file
                 try:
@@ -472,14 +487,14 @@ class OTAClient:
         self.config = config if config is not None else load_config()
         self.wdt = wdt
 
-    def feed_watchdog(self) -> None:
-        """Feed hardware watchdog and run garbage collection during long OTA operations."""
+    def feed_watchdog(self, collect_gc: bool = False) -> None:
+        """Feed hardware watchdog and optionally run garbage collection."""
         if self.wdt is not None and hasattr(self.wdt, "feed"):
             try:
                 self.wdt.feed()
             except Exception:  # noqa: BLE001, S110
                 pass
-        if gc is not None:
+        if collect_gc and gc is not None:
             try:
                 gc.collect()
             except Exception:  # noqa: BLE001, S110
@@ -530,7 +545,7 @@ class OTAClient:
         while redirect_count <= max_redirects:
             res = None
             try:
-                self.feed_watchdog()
+                self.feed_watchdog(collect_gc=True)
                 res = requests.get(cur_url, headers=headers)
                 self.feed_watchdog()
                 if res.status_code in (301, 302, 303, 307, 308):
@@ -561,9 +576,9 @@ class OTAClient:
                 if res.status_code != 200:
                     raise RuntimeError(f"HTTP error {res.status_code} fetching bundle")
 
-                self.feed_watchdog()
+                self.feed_watchdog(collect_gc=True)
                 data = res.json()
-                self.feed_watchdog()
+                self.feed_watchdog(collect_gc=True)
                 if not isinstance(data, dict):
                     raise TypeError("Response payload is not valid JSON dictionary")
                 return data
@@ -667,7 +682,7 @@ class OTAClient:
         if not self.ensure_wifi():
             raise RuntimeError("Could not establish Wi-Fi connection for OTA")
 
-        self.feed_watchdog()
+        self.feed_watchdog(collect_gc=True)
         bundle = self.download_bundle(url)
         self.feed_watchdog()
 
@@ -675,13 +690,14 @@ class OTAClient:
         if not valid:
             raise ValueError(f"Bundle validation failed: {err}")
 
+        self.feed_watchdog(collect_gc=True)
         print(f"[ota] Validated firmware bundle v{bundle['version']}. Staging files...")
         staged = stage_bundle(bundle, feed_wdt=self.feed_watchdog)
-        self.feed_watchdog()
+        self.feed_watchdog(collect_gc=True)
 
         print("[ota] Applying staged files...")
         success = apply_staged_update(bundle, staged, feed_wdt=self.feed_watchdog)
-        self.feed_watchdog()
+        self.feed_watchdog(collect_gc=True)
 
         if success and restart and machine is not None and hasattr(machine, "reset"):
             print("[ota] Rebooting device into updated firmware...")

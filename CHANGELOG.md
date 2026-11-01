@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-11-01
+
+### Fixed
+- Rettet `nimble_host` stack overflow og `task_wdt`-krasj ved OTA-oppdatering på ESP32 (`#154`):
+  - **BLE OTA-køing til hovedtråd (`mp_task`):** Kommandoene `START_OTA` / `OTA_UPDATE` / `ota_update` fra BLE Web UI legger nå oppdateringen i kø (`self.pending_ota_request`) og returnerer umiddelbart fra NimBLE IRQ-callbacken, slik at HTTPS/TLS-nedlasting og flash-staging utføres på hovedtråden (`mp_task`) i `GatewayApp.tick()` i stedet for på `nimble_host`-trådens lille stack (~4 KB).
+  - **Bevarer 60s hardware-watchdog i `boot.py`:** Endret `_feed_wdt_if_active()` i `firmware/boot.py` til å kalle `machine.WDT(timeout=60000).feed()` i stedet for `machine.WDT().feed()` uten argument, som på MicroPython ESP32 rekonfigurerte `esp_task_wdt` ned til standardverdien på 5000 ms (5 sekunder) hvert sekund.
+  - **Blokkvis flash-staging og lettvekts WDT-mating i `ota.py`:** Skriver og verifiserer `.new`-filer i 4 KB-blokker med `feed_wdt()` mellom hver blokk i `stage_bundle()`, og skiller rask watchdog-mating (`self.wdt.feed()`) fra tunge `gc.collect()`-sveip på 4 MB SPIRAM.
+
 ## [1.0.4] - 2026-11-01
 
 ### Changed

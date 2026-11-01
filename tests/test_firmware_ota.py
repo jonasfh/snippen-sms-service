@@ -432,11 +432,26 @@ def test_main_app_ble_ota_commands(
     assert res_payload_old["update_available"] is False
     assert res_payload_old["status"] == "notice"
 
-    # START_OTA command (with restart=False mocked to prevent machine.reset())
+    # START_OTA command queues pending_ota_request instead of executing inside BLE IRQ (nimble_host)
     monkeypatch.setattr("machine.reset", MagicMock())
-    res_start = app.on_ble_command("START_OTA", {})
+    (tmp_path / "main.py").write_text("old main\n")
+    app.enter_provisioning_mode()
+    assert app.is_provisioning_mode is True
+
+    res_start = app.on_ble_command("START_OTA", {"force": True})
     assert res_start["cmd"] == "START_OTA"
     assert res_start["status"] == "ok"
+    assert app.pending_ota_request is not None
+    assert app.pending_ota_request["cmd"] == "START_OTA"
+    assert app.pending_ota_request["force"] is True
+    # File is not yet modified while still in BLE callback
+    assert (tmp_path / "main.py").read_text() == "old main\n"
+
+    # Next tick on main loop (mp_task) executes the queued OTA update and exits provisioning mode
+    app.tick()
+    assert app.pending_ota_request is None
+    assert app.is_provisioning_mode is False
+    assert (tmp_path / "main.py").read_text() == "print('new main 1.1.0')\n"
 
 
 def test_ota_client_resolve_bundle_url(mpy_env: MicroPythonEnvironment) -> None:
@@ -543,3 +558,21 @@ def test_stage_and_validate_bundle_feeds_watchdog(
     success = ota.apply_staged_update(bundle, staged, feed_wdt=lambda: apply_feed_count.append(1))
     assert success is True
     assert len(apply_feed_count) > 0
+
+
+def test_stage_bundle_large_file_chunked_wdt_feeding(
+    mpy_env: MicroPythonEnvironment, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Verify stage_bundle writes and verifies multi-chunk (>4KB) files while feeding WDT per chunk."""
+    monkeypatch.chdir(tmp_path)
+    import ota
+
+    large_content = "# line\n" * 2000  # ~14 KB (> 3 x 4096-byte chunks)
+    bundle = create_sample_bundle("1.2.0", {"large_mod.py": large_content})
+
+    feeds: list[int] = []
+    staged = ota.stage_bundle(bundle, feed_wdt=lambda: feeds.append(1))
+    assert staged == ["large_mod.py.new"]
+    assert (tmp_path / "large_mod.py.new").read_text(encoding="utf-8") == large_content
+    # 1 initial + 4 write chunks + 4 read chunks + 1 post-verify = at least 10 feeds
+    assert len(feeds) >= 10

@@ -121,6 +121,7 @@ class GatewayApp:
         self.ota_verified = False
         self.ota_boot_time = time.time()
         self.boot_ota_checked = False
+        self.pending_ota_request: dict | None = None
 
         # Outgoing Rate Limiter & Circuit Breaker (Issue #31)
         if SmsRateLimiter is not None:
@@ -362,40 +363,15 @@ class GatewayApp:
                 return {"cmd": cmd, "status": "error", "message": str(exc)}
 
         if cmd in ("START_OTA", "OTA_UPDATE", "ota_update"):
-            try:
-                import ota
-
-                client = ota.OTAClient(config=self.config)
-                if hasattr(client, "wdt"):
-                    client.wdt = self.wdt
-                url = payload.get("url") if isinstance(payload, dict) else None
-                force = bool(payload.get("force")) if isinstance(payload, dict) else False
-                print(f"[main] OTA update requested via BLE (cmd: {cmd})...")
-                # 1. Pre-notify central over BLE so companion app knows request was accepted
-                if self.ble_server is not None and hasattr(
-                    self.ble_server, "notify_command_response"
-                ):
-                    try:
-                        self.ble_server.notify_command_response(
-                            {"cmd": cmd, "status": "ok", "message": "OTA update in progress"}
-                        )
-                    except Exception:  # noqa: BLE001, S110
-                        pass
-
-                # 2. Allow 300ms for BLE notification packet to be transmitted over RF
-                time.sleep(0.3)
-
-                # 3. Stop BLE server to eliminate 2.4 GHz radio coexistence collisions during Wi-Fi download
-                if self.ble_server is not None and self.ble_server.is_running:
-                    try:
-                        self.ble_server.stop()
-                    except Exception as exc:  # noqa: BLE001
-                        print(f"[main] Warning: Failed to stop BLE before OTA: {exc}")
-
-                client.perform_ota(url=url, force=force, restart=True)
-                return {"cmd": cmd, "status": "ok", "message": "OTA update in progress"}
-            except Exception as exc:  # noqa: BLE001
-                return {"cmd": cmd, "status": "error", "message": str(exc)}
+            url = payload.get("url") if isinstance(payload, dict) else None
+            force = bool(payload.get("force")) if isinstance(payload, dict) else False
+            print(f"[main] OTA update requested via BLE (cmd: {cmd}). Queuing for main loop...")
+            self.pending_ota_request = {
+                "cmd": cmd,
+                "url": url,
+                "force": force,
+            }
+            return {"cmd": cmd, "status": "ok", "message": "OTA update in progress"}
 
         return {"cmd": cmd, "status": "ok"}
 
@@ -882,6 +858,41 @@ class GatewayApp:
             print(f"[main] Warning: Feil under oppstartsjekk for OTA: {exc}")
         return False
 
+    def _process_pending_ota(self) -> bool:
+        """Execute queued BLE OTA request on the main mp_task stack."""
+        req = self.pending_ota_request
+        if req is None:
+            return False
+        self.pending_ota_request = None
+
+        cmd = req.get("cmd", "ota_update")
+        url = req.get("url")
+        force = bool(req.get("force"))
+        print(f"[main] Executing queued OTA update on main loop (cmd: {cmd})...")
+
+        # 1. Allow 300ms for BLE command notification packet to be transmitted over RF
+        time.sleep(0.3)
+
+        # 2. Stop BLE server to eliminate 2.4 GHz radio coexistence collisions during Wi-Fi download
+        self.is_provisioning_mode = False
+        self.live_operations_active = True
+        if self.ble_server is not None and self.ble_server.is_running:
+            try:
+                self.ble_server.stop()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[main] Warning: Failed to stop BLE before OTA: {exc}")
+
+        try:
+            import ota
+
+            client = ota.OTAClient(config=self.config)
+            if hasattr(client, "wdt"):
+                client.wdt = self.wdt
+            return bool(client.perform_ota(url=url, force=force, restart=True))
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main] Error performing queued OTA update: {exc}")
+            return False
+
     def tick(self) -> None:
         """Execute one iteration of the gateway event loop."""
         self.cycle_count += 1
@@ -890,6 +901,11 @@ class GatewayApp:
         # Feed hardware watchdog (Issue #53)
         if self.wdt is not None and hasattr(self.wdt, "feed"):
             self.wdt.feed()
+
+        # Execute queued BLE OTA update on main mp_task stack (prevents nimble_host stack overflow)
+        if self.pending_ota_request is not None:
+            self._process_pending_ota()
+            return
 
         # Periodic garbage collection to maintain stable heap
         if gc is not None and (self.cycle_count % 10 == 0):
@@ -1004,7 +1020,10 @@ class GatewayApp:
                         self.button.poll()
                     self.poll_incoming_calls()
                     self.poll_incoming_sms()
-                    if self.is_provisioning_mode != prev_mode:
+                    if (
+                        self.is_provisioning_mode != prev_mode
+                        or self.pending_ota_request is not None
+                    ):
                         break
                     time.sleep(0.05)
         except KeyboardInterrupt:

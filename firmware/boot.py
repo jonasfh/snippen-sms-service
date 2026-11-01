@@ -51,14 +51,26 @@ wdt_feed_timer = None
 
 
 def _feed_wdt_if_active() -> None:
-    """Feed machine.WDT if it was previously armed (e.g. across soft-resets)."""
+    """Feed machine.WDT with 60s timeout so default 5s timeout is never reconfigured."""
     try:
         import machine  # type: ignore[import-not-found]
 
         if hasattr(machine, "WDT"):
-            machine.WDT().feed()
+            machine.WDT(timeout=60000).feed()
     except Exception:  # noqa: BLE001, S110
         pass
+
+
+def stop_wdt_feed_timer() -> None:
+    """Stop the periodic background WDT feed timer when main loop takes over."""
+    global wdt_feed_timer
+    if wdt_feed_timer is not None:
+        try:
+            if hasattr(wdt_feed_timer, "deinit"):
+                wdt_feed_timer.deinit()
+        except Exception:  # noqa: BLE001, S110
+            pass
+        wdt_feed_timer = None
 
 
 def _start_wdt_feed_timer() -> None:
