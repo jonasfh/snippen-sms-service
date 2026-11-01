@@ -561,12 +561,16 @@ def test_ble_ota_update_command(
 
     monkeypatch.setattr(ota, "OTAClient", FakeOTAClient)
 
-    # 1. Test ota_update command
+    # 1. Test ota_update command queues request and tick() executes on main loop
     res = app.on_ble_command(
         "ota_update", {"force": True, "url": "https://example.com/bundle.json"}
     )
     assert res["status"] == "ok"
     assert res["cmd"] == "ota_update"
+    assert len(perform_calls) == 0
+    assert app.pending_ota_request is not None
+
+    app.tick()
     assert len(perform_calls) == 1
     assert perform_calls[0]["force"] is True
     assert perform_calls[0]["url"] == "https://example.com/bundle.json"
@@ -574,16 +578,17 @@ def test_ble_ota_update_command(
     # 2. Test START_OTA alias
     res2 = app.on_ble_command("START_OTA", {})
     assert res2["status"] == "ok"
+    app.tick()
     assert len(perform_calls) == 2
 
-    # 3. Test error handling when perform_ota fails
+    # 3. Test error handling when perform_ota fails during queued execution
     def fail_perform(*args: object, **kwargs: object) -> None:
         raise RuntimeError("Download timeout")
 
     monkeypatch.setattr(FakeOTAClient, "perform_ota", fail_perform)
     res_err = app.on_ble_command("ota_update", {})
-    assert res_err["status"] == "error"
-    assert "Download timeout" in res_err["message"]
+    assert res_err["status"] == "ok"
+    assert app._process_pending_ota() is False
 
 
 def test_ble_check_ota_command(

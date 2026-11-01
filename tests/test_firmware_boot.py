@@ -145,11 +145,17 @@ def test_start_wdt_feed_timer(mpy_env: MicroPythonEnvironment) -> None:
     assert boot.wdt_feed_timer is not None
     assert boot.wdt_feed_timer.period == 1000
 
-    wdt = machine.WDT()
+    wdt = machine.WDT(timeout=60000)
+    assert wdt.timeout == 60000
     initial_feeds = wdt.feed_count
     assert boot.wdt_feed_timer.callback is not None
     boot.wdt_feed_timer.callback(boot.wdt_feed_timer)
     assert wdt.feed_count == initial_feeds + 1
+    # Must preserve 60000ms timeout and never downgrade to 5000ms default
+    assert wdt.timeout == 60000
+
+    boot.stop_wdt_feed_timer()
+    assert boot.wdt_feed_timer is None
 
 
 def test_boot_rollback_records_failed_version(mpy_env: MicroPythonEnvironment) -> None:
