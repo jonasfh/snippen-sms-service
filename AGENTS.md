@@ -10,7 +10,7 @@ Guide AI agents working in `snippen-sms-service`. Keep this root file as a conci
 - **Frontend Testing**: `tools/web-config/` is optional during Python-only work; run `pytest tests/test_web_config_contract.py` when BLE contracts change.
 - **Formatting & Quality**: Routinely run `python scripts/format.py` (strips trailing whitespace, enforces single EOF newline) and resolve all `ruff check .`, `ruff format --check .`, and `pytest` failures before completion.
 - **GitHub Issue Workflow**: Follow `gh-issue/<id>` branching, Conventional Commits (`<type>[scope]: <description> (#<id>)`), **Rebase and merge** (`gh pr merge <id> --rebase --delete-branch`), and stop after `gh pr create`.
-- **Documentation & Versioning**: Keep `README.md`, `DEV_README.md`, and architecture docs in sync; bump version in `pyproject.toml` or `src/snippen_sms/__init__.py` and add a `CHANGELOG.md` entry under `## [X.Y.Z] - YYYY-MM-DD` on functional changes.
+- **Documentation & Versioning**: Keep `README.md`, `DEV_README.md`, and architecture docs in sync; **every PR** must bump the SemVer version in both `src/snippen_sms/__init__.py` (`__version__`) and `firmware/version.py` (`FIRMWARE_VERSION`) so it is strictly greater than the latest git tag, add a `CHANGELOG.md` entry under `## [X.Y.Z] - YYYY-MM-DD`, and pass `python scripts/validate_pr.py`.
 - **Environment Adaptation**: Whenever an agent hits friction (e.g., sandbox network issues for `gh` CLI, missing tools, unusual log locations, git ref locks), update `AGENTS.md` and `.agents/` with the workaround.
 
 ## Multi-Agent & Complexity Triage
