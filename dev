@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TESTING_DIR="$(cd "$SCRIPT_DIR/../snippen-testing" && pwd)"
+COMPOSE_TOOLS="$TESTING_DIR/compose.tools.yml"
+
+run_tool() {
+  docker compose -f "$COMPOSE_TOOLS" run -T --rm --no-deps sms-tools "$@"
+}
+
+run_interactive() {
+  docker compose -f "$COMPOSE_TOOLS" run --rm --no-deps sms-tools "$@"
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./dev <command> [args...]
+
+Tooling (runs in ephemeral sms-tools container with USB /dev pass-through):
+  test               Run pytest
+  lint               Run ruff check
+  lint:fix           Run ruff check --fix && ruff format
+  deploy [args...]   Run scripts/deploy_firmware.py against USB ESP32
+  mpremote [args...] Run mpremote against USB ESP32
+  esptool [args...]  Run esptool against USB ESP32
+  pytest [args...]   Run pytest with custom args
+  ruff [args...]     Run ruff with custom args
+  shell              Open interactive bash shell in sms-tools
+  build              Build sms-tools image
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  test)           run_tool pytest "$@" ;;
+  lint)           run_tool ruff check . "$@" ;;
+  lint:fix)       run_tool bash -lc "ruff check --fix . && ruff format ." ;;
+  deploy)         run_interactive python scripts/deploy_firmware.py "$@" ;;
+  mpremote)       run_interactive python -m mpremote "$@" ;;
+  esptool)        run_interactive python -m esptool "$@" ;;
+  pytest)         run_tool pytest "$@" ;;
+  ruff)           run_tool ruff "$@" ;;
+  shell)          run_interactive bash ;;
+  build)          docker compose -f "$COMPOSE_TOOLS" build sms-tools ;;
+  help|-h|--help) usage ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

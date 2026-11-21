@@ -83,6 +83,25 @@ The gateway service can be configured via CLI flags or environment variables:
 
 ## Quick Start (Development)
 
+### Host-First Development (`./dev`)
+
+Run tests, linting, and ESP32 USB firmware commands from the host inside an ephemeral `sms-tools` container (defined in `../snippen-testing/compose.tools.yml`, with `/dev` pass-through for USB):
+
+```bash
+./dev test               # Run pytest
+./dev lint               # Run ruff check
+./dev lint:fix           # Run ruff check --fix && ruff format
+./dev deploy [args...]   # Run scripts/deploy_firmware.py against USB ESP32
+./dev mpremote [args...] # Run mpremote against USB ESP32
+./dev esptool [args...]  # Run esptool against USB ESP32
+./dev pytest [args...]   # Run pytest with custom args
+./dev ruff [args...]     # Run ruff with custom args
+./dev shell              # Open interactive bash shell in sms-tools
+./dev build              # Rebuild sms-tools image
+```
+
+When running the full 4-service stack from `../snippen-testing` (`./dev up`), `src/` is bind-mounted live into `snippen-sms-service`. See [DEV_README.md](DEV_README.md) for architecture and detailed setup.
+
 Start the long-running SMS gateway service:
 
 ```bash
