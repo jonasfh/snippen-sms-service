@@ -4,6 +4,7 @@
 Guide AI agents working in `snippen-sms-service`. Keep this root file as a concise router; load detailed procedures from `.agents/` sub-guidelines and `skills/` on demand.
 
 ## Always-On Rules
+- **Host-First Execution (`./dev`)**: When running on the host (outside Dev Containers), execute all Python/pytest/ruff and ESP32 USB commands through `./dev` (`./dev test`, `./dev lint`, `./dev lint:fix`, `./dev deploy`, `./dev mpremote`, `./dev esptool`), which runs inside the ephemeral `sms-tools` container with `/dev` pass-through.
 - **Python & Environment**: Use Python 3.14+ under `src/snippen_sms/`. In Dev Containers, use `/home/vscode/.venv` (outside workspace to prevent collisions).
 - **SMS Provider Backends**: Support `mock`, `memory`, `fake` (HTTP-based), and `http`.
 - **Frontend Testing**: `tools/web-config/` is optional during Python-only work; run `pytest tests/test_web_config_contract.py` when BLE contracts change.
