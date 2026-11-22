@@ -1201,7 +1201,7 @@ def test_send_sms_multipart_ucs2_falls_back_to_pdu_on_cmgsex_size_error(
     success, ref = driver.send_sms("+4790688031", long_booking_msg)
 
     assert success is True
-    assert ref == "1,2,3,200,200,200"
-    # Chunks 4, 5, 6 sent via PDU mode (AT+CMGF=0)
-    assert len(pdu_cmds) == 3
+    assert ref == "200,200,200,200,200,200"
+    # All 6 chunks sent via PDU mode (AT+CMGF=0) so no chunks are lost in AT+CMGSEX buffer
+    assert len(pdu_cmds) == 6
     assert all(cmd.startswith("AT+CMGS=") for cmd in pdu_cmds)

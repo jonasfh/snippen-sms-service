@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.14] - 2026-11-22
+
+### Fixed
+- Send alle delmeldinger i 3GPP PDU-modus (`AT+CMGF=0`) når en melding har flere enn 3 deler eller når `AT+CMGSEX` feiler, slik at ikke del 1–3 blir liggende usendt i `AT+CMGSEX`-bufferet mens del 4–6 sendes som PDU (`#168`).
+
 ## [1.0.13] - 2026-11-22
 
 ### Fixed
