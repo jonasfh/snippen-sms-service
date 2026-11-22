@@ -527,7 +527,9 @@ class ModemDriver:
             refs: list[str] = []
             # SimCom A7670E AT+CMGSEX buffers parts in text mode and fails on >3 UCS-2 segments.
             # Use standard 3GPP PDU mode directly for >3 parts, or restart all parts in PDU mode if AT+CMGSEX fails.
-            use_pdu_mode = total_parts > 3 and sms_encoding is not None and hasattr(sms_encoding, "encode_pdu")
+            use_pdu_mode = (
+                total_parts > 3 and sms_encoding is not None and hasattr(sms_encoding, "encode_pdu")
+            )
             if not use_pdu_mode:
                 for idx, chunk in enumerate(chunks):
                     if idx > 0 and self.chunk_delay_ms > 0:
