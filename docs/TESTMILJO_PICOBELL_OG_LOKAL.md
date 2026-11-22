@@ -90,6 +90,7 @@ Forventet resultat: `✅ Autentisering og kommunikasjon mot Snippen Booking er V
 ### 2.5 Vanlige feilkilder lokalt
 - **Brannmur (UFW):** Hvis `ufw` er aktivert på Ubuntu, åpne port `8081` på lokalt nett: `sudo ufw allow 8081/tcp`.
 - **WiFi Client/AP Isolation:** Sørg for at Lilygo og `jonas-mac` er på samme WiFi-nettverk (ikke gjestenett med klientisolering).
+- **`snippen-sms-service`-containeren stjeler outbox-køen:** Docker-containeren `snippen-sms-service` i `snippen-testing` poller også `/outbox` hvert sekund og tømmer køen før fysisk LilyGO rekker å hente meldingen. Stopp containeren under maskinvaretesting: `docker stop snippen-sms-service` (eller `podman stop snippen-sms-service`).
 
 ---
 
