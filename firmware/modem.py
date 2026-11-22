@@ -469,7 +469,9 @@ class ModemDriver:
             if success or msg_ref_out is not None:
                 return True, msg_ref_out if msg_ref_out else "OK"
 
-            error_line = next((line for line in lines if "ERROR" in line), "Unknown PDU send failure")
+            error_line = next(
+                (line for line in lines if "ERROR" in line), "Unknown PDU send failure"
+            )
             return False, error_line
         finally:
             self.send_cmd("AT+CMGF=1", timeout_ms=1000)
