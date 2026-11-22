@@ -106,6 +106,7 @@ class GatewayService:
         self._last_update_check_time: float = 0.0
         self._last_sync_time: float = 0.0
         self._last_sync_result: dict[str, Any] | None = None
+        self._provider_ready_logged: bool = True
         self.reassembler = InboundReassembler(
             timeout_sec=getattr(self.config, "multipart_timeout_seconds", 30.0)
         )
@@ -167,13 +168,13 @@ class GatewayService:
         """Deliberately restore normal operation after rate limit suspension (Issue #31)."""
         self.rate_limiter.reset()
 
-    def sync_with_snippen(self) -> dict[str, Any] | None:
+    def sync_with_snippen(self, include_outbox: bool = True) -> dict[str, Any] | None:
         """Perform synchronization cycle with Snippen backend."""
         if self.sync_service is None or not self.config.sync_enabled:
             return None
 
         self._last_sync_time = time.time()
-        result = self.sync_service.sync_all()
+        result = self.sync_service.sync_all(include_outbox=include_outbox)
         self._last_sync_result = result
         return result
 
@@ -276,6 +277,14 @@ class GatewayService:
                     )
                     logger.info("Dispatched outbox SMS ID %s to %s", msg.id, msg.recipient)
                     processed.append(updated or msg)
+                elif result.transient_error:
+                    logger.warning(
+                        "Transient failure dispatching outbox SMS ID %s to %s (%s); keeping queued for retry",
+                        msg.id,
+                        msg.recipient,
+                        result.error_message,
+                    )
+                    break
                 else:
                     updated = self.storage.update_message_status(
                         msg.id,
@@ -496,20 +505,38 @@ class GatewayService:
             while not self._stop_event.is_set():
                 # Service tick - process Snippen API sync, pending outbox, and incoming messages
                 logger.debug("Gateway heartbeat tick.")
+                provider_ready = True
+                try:
+                    provider_ready = await self.provider.is_ready()
+                except Exception:
+                    logger.exception("Error checking SMS provider readiness.")
+                    provider_ready = False
+
+                if not provider_ready:
+                    if self._provider_ready_logged:
+                        logger.info(
+                            "SMS provider is paused or unavailable; skipping outbox sync and dispatch."
+                        )
+                        self._provider_ready_logged = False
+                elif not self._provider_ready_logged:
+                    logger.info("SMS provider is ready; resuming outbox sync and dispatch.")
+                    self._provider_ready_logged = True
+
                 if (
                     self.config.sync_enabled
                     and self.sync_service is not None
                     and (time.time() - self._last_sync_time) >= self.config.sync_interval_seconds
                 ):
                     try:
-                        self.sync_with_snippen()
+                        self.sync_with_snippen(include_outbox=provider_ready)
                     except Exception:
                         logger.exception("Error during Snippen API synchronization tick.")
 
-                try:
-                    await self.process_outbox()
-                except Exception:
-                    logger.exception("Error during outbox processing tick.")
+                if provider_ready:
+                    try:
+                        await self.process_outbox()
+                    except Exception:
+                        logger.exception("Error during outbox processing tick.")
 
                 try:
                     await self.poll_incoming_messages()

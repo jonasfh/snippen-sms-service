@@ -851,3 +851,87 @@ def test_gateway_send_sms_rate_limiter_blocks():
         await service.stop()
 
     asyncio.run(_test())
+
+
+def test_gateway_process_outbox_transient_error_keeps_queued():
+    """Test that transient provider errors (e.g. HTTP 503) keep messages queued instead of failing."""
+    from snippen_sms.providers.base import SendResult, SmsProvider
+
+    class TransientFailProvider(SmsProvider):
+        async def send_sms(self, recipient: str, body: str) -> SendResult:
+            return SendResult(
+                success=False,
+                error_message="HTTP 503 from POST http://fake-sms-provider:3000/messages/outbound",
+                transient_error=True,
+            )
+
+        async def receive_sms(self):
+            return []
+
+    async def _test():
+        config = GatewayConfig(database_path=":memory:")
+        service = GatewayService(config=config, provider=TransientFailProvider())
+        await service.start()
+
+        enqueued = service.enqueue_outbox(recipient="+4799887766", body="Retry me")
+        processed = await service.process_outbox()
+
+        assert processed == []
+        pending = service.storage.get_pending_outbox()
+        assert len(pending) == 1
+        assert pending[0].id == enqueued.id
+        assert pending[0].status == MessageStatus.PENDING
+
+        await service.stop()
+
+    asyncio.run(_test())
+
+
+def test_gateway_run_skips_outbox_sync_when_provider_not_ready():
+    """Test that GatewayService.run skips outbox sync and dispatch when provider.is_ready() is False."""
+    from unittest.mock import MagicMock
+    from snippen_sms.providers.base import SendResult, SmsProvider
+
+    class PausedProvider(SmsProvider):
+        async def is_ready(self) -> bool:
+            return False
+
+        async def send_sms(self, recipient: str, body: str) -> SendResult:
+            raise AssertionError("send_sms should not be called when provider is not ready")
+
+        async def receive_sms(self):
+            return []
+
+    async def _test():
+        config = GatewayConfig(
+            database_path=":memory:",
+            sync_enabled=True,
+            sync_interval_seconds=0.0,
+            poll_interval_seconds=0.05,
+        )
+        mock_sync = MagicMock()
+        mock_sync.sync_all.return_value = {
+            "inbox_synced": 0,
+            "outbox_enqueued": 0,
+            "statuses_reported": 0,
+            "error": None,
+        }
+        service = GatewayService(
+            config=config,
+            provider=PausedProvider(),
+            sync_service=mock_sync,
+        )
+        service.enqueue_outbox(recipient="+4799887766", body="Stay queued")
+
+        task = asyncio.create_task(service.run())
+        await asyncio.sleep(0.08)
+
+        mock_sync.sync_all.assert_called()
+        for call in mock_sync.sync_all.call_args_list:
+            assert call.kwargs.get("include_outbox") is False
+        assert len(service.storage.get_pending_outbox()) == 1
+
+        await service.stop()
+        await task
+
+    asyncio.run(_test())

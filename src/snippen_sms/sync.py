@@ -179,8 +179,11 @@ class SyncService:
         )
         return len(unreported)
 
-    def sync_all(self) -> dict[str, Any]:
-        """Perform a complete sync cycle: report inbound, fetch outbox, and report statuses.
+    def sync_all(self, include_outbox: bool = True) -> dict[str, Any]:
+        """Perform a complete sync cycle: report inbound, optionally fetch outbox, and report statuses.
+
+        Args:
+            include_outbox: Whether to fetch pending outbound SMS from Snippen.
 
         Returns:
             Diagnostic dictionary summarizing the synchronization cycle.
@@ -199,12 +202,13 @@ class SyncService:
             logger.warning("Inbox synchronization failed: %s", exc)
             result["error"] = str(exc)
 
-        try:
-            outbox_msgs = self.sync_outbox()
-            result["outbox_enqueued"] = len(outbox_msgs)
-        except (SnippenAuthError, SnippenNetworkError, SnippenClientError) as exc:
-            logger.warning("Outbox synchronization failed: %s", exc)
-            result["error"] = str(exc)
+        if include_outbox:
+            try:
+                outbox_msgs = self.sync_outbox()
+                result["outbox_enqueued"] = len(outbox_msgs)
+            except (SnippenAuthError, SnippenNetworkError, SnippenClientError) as exc:
+                logger.warning("Outbox synchronization failed: %s", exc)
+                result["error"] = str(exc)
 
         try:
             reported_count = self.sync_statuses()

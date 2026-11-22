@@ -17,6 +17,8 @@ from snippen_sms.providers.http import HttpSmsProvider
 class MockHttpHandler(BaseHTTPRequestHandler):
     """Mock HTTP handler simulating remote SMS HTTP provider."""
 
+    paused: bool = False
+
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         content_len = int(self.headers.get("Content-Length", 0))
@@ -24,6 +26,12 @@ class MockHttpHandler(BaseHTTPRequestHandler):
         payload = json.loads(post_body) if post_body else {}
 
         if parsed.path == "/messages/outbound":
+            if payload.get("to") == "+4700000000_PAUSED":
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Fake SMS Provider is paused", "paused": true}')
+                return
             if payload.get("to") == "+4700000000_FAIL":
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
@@ -58,6 +66,13 @@ class MockHttpHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
+
+        if parsed.path == "/api/status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"paused": self.__class__.paused}).encode("utf-8"))
+            return
 
         if parsed.path == "/messages" and qs.get("direction") == ["inbound"]:
             if self.headers.get("X-Trigger-Error") == "500":
@@ -211,5 +226,47 @@ def test_http_provider_receive_sms_connection_failure():
         provider = HttpSmsProvider(base_url="http://127.0.0.1:59999", timeout_seconds=1.0)
         messages = await provider.receive_sms()
         assert messages == []
+
+    asyncio.run(_test())
+
+
+def test_http_provider_send_sms_paused_is_transient(mock_server: str):
+    async def _test():
+        provider = HttpSmsProvider(base_url=mock_server, timeout_seconds=3.0)
+        await provider.open()
+
+        result = await provider.send_sms(
+            recipient="+4700000000_PAUSED",
+            body="Paused test",
+        )
+
+        assert result.success is False
+        assert result.transient_error is True
+        assert "HTTP 503" in (result.error_message or "")
+
+        await provider.close()
+
+    asyncio.run(_test())
+
+
+def test_http_provider_is_ready_when_active_and_paused(mock_server: str):
+    async def _test():
+        provider = HttpSmsProvider(base_url=mock_server, timeout_seconds=3.0)
+        MockHttpHandler.paused = False
+        assert await provider.is_ready() is True
+
+        MockHttpHandler.paused = True
+        try:
+            assert await provider.is_ready() is False
+        finally:
+            MockHttpHandler.paused = False
+
+    asyncio.run(_test())
+
+
+def test_http_provider_is_ready_connection_refused():
+    async def _test():
+        provider = HttpSmsProvider(base_url="http://127.0.0.1:59999", timeout_seconds=1.0)
+        assert await provider.is_ready() is False
 
     asyncio.run(_test())
