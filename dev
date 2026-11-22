@@ -13,6 +13,34 @@ run_interactive() {
   docker compose -f "$COMPOSE_TOOLS" run --rm --no-deps sms-tools "$@"
 }
 
+run_usb_tool() {
+  if command -v podman >/dev/null 2>&1; then
+    local image="snippen-testing-sms-tools:latest"
+    if ! podman image exists "$image" >/dev/null 2>&1; then
+      docker compose -f "$COMPOSE_TOOLS" build sms-tools
+    fi
+    local tty_flags=(-i)
+    if [ -t 0 ] && [ -t 1 ]; then
+      tty_flags=(-it)
+    fi
+    local dev_flags=()
+    local dev_path
+    for dev_path in /dev/ttyACM* /dev/ttyUSB*; do
+      if [ -e "$dev_path" ]; then
+        dev_flags+=(--device="$dev_path")
+      fi
+    done
+    podman run --rm "${tty_flags[@]}" \
+      --userns=keep-id \
+      --group-add=keep-groups \
+      "${dev_flags[@]}" \
+      -v "$SCRIPT_DIR:/workspaces/snippen-sms-service" \
+      -w /workspaces/snippen-sms-service \
+      "$image" "$@"
+  else
+    run_tool "$@"
+  fi
+}
 usage() {
   cat <<'EOF'
 Usage: ./dev <command> [args...]
@@ -38,9 +66,9 @@ case "$cmd" in
   test)           run_tool pytest "$@" ;;
   lint)           run_tool ruff check . "$@" ;;
   lint:fix)       run_tool bash -lc "ruff check --fix . && ruff format ." ;;
-  deploy)         run_interactive python scripts/deploy_firmware.py "$@" ;;
-  mpremote)       run_interactive python -m mpremote "$@" ;;
-  esptool)        run_interactive python -m esptool "$@" ;;
+  deploy)         run_usb_tool python scripts/deploy_firmware.py "$@" ;;
+  mpremote)       run_usb_tool python -m mpremote "$@" ;;
+  esptool)        run_usb_tool python -m esptool "$@" ;;
   pytest)         run_tool pytest "$@" ;;
   ruff)           run_tool ruff "$@" ;;
   shell)          run_interactive bash ;;

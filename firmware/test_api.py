@@ -18,6 +18,14 @@ except ImportError:
         return {}
 
 
+try:
+    from mdns_resolve import resolve_url_host
+except ImportError:
+
+    def resolve_url_host(url, headers=None):  # type: ignore[misc]
+        return url
+
+
 def run_api_test() -> bool:
     """Execute Snippen API ping test from ESP32."""
     cfg = load_config()
@@ -49,9 +57,14 @@ def run_api_test() -> bool:
         headers["X-API-Key"] = token
 
     try:
-        outbox_url = api_url.rstrip("/") + "/sms/outbox"
-        print(f"Sender GET-forespørsel mot beskyttet endepunkt: {outbox_url}...")
-        res = requests.get(outbox_url, headers=headers)
+        base_url = api_url.rstrip("/")
+        if base_url.endswith("/sms"):
+            outbox_url = base_url + "/outbox"
+        else:
+            outbox_url = base_url + "/sms/outbox"
+        resolved_url = resolve_url_host(outbox_url, headers)
+        print(f"Sender GET-forespørsel mot beskyttet endepunkt: {resolved_url}...")
+        res = requests.get(resolved_url, headers=headers)
         print(f"Statuskode: {res.status_code}")
         text = res.text[:200]
         print(f"Svar (første 200 tegn): {text}")
