@@ -14,6 +14,13 @@ except ImportError:
     except ImportError:
         requests = None
 
+try:
+    from mdns_resolve import resolve_url_host
+except ImportError:
+
+    def resolve_url_host(url: str, headers: dict[str, str] | None = None) -> str:
+        return url
+
 
 class SnippenApiClient:
     """HTTP client communicating with Snippen Booking REST API endpoints."""
@@ -59,6 +66,7 @@ class SnippenApiClient:
 
         url = f"{self._build_url('outbox')}?limit={limit}"
         headers = self._get_headers()
+        url = resolve_url_host(url, headers)
         res = None
 
         try:
@@ -110,6 +118,7 @@ class SnippenApiClient:
 
         url = self._build_url("outbox/status")
         headers = self._get_headers()
+        url = resolve_url_host(url, headers)
         payload = json.dumps({"statuses": statuses})
         res = None
 
@@ -147,6 +156,7 @@ class SnippenApiClient:
 
         url = self._build_url("inbox")
         headers = self._get_headers()
+        url = resolve_url_host(url, headers)
         payload = json.dumps({"messages": messages})
         res = None
 

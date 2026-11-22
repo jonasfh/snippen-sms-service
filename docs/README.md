@@ -14,6 +14,7 @@ Welcome to the documentation for **Snippen SMS Service** (`snippen-sms-service`)
 - **[Developer Guide](file:///workspaces/snippen-sms-service/DEV_README.md)**: Local development environment setup, Dev Container usage, testing with `pytest`, and linting rules.
 - **[User & Operational Overview](file:///workspaces/snippen-sms-service/README.md)**: High-level project purpose, operational goals, and repository information.
 - **[Plan for produksjonssetting](file:///workspaces/snippen-sms-service/docs/PRODUKSJONSSETTING.md)**: Sjekkliste, maskinvarekrav, provisjonering i felten og verifisering for idriftsettelse på Snippen grendehus.
+- **[Testmiljø: picobell.no & Lokal (.local)](file:///workspaces/snippen-sms-service/docs/TESTMILJO_PICOBELL_OG_LOKAL.md)**: Oppsett av WordPress test-instans på `picobell.no` (ProISP) med enkel `.zip`-oppdatering, samt lokal utviklingstesting via `jonas-mac.local`.
 - **[Agent Guidelines](file:///workspaces/snippen-sms-service/AGENTS.md)**: Automated engineering guidelines, issue workflows, and coding standards.
 
 ---

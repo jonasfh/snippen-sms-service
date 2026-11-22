@@ -172,6 +172,7 @@ def test_build_firmware_bundle_real_firmware(tmp_path: Path):
         "config.py",
         "logger.py",
         "main.py",
+        "mdns_resolve.py",
         "modem.py",
         "ota.py",
         "rate_limiter.py",
