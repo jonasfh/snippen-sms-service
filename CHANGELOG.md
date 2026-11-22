@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-22
+
+### Added
+- Lagt til mDNS (`.local`) A-record-oppslag i `firmware/mdns_resolve.py` for lokal testing mot `http://jonas-mac.local:8081` (`#161`).
+- Lagt til dokumentasjon for `picobell.no` (ProISP) testmiljø og lokal `.local`-testing i `docs/TESTMILJO_PICOBELL_OG_LOKAL.md` (`#161`).
+
+### Fixed
+- Fikset dobbel `/sms` i `firmware/test_api.py` når `snippen_api_base_url` allerede slutter på `/sms` (`#161`).
+- Oppdatert `./dev` (`deploy`, `mpremote`, `esptool`) til å bruke Podman `--group-add=keep-groups` og `--device=/dev/tty*` for rootless USB-tilgang (`#161`).
+
 ## [1.0.7] - 2026-11-21
 
 ### Changed
