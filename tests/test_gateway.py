@@ -891,13 +891,13 @@ def test_gateway_run_skips_outbox_sync_when_provider_not_ready():
     """Test that GatewayService.run skips outbox sync and dispatch when provider.is_ready() is False."""
     from unittest.mock import MagicMock
 
-    from snippen_sms.providers.base import SendResult, SmsProvider
+    from snippen_sms.providers.base import SmsProvider
 
     class PausedProvider(SmsProvider):
         async def is_ready(self) -> bool:
             return False
 
-        async def send_sms(self, recipient: str, body: str) -> SendResult:
+        async def send_sms(self, recipient: str, body: str):
             raise AssertionError("send_sms should not be called when provider is not ready")
 
         async def receive_sms(self):

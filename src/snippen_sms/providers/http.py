@@ -120,9 +120,7 @@ class HttpSmsProvider(SmsProvider):
             )
             if status_code != 200:
                 return False
-            if isinstance(response_data, dict) and response_data.get("paused") is True:
-                return False
-            return True
+            return not (isinstance(response_data, dict) and response_data.get("paused") is True)
         except RuntimeError as exc:
             # Generic HTTP providers may not expose /api/status.
             if "HTTP 404 " in str(exc):
