@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] - 2026-11-22
+
+### Added
+- Lagt til `ble-web-config`-container i `snippen-testing/docker-compose.yml` på port `8082` som serverer `tools/web-config/` for Web Bluetooth og lokal OTA (`firmware_bundle.json`), samt oppdatert `README.md` og `docs/TESTMILJO_PICOBELL_OG_LOKAL.md` (`#162`).
+
 ## [1.0.10] - 2026-11-22
 
 ### Changed
