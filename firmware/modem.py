@@ -409,6 +409,71 @@ class ModemDriver:
                 self.send_cmd("AT+CSMP=17,167,0,0", timeout_ms=1000)
                 self.send_cmd('AT+CSCS="GSM"', timeout_ms=1000)
 
+    def _send_single_pdu(
+        self,
+        target_number: str,
+        text: str,
+        timeout_ms: int = 15000,
+        msg_ref: int | None = None,
+        part_num: int = 1,
+        total_parts: int = 1,
+        use_ucs2: bool | None = None,
+    ) -> tuple[bool, str | None]:
+        """Transmit a single SMS segment in 3GPP PDU mode (AT+CMGF=0) with UDH."""
+        if sms_encoding is None or not hasattr(sms_encoding, "encode_pdu"):
+            return False, "PDU encoding unavailable"
+
+        pdu_hex, tpdu_len = sms_encoding.encode_pdu(
+            target_number,
+            text,
+            msg_ref=msg_ref,
+            part_num=part_num,
+            total_parts=total_parts,
+            use_ucs2=use_ucs2,
+        )
+
+        self.send_cmd("AT+CMGF=0", timeout_ms=1000)
+        try:
+            self.flush_input()
+            self.write_raw(f"AT+CMGS={tpdu_len}\r\n")
+
+            prompt_found = False
+            start = _ticks_ms()
+            while _ticks_diff(_ticks_ms(), start) < 3000:
+                chunk = self.uart.read(getattr(self.uart, "any", lambda: 1)() or 1)
+                if chunk:
+                    if b">" in chunk:
+                        prompt_found = True
+                        break
+                    if b"ERROR" in chunk:
+                        return False, "Modem rejected PDU AT+CMGS command"
+                time.sleep_ms(50)
+
+            if not prompt_found:
+                return False, "Timeout waiting for '>' prompt in PDU mode"
+
+            self.write_raw(pdu_hex + "\x1a")
+            success, lines = self._read_response(
+                timeout_ms=timeout_ms,
+                stop_tokens=("OK", "ERROR", "+CMS ERROR", "+CME ERROR"),
+            )
+
+            msg_ref_out = None
+            for line in lines:
+                if "+CMGS:" in line:
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        msg_ref_out = parts[1].strip()
+                    break
+
+            if success or msg_ref_out is not None:
+                return True, msg_ref_out if msg_ref_out else "OK"
+
+            error_line = next((line for line in lines if "ERROR" in line), "Unknown PDU send failure")
+            return False, error_line
+        finally:
+            self.send_cmd("AT+CMGF=1", timeout_ms=1000)
+
     def send_sms(
         self, phone_number: str, text: str, timeout_ms: int = 15000
     ) -> tuple[bool, str | None]:
@@ -458,19 +523,50 @@ class ModemDriver:
 
         try:
             refs: list[str] = []
+            use_pdu_mode = False
             for idx, chunk in enumerate(chunks):
                 if idx > 0 and self.chunk_delay_ms > 0:
                     time.sleep_ms(self.chunk_delay_ms)
 
-                ok, ref_or_err = self._send_single_sms(
-                    target_number,
-                    chunk,
-                    timeout_ms=timeout_ms,
-                    msg_ref=msg_ref,
-                    part_num=idx + 1,
-                    total_parts=total_parts,
-                    use_ucs2=use_ucs2,
-                )
+                if use_pdu_mode:
+                    ok, ref_or_err = self._send_single_pdu(
+                        target_number,
+                        chunk,
+                        timeout_ms=timeout_ms,
+                        msg_ref=msg_ref,
+                        part_num=idx + 1,
+                        total_parts=total_parts,
+                        use_ucs2=use_ucs2,
+                    )
+                else:
+                    ok, ref_or_err = self._send_single_sms(
+                        target_number,
+                        chunk,
+                        timeout_ms=timeout_ms,
+                        msg_ref=msg_ref,
+                        part_num=idx + 1,
+                        total_parts=total_parts,
+                        use_ucs2=use_ucs2,
+                    )
+                    if (
+                        not ok
+                        and total_parts > 1
+                        and sms_encoding is not None
+                        and hasattr(sms_encoding, "encode_pdu")
+                    ):
+                        ok_pdu, pdu_ref_or_err = self._send_single_pdu(
+                            target_number,
+                            chunk,
+                            timeout_ms=timeout_ms,
+                            msg_ref=msg_ref,
+                            part_num=idx + 1,
+                            total_parts=total_parts,
+                            use_ucs2=use_ucs2,
+                        )
+                        if ok_pdu:
+                            ok = True
+                            ref_or_err = pdu_ref_or_err
+                            use_pdu_mode = True
                 if not ok:
                     if total_parts > 1:
                         return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"

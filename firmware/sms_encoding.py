@@ -320,6 +320,115 @@ def split_sms_body(
     return [f"({i + 1}/{actual_total}) {c}" for i, c in enumerate(chunks)]
 
 
+_GSM7_BASIC_INDEX = {}
+for _i, _ch in enumerate(GSM7_BASIC):
+    _GSM7_BASIC_INDEX[_ch] = _i
+
+_GSM7_EXT_INDEX = {}
+for _code, _ch in GSM7_EXT_MAP.items():
+    _GSM7_EXT_INDEX[_ch] = _code
+
+
+def _encode_gsm7_septets(text: str) -> list[int]:
+    """Encode text into GSM 03.38 7-bit septet values."""
+    septets = []
+    for ch in text:
+        if ch in _GSM7_BASIC_INDEX:
+            septets.append(_GSM7_BASIC_INDEX[ch])
+        elif ch in _GSM7_EXT_INDEX:
+            septets.append(0x1B)
+            septets.append(_GSM7_EXT_INDEX[ch])
+        else:
+            septets.append(0x3F)
+    return septets
+
+
+def _pack_gsm7_septets(septets: list[int], fill_bits: int = 0) -> bytes:
+    """Pack 7-bit GSM septets into octets with optional leading fill bits."""
+    bit_buf = 0
+    bit_count = fill_bits
+    out = bytearray()
+    for septet in septets:
+        bit_buf |= (septet & 0x7F) << bit_count
+        bit_count += 7
+        while bit_count >= 8:
+            out.append(bit_buf & 0xFF)
+            bit_buf >>= 8
+            bit_count -= 8
+    if bit_count > 0:
+        out.append(bit_buf & 0xFF)
+    return bytes(out)
+
+
+def _encode_semi_octets(digits: str) -> bytes:
+    """Encode digit string into swapped semi-octet BCD bytes (padded with 0xF)."""
+    padded = digits if len(digits) % 2 == 0 else digits + "F"
+    out = bytearray()
+    for idx in range(0, len(padded), 2):
+        lo = int(padded[idx], 16)
+        hi = int(padded[idx + 1], 16)
+        out.append(((hi & 0x0F) << 4) | (lo & 0x0F))
+    return bytes(out)
+
+
+def encode_pdu(
+    recipient: str,
+    text: str,
+    msg_ref: int | None = None,
+    part_num: int = 1,
+    total_parts: int = 1,
+    use_ucs2: bool | None = None,
+) -> tuple[str, int]:
+    """Encode an outbound SMS-SUBMIT PDU hex string and return (pdu_hex, tpdu_length)."""
+    cleaned = recipient.strip()
+    if cleaned.startswith("+"):
+        ton_npi = 0x91
+        digits = cleaned[1:]
+    else:
+        ton_npi = 0x81
+        digits = cleaned
+
+    da_digits = "".join(ch for ch in digits if ch.isdigit())
+    da_len = len(da_digits)
+    da_bytes = _encode_semi_octets(da_digits)
+
+    if use_ucs2 is None:
+        use_ucs2 = not is_ascii_gsm(text)
+
+    has_udh = total_parts > 1 and msg_ref is not None
+    first_octet = 0x51 if has_udh else 0x11
+    dcs = 0x08 if use_ucs2 else 0x00
+
+    udh_bytes = b""
+    if has_udh:
+        udh_bytes = bytes([0x05, 0x00, 0x03, msg_ref & 0xFF, total_parts & 0xFF, part_num & 0xFF])
+
+    if use_ucs2:
+        ucs2_hex = encode_ucs2_hex(text)
+        payload_bytes = bytes(int(ucs2_hex[i : i + 2], 16) for i in range(0, len(ucs2_hex), 2))
+        ud_bytes = udh_bytes + payload_bytes
+        udl = len(ud_bytes)
+    else:
+        septets = _encode_gsm7_septets(text)
+        if has_udh:
+            fill_bits = (7 - (len(udh_bytes) * 8) % 7) % 7
+            udh_septets = (len(udh_bytes) * 8 + fill_bits) // 7
+            udl = udh_septets + len(septets)
+            ud_bytes = udh_bytes + _pack_gsm7_septets(septets, fill_bits=fill_bits)
+        else:
+            udl = len(septets)
+            ud_bytes = _pack_gsm7_septets(septets, fill_bits=0)
+
+    tpdu = bytearray([first_octet, 0x00, da_len, ton_npi])
+    tpdu.extend(da_bytes)
+    tpdu.extend([0x00, dcs, 0xA7, udl])
+    tpdu.extend(ud_bytes)
+
+    tpdu_len = len(tpdu)
+    pdu_hex = "00" + "".join(f"{b:02X}" for b in tpdu)
+    return pdu_hex, tpdu_len
+
+
 def decode_pdu(pdu_hex: str) -> dict | None:
     """Decode a GSM 03.40 / 3GPP TS 23.040 SMS-DELIVER PDU hex string.
 
