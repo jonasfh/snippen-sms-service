@@ -14,6 +14,7 @@ class SendResult:
     success: bool
     message_id: str | None = None
     error_message: str | None = None
+    transient_error: bool = False
 
 
 @dataclass
@@ -39,6 +40,10 @@ class SmsProvider(abc.ABC):
 
     async def close(self) -> None:
         """Release provider resources and close hardware interfaces."""
+
+    async def is_ready(self) -> bool:
+        """Return True if the provider is ready to accept outbound SMS."""
+        return True
 
     @abc.abstractmethod
     async def send_sms(self, recipient: str, body: str) -> SendResult:

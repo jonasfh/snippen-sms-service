@@ -111,6 +111,28 @@ class HttpSmsProvider(SmsProvider):
         """Release provider resources."""
         logger.debug("Closed HttpSmsProvider targeting %s", self.base_url)
 
+    async def is_ready(self) -> bool:
+        """Check whether the HTTP SMS provider is reachable and not paused."""
+        try:
+            status_code, response_data = await self._async_request(
+                method="GET",
+                path="api/status",
+            )
+            if status_code != 200:
+                return False
+            if isinstance(response_data, dict) and response_data.get("paused") is True:
+                return False
+            return True
+        except RuntimeError as exc:
+            # Generic HTTP providers may not expose /api/status.
+            if "HTTP 404 " in str(exc):
+                return True
+            logger.debug("Provider readiness check failed for %s: %s", self.base_url, exc)
+            return False
+        except (ConnectionError, TimeoutError) as exc:
+            logger.debug("Provider unreachable during readiness check for %s: %s", self.base_url, exc)
+            return False
+
     async def send_sms(self, recipient: str, body: str) -> SendResult:
         """Send an SMS message via HTTP to the remote provider gateway.
 
@@ -154,12 +176,24 @@ class HttpSmsProvider(SmsProvider):
 
             err_msg = f"Unexpected response status {status_code} from provider"
             logger.warning("Failed to send SMS to %s: %s", recipient, err_msg)
-            return SendResult(success=False, error_message=err_msg)
+            return SendResult(
+                success=False,
+                error_message=err_msg,
+                transient_error=status_code in (429, 502, 503, 504),
+            )
+
+        except (ConnectionError, TimeoutError) as exc:
+            err_msg = str(exc)
+            logger.warning("Transient error sending SMS to %s via %s: %s", recipient, self.base_url, err_msg)
+            return SendResult(success=False, error_message=err_msg, transient_error=True)
 
         except Exception as exc:  # noqa: BLE001
             err_msg = str(exc)
+            is_transient = any(
+                code in err_msg for code in ("HTTP 429 ", "HTTP 502 ", "HTTP 503 ", "HTTP 504 ")
+            )
             logger.warning("Error sending SMS to %s via %s: %s", recipient, self.base_url, err_msg)
-            return SendResult(success=False, error_message=err_msg)
+            return SendResult(success=False, error_message=err_msg, transient_error=is_transient)
 
     async def receive_sms(self) -> list[IncomingMessage]:
         """Fetch and drain pending incoming SMS messages from the HTTP provider.
