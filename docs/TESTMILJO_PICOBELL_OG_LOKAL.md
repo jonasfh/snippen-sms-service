@@ -70,7 +70,11 @@ Fra `snippen-testing` (eller `./dev up` i `snippen-booking`):
 ```bash
 ./dev up
 ```
-Dette starter `snippen-booking` på port `8081` (`0.0.0.0:8081`) med standard test-token `test-integration-token`.
+Dette starter `snippen-booking` på port `8081` (`0.0.0.0:8081`) med standard test-token `test-integration-token`, samt BLE Web Configurator på `http://localhost:8082` (og lokal OTA-manifest på `http://<PC-IP>:8082/firmware_bundle.json`).
+
+> [!NOTE]
+> - **Web Bluetooth på samme PC:** Fungerer uten HTTPS via `http://localhost:8082`.
+> - **Mobil over lokalt nettverk:** Krever HTTPS eller Chrome port-forwarding (`chrome://inspect`).
 
 ### 2.3 Konfigurer Lilygo mot `jonas-mac.local`
 Sett følgende på Lilygo-enheten (via BLE Web Configurator eller `config_local.py`):
