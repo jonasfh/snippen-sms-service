@@ -517,3 +517,26 @@ def test_parse_udh_hex() -> None:
     assert total16 == 3
     assert part16 == 2
     assert body16 == "Hei"
+
+
+def test_encode_pdu_ucs2_multipart_and_gsm7() -> None:
+    from sms_encoding import encode_pdu
+
+    # Single GSM-7 message
+    pdu_gsm, tpdu_len_gsm = encode_pdu("+4790688031", "Hei")
+    assert pdu_gsm.startswith("0011000A9174098608130000A703")
+    assert tpdu_len_gsm == (len(pdu_gsm) - 2) // 2
+
+    # Multipart UCS-2 message with UDH (UDHI bit 0x40 set -> 0x51, DCS=0x08)
+    pdu_ucs2, tpdu_len_ucs2 = encode_pdu(
+        "+4790688031",
+        "booking-ID: ø",
+        msg_ref=7,
+        part_num=4,
+        total_parts=6,
+        use_ucs2=True,
+    )
+    assert pdu_ucs2.startswith("0051000A9174098608130008A7")
+    # Contains 6-byte UDH 050003070604
+    assert "050003070604" in pdu_ucs2
+    assert tpdu_len_ucs2 == (len(pdu_ucs2) - 2) // 2

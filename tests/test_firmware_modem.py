@@ -1154,3 +1154,54 @@ def test_cmti_captured_during_command_response(mpy_env: MicroPythonEnvironment) 
     success, _ = driver.send_cmd("AT")
     assert success is True
     assert driver.check_incoming_sms() is True
+
+
+def test_send_sms_multipart_ucs2_falls_back_to_pdu_on_cmgsex_size_error(
+    mpy_env: MicroPythonEnvironment,
+) -> None:
+    from modem import ModemDriver
+
+    uart = MockUART(1)
+    cmgsex_count = 0
+    pdu_cmds: list[str] = []
+    cmgf_mode = 1
+
+    def responder(data: bytes) -> bytes | None:
+        nonlocal cmgsex_count, cmgf_mode
+        data_str = data.decode("utf-8", errors="ignore")
+        if "AT+CMGF=0" in data_str:
+            cmgf_mode = 0
+            return b"OK\r\n"
+        if "AT+CMGF=1" in data_str:
+            cmgf_mode = 1
+            return b"OK\r\n"
+        if "AT+CMGSEX=" in data_str:
+            return b"\r\n> "
+        if cmgf_mode == 0 and "AT+CMGS=" in data_str:
+            pdu_cmds.append(data_str.strip())
+            return b"\r\n> "
+        if data.endswith(b"\x1a"):
+            if cmgf_mode == 1:
+                cmgsex_count += 1
+                if cmgsex_count <= 3:
+                    return f"\r\n+CMGSEX: {cmgsex_count}\r\n\r\nOK\r\n".encode()
+                return b"\r\n+CMS ERROR: SMS size more than expected\r\n"
+            return b"\r\n+CMGS: 200\r\n\r\nOK\r\n"
+        return b"OK\r\n"
+
+    uart.responder = responder
+    driver = ModemDriver(uart=uart, config={"sms_chunk_delay_ms": 0})
+
+    long_booking_msg = (
+        "Takk for din bookingforespørsel for Festsalen den 2026-11-22. "
+        "Betaling: Bank , Vipps  (0 kr). Vennligst overfør leiebeløpet innen 3 dager "
+        "fra booking. Merk betalingen med ditt navn eller booking-ID. "
+        "Se detaljer: http://localhost:8081/?booking_uuid=d77b0c18-059e-44b1-b0fb-9b4763c193d0"
+    )
+    success, ref = driver.send_sms("+4790688031", long_booking_msg)
+
+    assert success is True
+    assert ref == "1,2,3,200,200,200"
+    # Chunks 4, 5, 6 sent via PDU mode (AT+CMGF=0)
+    assert len(pdu_cmds) == 3
+    assert all(cmd.startswith("AT+CMGS=") for cmd in pdu_cmds)
