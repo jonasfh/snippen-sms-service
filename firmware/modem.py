@@ -525,22 +525,14 @@ class ModemDriver:
 
         try:
             refs: list[str] = []
-            use_pdu_mode = False
-            for idx, chunk in enumerate(chunks):
-                if idx > 0 and self.chunk_delay_ms > 0:
-                    time.sleep_ms(self.chunk_delay_ms)
+            # SimCom A7670E AT+CMGSEX buffers parts in text mode and fails on >3 UCS-2 segments.
+            # Use standard 3GPP PDU mode directly for >3 parts, or restart all parts in PDU mode if AT+CMGSEX fails.
+            use_pdu_mode = total_parts > 3 and sms_encoding is not None and hasattr(sms_encoding, "encode_pdu")
+            if not use_pdu_mode:
+                for idx, chunk in enumerate(chunks):
+                    if idx > 0 and self.chunk_delay_ms > 0:
+                        time.sleep_ms(self.chunk_delay_ms)
 
-                if use_pdu_mode:
-                    ok, ref_or_err = self._send_single_pdu(
-                        target_number,
-                        chunk,
-                        timeout_ms=timeout_ms,
-                        msg_ref=msg_ref,
-                        part_num=idx + 1,
-                        total_parts=total_parts,
-                        use_ucs2=use_ucs2,
-                    )
-                else:
                     ok, ref_or_err = self._send_single_sms(
                         target_number,
                         chunk,
@@ -550,30 +542,44 @@ class ModemDriver:
                         total_parts=total_parts,
                         use_ucs2=use_ucs2,
                     )
-                    if (
-                        not ok
-                        and total_parts > 1
-                        and sms_encoding is not None
-                        and hasattr(sms_encoding, "encode_pdu")
-                    ):
-                        ok_pdu, pdu_ref_or_err = self._send_single_pdu(
-                            target_number,
-                            chunk,
-                            timeout_ms=timeout_ms,
-                            msg_ref=msg_ref,
-                            part_num=idx + 1,
-                            total_parts=total_parts,
-                            use_ucs2=use_ucs2,
-                        )
-                        if ok_pdu:
-                            ok = True
-                            ref_or_err = pdu_ref_or_err
+                    if not ok:
+                        has_network_ref = any(r and r != "OK" for r in refs)
+                        if (
+                            total_parts > 1
+                            and not has_network_ref
+                            and sms_encoding is not None
+                            and hasattr(sms_encoding, "encode_pdu")
+                        ):
                             use_pdu_mode = True
-                if not ok:
-                    if total_parts > 1:
-                        return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"
-                    return False, ref_or_err
-                refs.append(ref_or_err if ref_or_err else "OK")
+                            refs = []
+                            if total_parts > 1:
+                                msg_ref = self._outbound_msg_ref
+                                self._outbound_msg_ref = (self._outbound_msg_ref % 255) + 1
+                            break
+                        if total_parts > 1:
+                            return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"
+                        return False, ref_or_err
+                    refs.append(ref_or_err if ref_or_err else "OK")
+
+            if use_pdu_mode:
+                for idx, chunk in enumerate(chunks):
+                    if idx > 0 and self.chunk_delay_ms > 0:
+                        time.sleep_ms(self.chunk_delay_ms)
+
+                    ok, ref_or_err = self._send_single_pdu(
+                        target_number,
+                        chunk,
+                        timeout_ms=timeout_ms,
+                        msg_ref=msg_ref,
+                        part_num=idx + 1,
+                        total_parts=total_parts,
+                        use_ucs2=use_ucs2,
+                    )
+                    if not ok:
+                        if total_parts > 1:
+                            return False, f"Chunk {idx + 1}/{total_parts} failed: {ref_or_err}"
+                        return False, ref_or_err
+                    refs.append(ref_or_err if ref_or_err else "OK")
 
             return True, ",".join(refs)
         finally:
