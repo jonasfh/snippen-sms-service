@@ -114,6 +114,8 @@ class GatewayApp:
         self.last_heartbeat = 0
         self.last_inbox_check = 0
         self.last_outbox_poll = 0
+        self.last_outbox_idle_log: float | None = None
+        self.outbox_polls_since_log = 0
         self.last_wifi_reconnect = 0
         self.wifi_backoff_sec = 5
         self.consecutive_modem_failures = 0
@@ -563,10 +565,25 @@ class GatewayApp:
             print(f"[main] Error processing inbox: {exc}")
             return 0
 
+    def _should_log_outbox_idle(self, now: float | None = None) -> tuple[bool, int]:
+        """Return (should_log, polls_since_last_log) using a predictable time interval."""
+        current_time = time.time() if now is None else now
+        interval = self.config.get("outbox_idle_log_interval_sec", 30)
+        if (
+            self.last_outbox_idle_log is None
+            or (current_time - self.last_outbox_idle_log) >= interval
+        ):
+            polls = self.outbox_polls_since_log
+            self.last_outbox_idle_log = current_time
+            self.outbox_polls_since_log = 0
+            return True, polls
+        return False, 0
+
     def poll_outbox(self) -> int:
         """Poll outbound SMS from Snippen Booking API and transmit over cellular modem (Issue #52, #148)."""
         if self.api_client is None:
-            if self.cycle_count % 6 == 0:
+            should_log, _ = self._should_log_outbox_idle()
+            if should_log:
                 print(
                     "[main] Outbox poll hoppet over: REST API-klient ikke initialisert (mangler URL/token)."
                 )
@@ -574,19 +591,27 @@ class GatewayApp:
         if self.modem is None:
             return 0
         if wifi is not None and not wifi.is_connected():
-            if self.cycle_count % 6 == 0:
+            should_log, _ = self._should_log_outbox_idle()
+            if should_log:
                 ssid = self.config.get("wifi_ssid", "")
                 print(f"[main] Outbox poll hoppet over: Wi-Fi ikke tilkoblet ('{ssid}').")
             return 0
 
         try:
             limit = self.config.get("outbox_batch_limit", 5)
+            self.outbox_polls_since_log += 1
             messages = self.api_client.fetch_outbox(limit=limit)
             if not messages:
-                if self.cycle_count % 6 == 0:
+                should_log, polls = self._should_log_outbox_idle()
+                if should_log:
                     base_url = getattr(self.api_client, "base_url", "API")
-                    print(f"[main] Pollet {base_url}/outbox: Ingen ventende SMS i kø.")
+                    print(
+                        f"[main] Pollet {base_url}/outbox: Ingen ventende SMS i kø (polls siden sist: {polls})."
+                    )
                 return 0
+
+            self.last_outbox_idle_log = time.time()
+            self.outbox_polls_since_log = 0
 
             print(f"[main] Fetched {len(messages)} pending outbound SMS from Snippen Booking.")
             sent_count = 0

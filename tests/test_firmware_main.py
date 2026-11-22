@@ -779,3 +779,59 @@ def test_telemetry_reports_rate_limiter_status(
     assert "rate_limiter" in telemetry
     assert telemetry["rate_limiter"]["circuit_open"] is False
     assert telemetry["rate_limiter"]["history_count"] == 0
+
+
+def test_poll_outbox_empty_logs_at_predictable_time_interval(
+    mpy_env: MicroPythonEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify empty outbox polls log on a time interval instead of cycle_count % 6 (Issue #163)."""
+    import main
+    import wifi
+
+    monkeypatch.setattr(wifi, "is_connected", lambda: True)
+
+    fake_now = [1000.0]
+    monkeypatch.setattr(main.time, "time", lambda: fake_now[0])
+
+    app = main.GatewayApp(
+        config={
+            "wifi_ssid": "TestSSID",
+            "snippen_api_token": "valid_token",
+            "outbox_idle_log_interval_sec": 30,
+        }
+    )
+
+    class MockEmptyApiClient:
+        base_url = "http://localhost:8081/wp-json/snippen/v1/sms"
+
+        def fetch_outbox(self, limit: int = 5) -> list[dict]:
+            return []
+
+    class MockModem:
+        pass
+
+    app.api_client = MockEmptyApiClient()
+    app.modem = MockModem()
+    app.cycle_count = 1  # Not divisible by 6
+
+    # First poll should log immediately regardless of cycle_count
+    assert app.poll_outbox() == 0
+    captured = capsys.readouterr().out
+    assert "Ingen ventende SMS i kø (polls siden sist: 1)" in captured
+
+    # Polls within 30s interval should not log even if cycle_count % 6 == 0
+    app.cycle_count = 6
+    fake_now[0] = 1010.0
+    assert app.poll_outbox() == 0
+    fake_now[0] = 1020.0
+    assert app.poll_outbox() == 0
+    assert "Ingen ventende SMS i kø" not in capsys.readouterr().out
+
+    # Poll after 30s interval has elapsed should log with accumulated poll count
+    app.cycle_count = 7
+    fake_now[0] = 1030.0
+    assert app.poll_outbox() == 0
+    captured = capsys.readouterr().out
+    assert "Ingen ventende SMS i kø (polls siden sist: 3)" in captured

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2026-11-22
+
+### Changed
+- Erstattet `cycle_count % 6` med tidsbasert logg-intervall (`outbox_idle_log_interval_sec`, standard 30s) og poll-teller i `firmware/main.py` (`poll_outbox()`) (`#163`).
+- Dokumentert i `docs/TESTMILJO_PICOBELL_OG_LOKAL.md` at `snippen-sms-service`-containeren i `snippen-testing` må stoppes ved fysisk LilyGO-testing (`#163`).
+
 ## [1.0.9] - 2026-11-22
 
 ### Changed
