@@ -130,7 +130,9 @@ class HttpSmsProvider(SmsProvider):
             logger.debug("Provider readiness check failed for %s: %s", self.base_url, exc)
             return False
         except (ConnectionError, TimeoutError) as exc:
-            logger.debug("Provider unreachable during readiness check for %s: %s", self.base_url, exc)
+            logger.debug(
+                "Provider unreachable during readiness check for %s: %s", self.base_url, exc
+            )
             return False
 
     async def send_sms(self, recipient: str, body: str) -> SendResult:
@@ -184,7 +186,9 @@ class HttpSmsProvider(SmsProvider):
 
         except (ConnectionError, TimeoutError) as exc:
             err_msg = str(exc)
-            logger.warning("Transient error sending SMS to %s via %s: %s", recipient, self.base_url, err_msg)
+            logger.warning(
+                "Transient error sending SMS to %s via %s: %s", recipient, self.base_url, err_msg
+            )
             return SendResult(success=False, error_message=err_msg, transient_error=True)
 
         except Exception as exc:  # noqa: BLE001
