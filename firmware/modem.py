@@ -628,7 +628,7 @@ class ModemDriver:
                                     3: "STO SENT",
                                 }
                                 cur_stat = stat_map.get(stat_code, "REC UNREAD")
-                            except ValueError, IndexError:
+                            except (ValueError, IndexError):
                                 cur_idx = None
                         elif (
                             cur_idx is not None
