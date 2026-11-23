@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.15] - 2026-11-23
+
+### Added
+- Lagt til hardware-in-the-loop (HIL) integrasjonstestskript (`scripts/test_hardware_sms_e2e.py`) og `./dev hil-test` for toveis SMS-testing mellom to fysiske LilyGO ESP32-kort (GSM-7, `æøå`, emojis, 3- og 5-delte PDU-meldinger, og booking-maler) (`#171`).
+
+### Fixed
+- Send alle flerdelte UCS-2-meldinger (`total_parts > 1 and use_ucs2`) via 3GPP PDU-modus (`AT+CMGF=0`) i `firmware/modem.py`, siden `AT+CMGSEX` i tekstmodus kan korruptere UTF-16 surrogatpar (emojis) i 2–3-delte meldinger (`#171`).
+
 ## [1.0.14] - 2026-11-22
 
 ### Fixed

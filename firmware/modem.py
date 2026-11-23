@@ -525,10 +525,13 @@ class ModemDriver:
 
         try:
             refs: list[str] = []
-            # SimCom A7670E AT+CMGSEX buffers parts in text mode and fails on >3 UCS-2 segments.
-            # Use standard 3GPP PDU mode directly for >3 parts, or restart all parts in PDU mode if AT+CMGSEX fails.
+            # SimCom A7670E AT+CMGSEX buffers parts in text mode and fails on >3 UCS-2 segments
+            # and can corrupt UTF-16 surrogate pairs (emojis) in UCS-2 multipart segments.
+            # Use standard 3GPP PDU mode for >3 parts or any multipart UCS-2 message.
             use_pdu_mode = (
-                total_parts > 3 and sms_encoding is not None and hasattr(sms_encoding, "encode_pdu")
+                (total_parts > 3 or (total_parts > 1 and use_ucs2))
+                and sms_encoding is not None
+                and hasattr(sms_encoding, "encode_pdu")
             )
             if not use_pdu_mode:
                 for idx, chunk in enumerate(chunks):
@@ -625,7 +628,7 @@ class ModemDriver:
                                     3: "STO SENT",
                                 }
                                 cur_stat = stat_map.get(stat_code, "REC UNREAD")
-                            except (ValueError, IndexError):
+                            except ValueError, IndexError:
                                 cur_idx = None
                         elif (
                             cur_idx is not None

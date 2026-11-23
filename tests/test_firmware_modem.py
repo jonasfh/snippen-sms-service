@@ -514,7 +514,7 @@ def test_send_sms_multipart_ucs2_with_norwegian(mpy_env: MicroPythonEnvironment)
             return b"\r\n> "
         if data.endswith(b"\x1a"):
             cmgsex_calls += 1
-            return f"\r\n+CMGSEX: {70 + cmgsex_calls}\r\n\r\nOK\r\n".encode()
+            return f"\r\n+CMGS: {70 + cmgsex_calls}\r\n\r\nOK\r\n".encode()
         return None
 
     uart.responder = responder
@@ -551,7 +551,7 @@ def test_send_sms_multipart_ucs2_with_emojis(mpy_env: MicroPythonEnvironment) ->
             return b"\r\n> "
         if data.endswith(b"\x1a"):
             cmgsex_calls += 1
-            return f"\r\n+CMGSEX: {80 + cmgsex_calls}\r\n\r\nOK\r\n".encode()
+            return f"\r\n+CMGS: {80 + cmgsex_calls}\r\n\r\nOK\r\n".encode()
         return None
 
     uart.responder = responder
