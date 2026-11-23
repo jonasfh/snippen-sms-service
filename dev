@@ -63,6 +63,7 @@ Tooling (runs in ephemeral sms-tools container with USB /dev pass-through):
   lint               Run ruff check
   lint:fix           Run ruff check --fix && ruff format
   deploy [args...]   Run scripts/deploy_firmware.py against USB ESP32
+  hil-test [args...] Run scripts/test_hardware_sms_e2e.py against two USB ESP32s
   mpremote [args...] Run mpremote against USB ESP32
   esptool [args...]  Run esptool against USB ESP32
   pytest [args...]   Run pytest with custom args
@@ -81,6 +82,7 @@ case "$cmd" in
   lint)           run_tool ruff check . "$@" ;;
   lint:fix)       run_tool bash -lc "ruff check --fix . && ruff format ." ;;
   deploy)         run_usb_tool python scripts/deploy_firmware.py "$@" ;;
+  hil-test)       run_usb_tool python scripts/test_hardware_sms_e2e.py "$@" ;;
   mpremote)       run_usb_tool python -m mpremote "$@" ;;
   esptool)        run_usb_tool python -m esptool "$@" ;;
   pytest)         run_tool pytest "$@" ;;
