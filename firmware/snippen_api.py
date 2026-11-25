@@ -80,13 +80,9 @@ class SnippenApiClient:
                     return data
                 return []
             if res.status_code in (401, 403):
-                token_preview = (
-                    f"{self.api_token[:4]}..."
-                    if len(self.api_token) >= 4
-                    else ("<tom>" if not self.api_token else self.api_token)
-                )
+                token_status = "<konfigurert>" if self.api_token else "<tom>"
                 print(
-                    f"[snippen_api] Autentisering avvist (HTTP {res.status_code}) mot {url}. Token: {token_preview}"
+                    f"[snippen_api] Autentisering avvist (HTTP {res.status_code}) mot {url}. Token: {token_status}"
                 )
             else:
                 print(f"[snippen_api] Uventet HTTP-status fra {url}: {res.status_code}")

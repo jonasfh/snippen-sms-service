@@ -53,6 +53,20 @@ try:
 except ImportError:
     wifi = None
 
+
+def _parse_host_and_path(url: str) -> tuple[str, str]:
+    """Extract lowercase hostname and path from a URL without requiring urllib."""
+    if "://" not in url:
+        return "", url
+    _, rest = url.split("://", 1)
+    if "/" in rest:
+        host_port, path = rest.split("/", 1)
+        path = "/" + path
+    else:
+        host_port, path = rest, ""
+    host = host_port.split(":", 1)[0].lower()
+    return host, path
+
 try:
     from config import load_config
 except ImportError:
@@ -603,7 +617,11 @@ class OTAClient:
         repo = self.config.get("ota_repo", "jonasfh/snippen-sms-service")
 
         # Fast path for GitHub repository releases: query lightweight GitHub Releases API (~1s)
-        if ("github.com" in target_url and "releases/latest" in target_url) or not url:
+        host, path = _parse_host_and_path(target_url)
+        is_github_latest = (
+            host == "github.com" or host.endswith(".github.com")
+        ) and "/releases/latest" in path
+        if is_github_latest or not url:
             api_url = f"https://api.github.com/repos/{repo}/releases/latest"
             headers = {
                 "Accept": "application/json",

@@ -29,7 +29,8 @@ def test_get_default_config() -> None:
     assert cfg["modem_baudrate"] == 115200
     assert cfg["modem_pwrkey_pulse_ms"] == 1500
     assert cfg["modem_boot_wait_sec"] == 6
-    assert "https://vestreholmensameie.no" in cfg["snippen_api_base_url"]
+    from urllib.parse import urlparse
+    assert urlparse(cfg["snippen_api_base_url"]).hostname == "vestreholmensameie.no"
     assert cfg["outbox_poll_interval_sec"] == 5
     assert cfg["inbox_check_interval_sec"] == 30
     assert cfg["modem_cmd_timeout_ms"] == 2000
