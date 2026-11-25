@@ -623,9 +623,7 @@ class MessageStorage:
                 ),
             )
         masked_phone = f"***{context.phone_number[-4:]}" if len(context.phone_number) >= 4 else "***"
-        logger.debug(
-            "Updated conversation context for %s (id=%s)", masked_phone, context.id
-        )
+        logger.debug("Updated conversation context for %s (id=%s)", masked_phone, context.id)
         return context
 
     def delete_conversation_context(self, phone_number: str) -> bool:
