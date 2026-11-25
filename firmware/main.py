@@ -685,14 +685,15 @@ class GatewayApp:
         """Process an incoming voice call: notify admin and reply to caller via SMS (Issue #113)."""
         now = time.time()
         last_time = self.last_call_notification.get(caller, 0)
+        masked_caller = f"***{caller[-4:]}" if len(caller) >= 4 else (caller or "skjult nummer")
         if now - last_time < 30:
             print(
-                f"[main] Call from '{caller}' debounced (last handled {int(now - last_time)}s ago)."
+                f"[main] Call from '{masked_caller}' debounced (last handled {int(now - last_time)}s ago)."
             )
             return
         self.last_call_notification[caller] = now
 
-        print(f"[main] Handling incoming call event from '{caller or 'skjult nummer'}'.")
+        print(f"[main] Handling incoming call event from '{masked_caller}'.")
 
         # 1. Notify admin via SMS
         notify_admin = self.config.get("call_notify_admin_enabled", True)
@@ -750,7 +751,8 @@ class GatewayApp:
                         "Send SMS eller ring leieansvarlig på 92830575."
                     ),
                 )
-                print(f"[main] Sending automated SMS reply to caller ({caller})...")
+                masked_reply_target = f"***{caller[-4:]}" if len(caller) >= 4 else "***"
+                print(f"[main] Sending automated SMS reply to caller ({masked_reply_target})...")
                 try:
                     ok_reply, err_reply = self.modem.send_sms(caller, reply_text)
                     if ok_reply:

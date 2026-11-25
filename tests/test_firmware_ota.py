@@ -331,12 +331,13 @@ def test_boot_check_and_handle_ota_pending_crash_triggers_rollback(
 
 
 def test_ota_client_download_with_redirect(mpy_env: MicroPythonEnvironment, tmp_path: Path) -> None:
+    from urllib.parse import urlparse
     import ota
 
     bundle = create_sample_bundle("1.1.0")
 
     def mock_get(url: str, headers: dict | None = None, **kwargs: object) -> MockResponse:
-        if "github.com" in url:
+        if urlparse(url).hostname == "github.com":
             # 302 redirect
             return MockResponse(
                 status_code=302,
