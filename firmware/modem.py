@@ -866,9 +866,7 @@ class ModemDriver:
         success, lines = self.send_cmd(cmd, timeout_ms=timeout_ms)
         if success:
             masked = f"***{normalized[-4:]}" if len(normalized) >= 4 else "***"
-            print(
-                f"[modem] Call forwarding configured successfully to {masked} (reason {reason})."
-            )
+            print(f"[modem] Call forwarding configured successfully to {masked} (reason {reason}).")
             return True
 
         masked = f"***{normalized[-4:]}" if len(normalized) >= 4 else "***"
@@ -976,7 +974,9 @@ class ModemDriver:
                 self.flush_input()
 
             caller_str = caller if caller is not None else ""
-            masked_caller = f"***{caller_str[-4:]}" if len(caller_str) >= 4 else (caller_str or "unknown")
+            masked_caller = (
+                f"***{caller_str[-4:]}" if len(caller_str) >= 4 else (caller_str or "unknown")
+            )
             print(f"[modem] Incoming voice call detected from '{masked_caller}'.")
             self._pending_callers.append(caller_str)
 

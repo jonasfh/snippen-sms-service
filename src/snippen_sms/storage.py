@@ -591,7 +591,9 @@ class MessageStorage:
                     ),
                 )
                 context.id = cursor.lastrowid
-            masked_phone = f"***{context.phone_number[-4:]}" if len(context.phone_number) >= 4 else "***"
+            masked_phone = (
+                f"***{context.phone_number[-4:]}" if len(context.phone_number) >= 4 else "***"
+            )
             logger.debug(
                 "Saved new conversation context for %s with id=%s", masked_phone, context.id
             )
@@ -622,7 +624,9 @@ class MessageStorage:
                     context.id,
                 ),
             )
-        masked_phone = f"***{context.phone_number[-4:]}" if len(context.phone_number) >= 4 else "***"
+        masked_phone = (
+            f"***{context.phone_number[-4:]}" if len(context.phone_number) >= 4 else "***"
+        )
         logger.debug("Updated conversation context for %s (id=%s)", masked_phone, context.id)
         return context
 
