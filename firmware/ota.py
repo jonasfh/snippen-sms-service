@@ -67,6 +67,7 @@ def _parse_host_and_path(url: str) -> tuple[str, str]:
     host = host_port.split(":", 1)[0].lower()
     return host, path
 
+
 try:
     from config import load_config
 except ImportError:
