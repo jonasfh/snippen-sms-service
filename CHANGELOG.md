@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.16] - 2026-11-26
+
+### Fixed
+- Fikset CodeQL-sikkerhetsvarsler: eksplisitt host/path-validering i `firmware/ota.py` og `urlparse` i tester, fjernet token-prefix fra feillogging i `firmware/snippen_api.py`, og maskert telefonnumre i logger (`firmware/modem.py`, `firmware/main.py`, `src/snippen_sms/storage.py`) (`#173`).
+
 ## [1.0.15] - 2026-11-23
 
 ### Added
